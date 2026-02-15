@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { signInWithPopup } from 'firebase/auth';
+import { auth, googleProvider, isFirebaseConfigured } from '@/config/firebase';
 
 interface User {
   id: string;
@@ -18,10 +20,13 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
+  updateUser: (userData: Partial<User>) => void;
   error: string | null;
   clearError: () => void;
+  isFirebaseReady: boolean;
 }
 
 interface RegisterData {
@@ -97,6 +102,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const loginWithGoogle = useCallback(async () => {
+    setError(null);
+    setIsLoading(true);
+    try {
+      if (!isFirebaseConfigured) {
+        throw new Error(
+          'Google Sign-In is not configured. Please set up Firebase credentials in your environment variables.'
+        );
+      }
+
+      // Trigger Google Sign-In popup via Firebase
+      const result = await signInWithPopup(auth, googleProvider);
+      const firebaseUser = result.user;
+
+      // Get the Firebase ID token to send to our backend
+      const idToken = await firebaseUser.getIdToken();
+
+      // Send the token to our backend to create/find the user
+      const res = await fetch(`${API_BASE}/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idToken,
+          email: firebaseUser.email,
+          name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+          firebaseUid: firebaseUser.uid,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Google sign-in failed');
+      }
+
+      const data = await res.json();
+      setUser(data.user);
+      localStorage.setItem('memd_user_id', data.user.id);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Google sign-in failed';
+      setError(message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   const register = useCallback(async (data: RegisterData) => {
     setError(null);
     setIsLoading(true);
@@ -127,6 +178,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(() => {
     setUser(null);
     localStorage.removeItem('memd_user_id');
+    // Also sign out of Firebase if configured
+    if (isFirebaseConfigured) {
+      auth.signOut().catch(() => {
+        // Ignore sign-out errors
+      });
+    }
+  }, []);
+
+  const updateUser = useCallback((userData: Partial<User>) => {
+    setUser((prev) => prev ? { ...prev, ...userData } : null);
   }, []);
 
   return (
@@ -136,10 +197,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         isAuthenticated: !!user,
         login,
+        loginWithGoogle,
         register,
         logout,
+        updateUser,
         error,
         clearError,
+        isFirebaseReady: isFirebaseConfigured,
       }}
     >
       {children}

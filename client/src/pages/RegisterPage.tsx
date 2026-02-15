@@ -40,7 +40,7 @@ export default function RegisterPage() {
 
     try {
       await register({ email, password, name });
-      navigate('/app', { replace: true });
+      navigate('/onboarding', { replace: true });
     } catch {
       // Error is handled by AuthContext
     } finally {

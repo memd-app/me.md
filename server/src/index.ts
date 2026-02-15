@@ -6,6 +6,7 @@ import { db } from './config/database.js';
 import { healthRouter } from './routes/health.js';
 import { authRouter } from './routes/auth.js';
 import { topicsRouter } from './routes/topics.js';
+import { usersRouter } from './routes/users.js';
 
 dotenv.config();
 
@@ -24,9 +25,9 @@ app.use(express.json({ limit: '10mb' }));
 app.use('/api/health', healthRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/topics', topicsRouter);
+app.use('/api/users', usersRouter);
 
 // TODO: Add remaining routes as they are implemented
-// app.use('/api/users', usersRouter);
 // app.use('/api/sessions', sessionsRouter);
 // app.use('/api/messages', messagesRouter);
 // app.use('/api/notes', notesRouter);

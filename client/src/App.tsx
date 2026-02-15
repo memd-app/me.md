@@ -19,6 +19,7 @@ import SearchPage from '@/pages/SearchPage';
 import ExportPage from '@/pages/ExportPage';
 import SettingsPage from '@/pages/SettingsPage';
 import NotFoundPage from '@/pages/NotFoundPage';
+import CreateTopicPage from '@/pages/CreateTopicPage';
 import PlaceholderPage from '@/pages/PlaceholderPage';
 
 function App() {
@@ -55,6 +56,7 @@ function App() {
             <Route index element={<DashboardPage />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="topics" element={<TopicsPage />} />
+            <Route path="topics/new" element={<CreateTopicPage />} />
             <Route path="topics/:id" element={<PlaceholderPage title="Topic Detail" icon="📋" />} />
             <Route path="session/new" element={<NewSessionPage />} />
             <Route path="session/:id" element={<PlaceholderPage title="Interview Session" icon="💬" />} />
