@@ -1,3 +1,37 @@
+## Session - 2026-02-15 (Agent handling Features #94 and #143)
+
+### Accomplished
+- Feature #94 (Privacy tiers mark items as never export): PASSING
+  - Added Privacy Settings tab to VerificationPage with toggle controls for all verified insights
+  - Privacy tier badge (Never Export / Exportable) shown on each insight card
+  - Toggle switch to flip between exportable and never_export tiers in both views
+  - Never Export counter added to stats grid (4th stat card)
+  - Clickable privacy badge on pending insight cards in verification queue
+  - Backend PUT /api/insights/:id already supported privacyTier updates
+  - Verified: toggling privacy tier persists, export excludes never_export insights
+
+- Feature #143 (Export filtered by privacy tier): PASSING
+  - Fixed /api/profile/summary to filter by privacyTier='exportable' (was missing)
+  - Fixed /api/profile/regenerate to filter by privacyTier='exportable' (was missing)
+  - Export markdown and JSON endpoints already had correct filtering
+  - Verified: never_export insights absent from all export formats
+  - Verified: exportable insights present in all export formats
+  - Verified: profile summary sections do not reference excluded data
+  - Verified: changing privacy tier from never_export to exportable includes insight in next export
+
+### Verification
+- TypeScript compiles clean (client: zero errors, server: only pre-existing database.ts type export issue)
+- Vite build succeeds (no errors)
+- Server starts without errors after restart
+- All API endpoints tested end-to-end with correct privacy tier filtering
+- No mock data patterns found in server/src or client/src
+- Test data created, verified, and cleaned up
+
+### Current Status
+- Features #94 and #143 both passing
+- All profile export/summary/regenerate endpoints respect privacy tiers
+- Privacy management UI fully functional on Verification page
+
 ## Session - 2026-02-15 (Agent handling Features #15 and #21)
 
 ### Accomplished
