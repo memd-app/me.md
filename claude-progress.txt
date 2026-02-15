@@ -1,3 +1,32 @@
+## Session - 2026-02-15 (Agent handling Feature #79)
+
+### Accomplished
+- Feature #79 (Knowledge graph recalibrates when insights deleted): PASSING
+  - Verified end-to-end that rejecting insights causes graph to recalibrate
+  - Backend: POST /api/insights/:id/reject correctly deletes linked concept nodes and edges
+  - Backend: GET /api/graph correctly excludes rejected insights from node counts and weight calculations
+  - Topic weight reduced from 5.3 to 4.4 after rejecting 3 of 6 insights (less verified = lower weight)
+  - Concept node count reduced from 6 to 3 (rejected concepts removed entirely)
+  - Contains edges reduced from 6 to 3 (edges to removed concepts deleted)
+  - Stats bar in UI updated: "6 concepts 6 insights 6 verified 7 connections" -> "3 concepts 3 insights 3 verified 4 connections"
+  - Kept insights remain visible as concept nodes in graph
+  - Visual verification via Playwright screenshots confirms graph shrinks after rejection
+  - No mock data patterns found in client/src or server/src
+  - Data persists correctly within same server session (rejection status and concept node deletion persist)
+  - Zero console errors in browser
+
+### Verification Details
+- Created test user, topic, 5 sessions with 6 distilled insights
+- Verified all 6 insights (creating 6 concept nodes)
+- Rejected 3 insights via API, observed removal of 3 concept nodes
+- Re-navigated to Knowledge Graph page to verify UI reflects changes
+- Screenshot comparison: before (6 concept nodes around topic) vs after (3 concept nodes)
+- Persistence: re-queried after 2s delay, data unchanged (concepts=2, rejected=2)
+
+### Current Status
+- Feature #79 passing
+- ~106/209 features passing (50%+)
+
 ## Session - 2026-02-15 (Agent handling Feature #78)
 
 ### Accomplished
