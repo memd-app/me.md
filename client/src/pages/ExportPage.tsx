@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, FormEvent } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 
 type ExportFormat = 'markdown' | 'json' | 'both';
+type ExportAction = 'download' | 'clipboard';
 
 export default function ExportPage() {
   const { user } = useAuth();
@@ -9,6 +10,14 @@ export default function ExportPage() {
   const [exporting, setExporting] = useState(false);
   const [copying, setCopying] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Authentication verification state
+  const [isVerified, setIsVerified] = useState(false);
+  const [showVerifyDialog, setShowVerifyDialog] = useState(false);
+  const [verifyPassword, setVerifyPassword] = useState('');
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [pendingAction, setPendingAction] = useState<ExportAction | null>(null);
 
   const downloadFile = async (endpoint: string, filename: string) => {
     if (!user) return;
@@ -27,7 +36,7 @@ export default function ExportPage() {
     URL.revokeObjectURL(url);
   };
 
-  const handleExport = async () => {
+  const performExport = async () => {
     if (!user) return;
     try {
       setExporting(true);
@@ -39,7 +48,6 @@ export default function ExportPage() {
       }
 
       if (selectedFormat === 'json' || selectedFormat === 'both') {
-        // Small delay between downloads so browser handles both
         if (selectedFormat === 'both') {
           await new Promise(resolve => setTimeout(resolve, 500));
         }
@@ -61,7 +69,7 @@ export default function ExportPage() {
     }
   };
 
-  const handleCopyToClipboard = async () => {
+  const performCopy = async () => {
     if (!user) return;
     try {
       setCopying(true);
@@ -80,23 +88,90 @@ export default function ExportPage() {
     }
   };
 
+  const requireVerification = (action: ExportAction) => {
+    if (isVerified) {
+      // Already verified this session
+      if (action === 'download') {
+        performExport();
+      } else {
+        performCopy();
+      }
+      return;
+    }
+    setPendingAction(action);
+    setShowVerifyDialog(true);
+    setVerifyPassword('');
+    setVerifyError(null);
+  };
+
+  const handleVerify = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    setVerifyError(null);
+    setVerifying(true);
+
+    try {
+      const res = await fetch('/api/auth/verify-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id,
+        },
+        body: JSON.stringify({ password: verifyPassword }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Verification failed');
+      }
+
+      // Mark as verified for this session
+      setIsVerified(true);
+      setShowVerifyDialog(false);
+      setVerifyPassword('');
+
+      // Execute the pending action
+      if (pendingAction === 'download') {
+        performExport();
+      } else if (pendingAction === 'clipboard') {
+        performCopy();
+      }
+      setPendingAction(null);
+    } catch (err) {
+      setVerifyError(err instanceof Error ? err.message : 'Verification failed');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleCancelVerify = () => {
+    setShowVerifyDialog(false);
+    setVerifyPassword('');
+    setVerifyError(null);
+    setPendingAction(null);
+  };
+
+  const handleExport = () => requireVerification('download');
+  const handleCopyToClipboard = () => requireVerification('clipboard');
+
   const formatOptions: { value: ExportFormat; label: string; icon: string; description: string }[] = [
     {
       value: 'markdown',
       label: 'Markdown',
-      icon: '📝',
+      icon: '\uD83D\uDCDD',
       description: 'Export as a portable me.md file',
     },
     {
       value: 'json',
       label: 'JSON',
-      icon: '📦',
+      icon: '\uD83D\uDCE6',
       description: 'Structured data for AI tools and APIs',
     },
     {
       value: 'both',
       label: 'Both',
-      icon: '📋',
+      icon: '\uD83D\uDCCB',
       description: 'Download both Markdown and JSON files',
     },
   ];
@@ -120,6 +195,18 @@ export default function ExportPage() {
           }`}
         >
           <p className="text-sm">{status.message}</p>
+        </div>
+      )}
+
+      {/* Verification status banner */}
+      {isVerified && (
+        <div className="mb-6 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 flex items-center gap-2">
+          <svg className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+          <p className="text-sm text-green-700 dark:text-green-300">
+            <strong>Identity verified.</strong> You can export freely during this session.
+          </p>
         </div>
       )}
 
@@ -156,7 +243,6 @@ export default function ExportPage() {
               }`}>
                 {option.description}
               </p>
-              {/* Selection indicator */}
               {selectedFormat === option.value && (
                 <div className="mt-2 flex items-center gap-1">
                   <svg className="w-4 h-4 text-blue-500 dark:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
@@ -189,6 +275,14 @@ export default function ExportPage() {
                 ? 'Downloads your profile as me.md'
                 : 'Downloads structured profile data as JSON'}
             </p>
+            {!isVerified && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                </svg>
+                Requires identity verification
+              </p>
+            )}
           </div>
           <button
             onClick={handleExport}
@@ -216,6 +310,14 @@ export default function ExportPage() {
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Copy your profile as markdown directly to paste into any AI tool
             </p>
+            {!isVerified && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                </svg>
+                Requires identity verification
+              </p>
+            )}
           </div>
           <button
             onClick={handleCopyToClipboard}
@@ -233,6 +335,76 @@ export default function ExportPage() {
           <strong>Privacy:</strong> Items marked as &quot;never export&quot; in your privacy settings will be automatically excluded from all exports. Only verified insights with &quot;exportable&quot; privacy tier are included.
         </p>
       </div>
+
+      {/* Authentication Verification Dialog */}
+      {showVerifyDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                <svg className="w-5 h-5 text-amber-600 dark:text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Verify Your Identity
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Export requires authentication confirmation
+                </p>
+              </div>
+            </div>
+
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              To protect your data, please enter your password to confirm your identity before exporting.
+            </p>
+
+            {verifyError && (
+              <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm">
+                {verifyError}
+              </div>
+            )}
+
+            <form onSubmit={handleVerify} className="space-y-4">
+              <div>
+                <label htmlFor="verify-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Password
+                </label>
+                <input
+                  id="verify-password"
+                  type="password"
+                  required
+                  value={verifyPassword}
+                  onChange={(e) => { setVerifyPassword(e.target.value); if (verifyError) setVerifyError(null); }}
+                  className="input-field"
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onClick={handleCancelVerify}
+                  className="btn-secondary"
+                  disabled={verifying}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={verifying || !verifyPassword}
+                  className="btn-primary"
+                >
+                  {verifying ? 'Verifying...' : 'Verify & Export'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
