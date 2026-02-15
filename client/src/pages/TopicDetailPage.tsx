@@ -423,6 +423,7 @@ export default function TopicDetailPage() {
   const tags = parseTags(topic.tags);
   const referenceUrls = parseReferenceUrls(topic.referenceUrls);
   const activeSessions = sessions.filter(s => s.status === 'active');
+  const pausedSessions = sessions.filter(s => s.status === 'paused');
   const completedSessions = sessions.filter(s => s.status === 'completed');
 
   return (
@@ -910,6 +911,36 @@ export default function TopicDetailPage() {
                       </div>
                       <span className="text-sm text-gray-500 dark:text-gray-400">
                         Started {new Date(session.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+
+            {pausedSessions.length > 0 && (
+              <div className="mb-4">
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                  Paused Sessions
+                </h3>
+                {pausedSessions.map((session) => (
+                  <Link
+                    key={session.id}
+                    to={`/app/session/${session.id}`}
+                    className="block p-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-900/10 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors mb-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-amber-500" />
+                        <span className="font-medium text-gray-900 dark:text-white">
+                          Paused Session
+                        </span>
+                        <span className="text-xs text-amber-600 dark:text-amber-400">
+                          — Click to resume
+                        </span>
+                      </div>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        Paused {new Date(session.updatedAt).toLocaleString()}
                       </span>
                     </div>
                   </Link>

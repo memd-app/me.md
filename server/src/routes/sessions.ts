@@ -77,9 +77,9 @@ sessionsRouter.post('/', async (req, res) => {
       role: 'assistant',
       content: openingMessageContent,
       quickReplies: JSON.stringify([
-        "I'd like to explore this topic deeply",
-        "Let me share what I already know",
-        "I'm not sure where to start"
+        "I have something specific on my mind about this",
+        "I'd like to explore this openly and see what emerges",
+        "I'm not sure where to start, guide me"
       ]),
       suggestsCompletion: false,
       isBookmarked: false,
@@ -211,13 +211,18 @@ sessionsRouter.post('/:id/messages', async (req, res) => {
     // Check if session has research_data (from reference URLs)
     const hasResearchContext = !!session.researchData;
 
+    const historyForAI = conversationHistory.map(m => ({ role: m.role, content: m.content }));
     const aiResponseContent = generateAIResponse(
       topic?.title || 'Unknown Topic',
       topic?.description || '',
       topic?.intent || '',
-      conversationHistory.map(m => ({ role: m.role, content: m.content })),
+      historyForAI,
       hasResearchContext
     );
+
+    // Generate context-aware quick replies using the AI response and conversation history
+    const userMessageCount = conversationHistory.filter(m => m.role === 'user').length;
+    const quickRepliesArr = generateQuickReplies(userMessageCount, aiResponseContent, historyForAI);
 
     const aiMessageId = uuidv4();
     const aiMessage = db.insert(messages).values({
@@ -225,7 +230,7 @@ sessionsRouter.post('/:id/messages', async (req, res) => {
       sessionId,
       role: 'assistant',
       content: aiResponseContent,
-      quickReplies: JSON.stringify(generateQuickReplies(conversationHistory.length)),
+      quickReplies: JSON.stringify(quickRepliesArr),
       suggestsCompletion: conversationHistory.length >= 10,
       isBookmarked: false,
       isVoiceInput: false,
@@ -279,6 +284,159 @@ sessionsRouter.put('/:id', async (req, res) => {
     res.status(500).json({ error: 'Failed to update session' });
   }
 });
+
+// POST /api/sessions/:id/pause - Pause an active session
+sessionsRouter.post('/:id/pause', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const sessionId = req.params.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const session = db.select().from(sessions).where(
+      and(eq(sessions.id, sessionId), eq(sessions.userId, userId))
+    ).get();
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    if (session.status !== 'active') {
+      return res.status(400).json({ error: 'Only active sessions can be paused' });
+    }
+
+    const updated = db.update(sessions).set({
+      status: 'paused',
+      updatedAt: new Date().toISOString(),
+    }).where(eq(sessions.id, sessionId)).returning().get();
+
+    res.json({ session: updated });
+  } catch (error) {
+    console.error('Pause session error:', error);
+    res.status(500).json({ error: 'Failed to pause session' });
+  }
+});
+
+// POST /api/sessions/:id/resume - Resume a paused session with gap-aware greeting
+sessionsRouter.post('/:id/resume', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const sessionId = req.params.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const session = db.select().from(sessions).where(
+      and(eq(sessions.id, sessionId), eq(sessions.userId, userId))
+    ).get();
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    if (session.status !== 'paused') {
+      return res.status(400).json({ error: 'Only paused sessions can be resumed' });
+    }
+
+    // Get the topic for context
+    const topic = db.select().from(topics).where(eq(topics.id, session.topicId)).get();
+
+    // Get conversation history to reference in the gap-aware greeting
+    const conversationHistory = db.select().from(messages)
+      .where(eq(messages.sessionId, sessionId))
+      .orderBy(messages.createdAt)
+      .all();
+
+    // Calculate time gap
+    const pausedAt = new Date(session.updatedAt);
+    const now = new Date();
+    const gapMs = now.getTime() - pausedAt.getTime();
+    const gapMinutes = Math.floor(gapMs / 60000);
+    const gapHours = Math.floor(gapMinutes / 60);
+    const gapDays = Math.floor(gapHours / 24);
+
+    let timeGapDescription = '';
+    if (gapDays > 0) {
+      timeGapDescription = gapDays === 1 ? 'a day' : `${gapDays} days`;
+    } else if (gapHours > 0) {
+      timeGapDescription = gapHours === 1 ? 'an hour' : `${gapHours} hours`;
+    } else if (gapMinutes > 5) {
+      timeGapDescription = `${gapMinutes} minutes`;
+    } else {
+      timeGapDescription = 'a moment';
+    }
+
+    // Get last few user messages for context
+    const lastUserMessages = conversationHistory
+      .filter(m => m.role === 'user')
+      .slice(-2)
+      .map(m => m.content);
+
+    // Generate gap-aware greeting
+    const topicTitle = topic?.title || 'our discussion';
+    const gapGreeting = generateGapAwareGreeting(topicTitle, timeGapDescription, lastUserMessages, conversationHistory.length);
+
+    // Update session status back to active
+    const updated = db.update(sessions).set({
+      status: 'active',
+      updatedAt: new Date().toISOString(),
+    }).where(eq(sessions.id, sessionId)).returning().get();
+
+    // Insert the gap-aware greeting message
+    const greetingMessageId = uuidv4();
+    const greetingMessage = db.insert(messages).values({
+      id: greetingMessageId,
+      sessionId,
+      role: 'assistant',
+      content: gapGreeting,
+      quickReplies: JSON.stringify([
+        "Let's continue where we left off",
+        "I've had some new thoughts to share",
+        "Can you remind me what we covered?"
+      ]),
+      suggestsCompletion: false,
+      isBookmarked: false,
+      isVoiceInput: false,
+    }).returning().get();
+
+    res.json({
+      session: updated,
+      topic,
+      greetingMessage,
+    });
+  } catch (error) {
+    console.error('Resume session error:', error);
+    res.status(500).json({ error: 'Failed to resume session' });
+  }
+});
+
+// Helper function to generate a gap-aware greeting when resuming a paused session
+function generateGapAwareGreeting(
+  topicTitle: string,
+  timeGap: string,
+  lastUserMessages: string[],
+  totalMessageCount: number
+): string {
+  let greeting = `Welcome back! It's been ${timeGap} since we last spoke about **${topicTitle}**.`;
+
+  if (lastUserMessages.length > 0) {
+    const lastThought = lastUserMessages[lastUserMessages.length - 1];
+    // Use a brief snippet of their last message to show context awareness
+    const snippet = lastThought.length > 100 ? lastThought.substring(0, 100) + '...' : lastThought;
+    greeting += `\n\nLast time, you were sharing your thoughts: "${snippet}"`;
+  }
+
+  if (totalMessageCount > 6) {
+    greeting += `\n\nWe've had a great conversation so far with ${totalMessageCount} messages exchanged. **Would you like to pick up where we left off, or has anything new come to mind** during the break that you'd like to explore?`;
+  } else {
+    greeting += `\n\nWe were just getting started in our exploration. **Would you like to continue from where we left off, or would you prefer to take a different direction?**`;
+  }
+
+  return greeting;
+}
 
 // Helper function to parse JSON arrays safely
 function parseJsonArray(jsonStr: string | null): string[] {
@@ -337,7 +495,187 @@ function generateOpeningMessage(title: string, description: string | null, inten
   return message;
 }
 
-// Helper function to generate AI responses based on conversation context
+// ============================================
+// Interview Methodology Engine
+// ============================================
+
+// Supported questioning methodologies
+type Methodology = 'clean_language' | 'socratic' | 'five_whys' | 'appreciative_inquiry' | 'micro_phenomenology';
+
+const METHODOLOGY_LABELS: Record<Methodology, string> = {
+  clean_language: 'Clean Language',
+  socratic: 'Socratic Method',
+  five_whys: '5 Whys',
+  appreciative_inquiry: 'Appreciative Inquiry',
+  micro_phenomenology: 'Micro-phenomenology',
+};
+
+// Select methodology based on conversation stage and intent
+function selectMethodology(messageCount: number, intent: string): Methodology {
+  // Map intents to preferred methodology sequences
+  const sequences: Record<string, Methodology[]> = {
+    articulate: ['clean_language', 'micro_phenomenology', 'socratic', 'appreciative_inquiry', 'five_whys'],
+    explore: ['appreciative_inquiry', 'socratic', 'clean_language', 'micro_phenomenology', 'five_whys'],
+    decide: ['socratic', 'five_whys', 'clean_language', 'appreciative_inquiry', 'micro_phenomenology'],
+    document: ['micro_phenomenology', 'clean_language', 'appreciative_inquiry', 'socratic', 'five_whys'],
+  };
+
+  const seq = sequences[intent] || sequences['explore'];
+  return seq[messageCount % seq.length];
+}
+
+// Extract key phrases/words from user's message for reflection
+function extractKeyPhrases(message: string): string[] {
+  // Remove common filler words and short words, keep meaningful phrases
+  const words = message.replace(/[^\w\s'-]/g, '').split(/\s+/).filter(w => w.length > 3);
+  const stopWords = new Set([
+    'that', 'this', 'with', 'from', 'have', 'been', 'were', 'they', 'their', 'them',
+    'will', 'would', 'could', 'should', 'about', 'which', 'there', 'these', 'those',
+    'then', 'than', 'just', 'also', 'very', 'really', 'much', 'some', 'into', 'when',
+    'what', 'like', 'know', 'think', 'being', 'going', 'make', 'made', 'does', 'done',
+  ]);
+
+  const meaningful = words.filter(w => !stopWords.has(w.toLowerCase()));
+
+  // Return up to 5 key words
+  return meaningful.slice(0, 5);
+}
+
+// Extract a brief quote from the user's message for reflection
+function extractQuote(message: string, maxLength: number = 80): string {
+  // Find the most substantive sentence
+  const sentences = message.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 15);
+  if (sentences.length === 0) {
+    return message.length > maxLength ? message.substring(0, maxLength) + '...' : message;
+  }
+
+  // Pick the longest meaningful sentence (usually the most substantive)
+  const best = sentences.sort((a, b) => b.length - a.length)[0];
+  return best.length > maxLength ? best.substring(0, maxLength) + '...' : best;
+}
+
+// Generate a methodology-based reflection (2-4 sentences) that references user's actual input
+function generateReflection(
+  methodology: Methodology,
+  topicTitle: string,
+  lastUserMessage: string,
+  previousUserMessages: string[],
+  messageCount: number
+): string {
+  const quote = extractQuote(lastUserMessage);
+  const keyPhrases = extractKeyPhrases(lastUserMessage);
+  const keyPhrase = keyPhrases.length > 0 ? keyPhrases[0] : '';
+
+  // Build a cross-reference to prior messages if available
+  let priorReference = '';
+  if (previousUserMessages.length > 0 && messageCount > 1) {
+    const earlierQuote = extractQuote(previousUserMessages[previousUserMessages.length - 1], 60);
+    priorReference = ` Earlier you mentioned "${earlierQuote}" — and I can see how that connects to what you're sharing now.`;
+  }
+
+  const reflections: Record<Methodology, string[]> = {
+    clean_language: [
+      `When you say "${quote}", there's a clarity in how you frame that experience. ${keyPhrase ? `The way you use the word "${keyPhrase}" suggests it carries particular significance for you.` : 'That language reveals something important about your perspective.'}${priorReference} Your expression has a precision that's worth exploring further.`,
+      `I notice how you describe this — "${quote}". ${keyPhrase ? `"${keyPhrase}" seems like a meaningful concept in how you understand **${topicTitle}**.` : `The way you frame **${topicTitle}** reveals layers of meaning.`}${priorReference} There's richness in the specific words you've chosen.`,
+      `Your words paint a vivid picture: "${quote}". ${keyPhrase ? `I'm drawn to how "${keyPhrase}" functions in your thinking about this.` : 'The specific language you use reveals underlying patterns.'}${priorReference} These details matter because they capture something uniquely yours.`,
+    ],
+    socratic: [
+      `That's a thoughtful position — "${quote}". ${keyPhrase ? `Your point about "${keyPhrase}" raises some interesting implications I'd like to examine.` : 'Let me examine the assumptions underlying that perspective.'}${priorReference} Understanding the foundations of this view will help us go deeper.`,
+      `I appreciate you sharing that perspective. When you say "${quote}", it reveals a belief worth interrogating constructively. ${keyPhrase ? `The concept of "${keyPhrase}" in particular seems central to how you see **${topicTitle}**.` : `Your framing of **${topicTitle}** carries interesting assumptions.`}${priorReference}`,
+      `"${quote}" — that's a strong articulation. ${keyPhrase ? `Let's consider what "${keyPhrase}" really means in this context and whether it holds up under scrutiny.` : 'I want to test this idea to help you refine it.'}${priorReference} The goal is to strengthen your understanding, not challenge it.`,
+    ],
+    five_whys: [
+      `"${quote}" — there's something deeper underneath that. ${keyPhrase ? `When you mention "${keyPhrase}", I sense there's a root cause or core motivation driving this.` : 'I sense there are layers here we haven\'t uncovered yet.'}${priorReference} Let's keep digging to find the foundational belief.`,
+      `Thank you for sharing that: "${quote}". ${keyPhrase ? `The idea of "${keyPhrase}" might be a surface expression of something more fundamental about how you approach **${topicTitle}**.` : `There seems to be a deeper pattern underlying your approach to **${topicTitle}**.`}${priorReference} Understanding the root will give you powerful self-knowledge.`,
+      `I hear you — "${quote}". ${keyPhrase ? `"${keyPhrase}" is interesting, but I wonder what drives that for you at a deeper level.` : 'That feels like an important layer, and I think there are more beneath it.'}${priorReference} Each layer we peel back brings us closer to something core.`,
+    ],
+    appreciative_inquiry: [
+      `What you've shared is genuinely illuminating: "${quote}". ${keyPhrase ? `Your awareness around "${keyPhrase}" represents real strength in how you navigate **${topicTitle}**.` : `Your clarity about **${topicTitle}** reflects genuine self-awareness.`}${priorReference} I'd love to build on that strength.`,
+      `"${quote}" — there's something powerful in that. ${keyPhrase ? `The way you engage with "${keyPhrase}" shows a capacity for deep reflection that's valuable.` : 'Your ability to articulate this shows remarkable introspective skill.'}${priorReference} Let's explore what's working well here.`,
+      `I'm struck by the depth in what you've shared: "${quote}". ${keyPhrase ? `"${keyPhrase}" seems to be connected to something that really matters to you about **${topicTitle}**.` : `Your engagement with **${topicTitle}** reveals genuine passion and thoughtfulness.`}${priorReference} This is exactly the kind of insight that builds a rich personal profile.`,
+    ],
+    micro_phenomenology: [
+      `"${quote}" — I want to slow down on that moment. ${keyPhrase ? `When you think about "${keyPhrase}", there's likely a specific sensory or emotional experience attached.` : 'There\'s likely a vivid inner experience connected to what you\'ve described.'}${priorReference} The fine details of how you experience this matter.`,
+      `Thank you for that: "${quote}". ${keyPhrase ? `I'm curious about the lived experience when "${keyPhrase}" comes up for you in relation to **${topicTitle}**.` : `I want to zoom into the actual felt experience of **${topicTitle}** for you.`}${priorReference} The micro-details reveal patterns that broader descriptions can miss.`,
+      `When you describe "${quote}", I want to capture the texture of that experience. ${keyPhrase ? `"${keyPhrase}" likely triggers specific thoughts, feelings, or even physical sensations.` : 'The specific quality of this experience is what makes it uniquely yours.'}${priorReference} Let me help you articulate the fine grain.`,
+    ],
+  };
+
+  const methodReflections = reflections[methodology];
+  return methodReflections[messageCount % methodReflections.length];
+}
+
+// Generate a methodology-based focused question with bolded key concepts
+function generateQuestion(
+  methodology: Methodology,
+  topicTitle: string,
+  lastUserMessage: string,
+  previousUserMessages: string[],
+  messageCount: number,
+  topicIntent: string
+): string {
+  const keyPhrases = extractKeyPhrases(lastUserMessage);
+  const keyPhrase = keyPhrases.length > 0 ? keyPhrases[0] : topicTitle;
+  const secondPhrase = keyPhrases.length > 1 ? keyPhrases[1] : '';
+
+  // Build prior-answer-aware question elements
+  const hasPrior = previousUserMessages.length > 0;
+  const priorKeyPhrases = hasPrior ? extractKeyPhrases(previousUserMessages[previousUserMessages.length - 1]) : [];
+  const priorPhrase = priorKeyPhrases.length > 0 ? priorKeyPhrases[0] : '';
+
+  const questions: Record<Methodology, string[]> = {
+    clean_language: [
+      `And when you experience **${keyPhrase}**${secondPhrase ? ` and **${secondPhrase}**` : ''} in relation to **${topicTitle}**, what kind of **${keyPhrase}** is that?`,
+      `You mentioned **${keyPhrase}** — and is there anything else about **${keyPhrase}** as it relates to **${topicTitle}**?`,
+      `When **${keyPhrase}** happens in the context of **${topicTitle}**, **where do you feel that** — and what's it like?`,
+      `What would you like to have happen with **${keyPhrase}** and your understanding of **${topicTitle}**?`,
+      hasPrior && priorPhrase
+        ? `You've touched on both **${priorPhrase}** and now **${keyPhrase}** — **what's the relationship between these two** in how you think about **${topicTitle}**?`
+        : `And **${keyPhrase}** is like... what? **What metaphor or image** comes to mind when you think about this aspect of **${topicTitle}**?`,
+    ],
+    socratic: [
+      `What **evidence from your experience** supports this view of **${keyPhrase}** in relation to **${topicTitle}**? And is there **any counter-evidence** you've encountered?`,
+      `If someone held the **opposite view** about **${keyPhrase}** and **${topicTitle}**, what would be their **strongest argument**?`,
+      `**What assumptions are you making** about **${keyPhrase}** that might be worth examining? Which of those assumptions feel most certain and which feel shaky?`,
+      `How would you **define ${keyPhrase}** precisely? And does that **definition hold up** across different situations in your life?`,
+      hasPrior && priorPhrase
+        ? `Earlier you discussed **${priorPhrase}**, and now **${keyPhrase}** — are these **consistent with each other**, or is there a tension worth exploring?`
+        : `**What would need to be true** for your perspective on **${keyPhrase}** to be completely wrong? And how likely do you think that is?`,
+    ],
+    five_whys: [
+      `**Why does ${keyPhrase} matter** so much to you in the context of **${topicTitle}**? What's at stake if it were different?`,
+      `You've identified **${keyPhrase}** as important — but **why is that the case** rather than something else? What makes it fundamental?`,
+      `If we go one level deeper: **why do you think** you feel this way about **${keyPhrase}**? What **experience or belief** is driving it?`,
+      `**What would change** in your life if **${keyPhrase}** were no longer part of how you see **${topicTitle}**? And why would that matter?`,
+      hasPrior && priorPhrase
+        ? `We've traced from **${priorPhrase}** to **${keyPhrase}** — **why does this chain** exist for you? What's the **deepest reason** connecting them?`
+        : `**Why is ${keyPhrase} the way you chose** to express this? What's underneath that choice?`,
+    ],
+    appreciative_inquiry: [
+      `When **${keyPhrase}** is at its **best** in relation to **${topicTitle}**, what does that look like? Can you describe a **peak moment**?`,
+      `What **strengths of yours** make your approach to **${keyPhrase}** and **${topicTitle}** particularly effective? What are you **most proud of** here?`,
+      `**Imagine the ideal future** where your understanding of **${keyPhrase}** is fully realized — **what would be different** about how you engage with **${topicTitle}**?`,
+      `What **conditions or environments** help you be at your best with **${keyPhrase}**? When does your **natural brilliance** around **${topicTitle}** shine through?`,
+      hasPrior && priorPhrase
+        ? `You've shown real depth in discussing both **${priorPhrase}** and **${keyPhrase}** — **what's the greatest strength** you bring to understanding **${topicTitle}**?`
+        : `If you could **amplify what's already working** about your relationship with **${keyPhrase}**, **what would you do more of**?`,
+    ],
+    micro_phenomenology: [
+      `When **${keyPhrase}** comes up for you, **what's the very first thing** you notice — a thought, a feeling, a sensation? **Walk me through that moment** in slow motion.`,
+      `If you close your eyes and think about **${keyPhrase}** in the context of **${topicTitle}**, **what images or sensations** arise? **Where in your body** do you notice them?`,
+      `**At the exact moment** when you're engaged with **${keyPhrase}**, what is the **quality of your attention**? Is it focused, diffuse, excited, calm?`,
+      `Can you **replay a specific moment** when **${keyPhrase}** was most vivid for you? **What were you seeing, hearing, feeling** in that precise instant?`,
+      hasPrior && priorPhrase
+        ? `Compare the **felt experience** of **${priorPhrase}** with **${keyPhrase}** — do they **feel different** in your body or mind? How would you describe that difference?`
+        : `**What's the texture** of your experience with **${keyPhrase}**? If it had a **color, temperature, or rhythm**, what would it be?`,
+    ],
+  };
+
+  const methodQuestions = questions[methodology];
+  return methodQuestions[messageCount % methodQuestions.length];
+}
+
+// Main function: Generate AI response based on conversation context using methodology-based questioning
 function generateAIResponse(
   topicTitle: string,
   topicDescription: string,
@@ -348,86 +686,129 @@ function generateAIResponse(
   const userMessages = conversationHistory.filter(m => m.role === 'user');
   const messageCount = userMessages.length;
   const lastUserMessage = userMessages[userMessages.length - 1]?.content || '';
+  const previousUserMessages = userMessages.slice(0, -1).map(m => m.content);
 
-  // Context-aware reflections (when reference URLs were provided)
-  const contextReflections = [
-    `That's a really thoughtful perspective, especially considering the context you've provided. I can see how the references you shared connect to your understanding of **${topicTitle}**.`,
-    `Thank you for sharing that. Drawing from both your personal experience and the reference materials, what you've described reveals something meaningful about this area.`,
-    `I appreciate you going deeper on that. The richness of your perspective on **${topicTitle}**, combined with the context you've gathered, paints a compelling picture.`,
-    `That's fascinating — your perspective is particularly nuanced, and I can see how the references you provided have informed your thinking about **${topicTitle}**.`,
-    `I hear you. What you've shared connects powerfully to the themes in your reference materials around **${topicTitle}** — let's explore that further.`,
-  ];
+  // Select methodology for this exchange
+  const methodology = selectMethodology(messageCount, topicIntent || 'explore');
 
-  // Standard reflections (no reference URLs)
-  const standardReflections = [
-    `That's a really thoughtful perspective. I can see how your experience has shaped your understanding of **${topicTitle}**.`,
-    `Thank you for sharing that. What you've described reveals something meaningful about how you approach this area of your life.`,
-    `I appreciate you going deeper on that. There's a lot of richness in what you've shared about **${topicTitle}**.`,
-    `That's fascinating — the way you describe it suggests you've given this considerable thought. Your perspective is quite nuanced.`,
-    `I hear you. What you've shared connects to some important themes around **${topicTitle}** that I think are worth exploring further.`,
-  ];
+  // Generate methodology-based reflection (2-4 sentences referencing user's actual words)
+  const reflection = generateReflection(
+    methodology,
+    topicTitle,
+    lastUserMessage,
+    previousUserMessages,
+    messageCount
+  );
 
-  // Context-aware questions (when reference URLs were provided)
-  const contextQuestions = [
-    `Thinking about the references you shared, **how does your personal experience align or diverge** from what those materials describe?`,
-    `Based on the context you've provided, **what's the most surprising or challenging insight** you've encountered? How does it relate to your own views?`,
-    `**How has the research or reading you've done** (reflected in the references) changed how you think about **${topicTitle}**?`,
-    `If you compare your gut feeling about this topic to **what the referenced materials suggest**, where do you see the biggest gaps or confirmations?`,
-    `**What practical implications** from your references do you see applying to your own life or decisions around **${topicTitle}**?`,
-    `Building on the context you've shared, **what aspect of ${topicTitle} still feels unresolved** or needs deeper exploration?`,
-    `**How would you synthesize** your personal experience with the insights from your reference materials into a core belief or principle?`,
-    `Looking at the bigger picture with all the context you've gathered, **what would you want others to know** about your perspective on **${topicTitle}**?`,
-  ];
+  // Generate focused question with bolded key concepts
+  const question = generateQuestion(
+    methodology,
+    topicTitle,
+    lastUserMessage,
+    previousUserMessages,
+    messageCount,
+    topicIntent || 'explore'
+  );
 
-  // Standard questions (no reference URLs)
-  const standardQuestions = [
-    `Can you think of a **specific moment or experience** that shaped this view? What happened, and how did it affect you?`,
-    `When you think about this more deeply, **what tensions or contradictions** do you notice in your thinking?`,
-    `If you could explain this to someone who knows nothing about you, **what would be the most important thing** for them to understand?`,
-    `**How has your perspective on this changed** over time? What caused those shifts?`,
-    `**What would someone close to you** say about your approach to this? Would they agree with how you've described it?`,
-    `Is there a **principle or framework** you use when navigating decisions in this area?`,
-    `**What's the hardest part** about this topic for you? What makes it challenging?`,
-    `If you imagine looking back on this five years from now, **what do you think you'd want to remember** about how you see it today?`,
-  ];
-
-  const reflections = hasResearchContext ? contextReflections : standardReflections;
-  const questions = hasResearchContext ? contextQuestions : standardQuestions;
-
-  const reflection = reflections[messageCount % reflections.length];
-  const question = questions[messageCount % questions.length];
+  // Add methodology label as subtle context
+  const methodLabel = METHODOLOGY_LABELS[methodology];
 
   if (messageCount === 0) {
     return `I appreciate you getting started! Let me reflect on what you've shared.\n\n${reflection}\n\n${question}`;
   }
 
+  // For later exchanges, include a subtle methodology indicator
+  if (messageCount >= 3 && messageCount % 3 === 0) {
+    // Every 3rd exchange, add a brief transition that shifts the angle
+    const transitions = [
+      `Let me shift our angle slightly here.`,
+      `I'd like to explore this from a different direction now.`,
+      `Let's approach this from a new perspective.`,
+      `I want to zoom into something specific.`,
+    ];
+    const transition = transitions[(messageCount / 3) % transitions.length];
+    return `${reflection}\n\n${transition}\n\n${question}`;
+  }
+
   return `${reflection}\n\n${question}`;
 }
 
-// Helper function to generate context-aware quick replies
-function generateQuickReplies(messageCount: number): string[] {
-  const replySets = [
+// Extract a meaningful topic word from user messages for quick reply personalization
+function extractTopicWord(conversationHistory: Array<{ role: string; content: string }>): string {
+  const userMessages = conversationHistory.filter(m => m.role === 'user');
+  if (userMessages.length === 0) return '';
+
+  const lastMsg = userMessages[userMessages.length - 1].content;
+  // Look for longer, more meaningful words (5+ chars) to avoid awkward short words
+  const words = lastMsg.replace(/[^\w\s'-]/g, '').split(/\s+/).filter(w => w.length >= 5);
+  const stopWords = new Set([
+    'about', 'after', 'again', 'being', 'could', 'doing', 'during', 'every',
+    'first', 'going', 'great', 'having', 'might', 'never', 'often', 'other',
+    'place', 'quite', 'really', 'right', 'should', 'since', 'still', 'their',
+    'there', 'these', 'thing', 'think', 'those', 'under', 'until', 'where',
+    'which', 'while', 'would', 'comes', 'feels', 'image', 'makes', 'seems',
+    'something', 'anything', 'everything', 'someone', 'always', 'before',
+    'between', 'different', 'because', 'through', 'people', 'understand',
+  ]);
+
+  const meaningful = words.filter(w => !stopWords.has(w.toLowerCase()));
+  return meaningful.length > 0 ? meaningful[0].toLowerCase() : '';
+}
+
+// Generate context-aware quick replies in first-person voice, under 15 words
+function generateQuickReplies(
+  messageCount: number,
+  lastAiMessage?: string,
+  conversationHistory?: Array<{ role: string; content: string }>
+): string[] {
+  // Extract a topic word from user's messages for personalization
+  const topicWord = conversationHistory ? extractTopicWord(conversationHistory) : '';
+
+  // All replies are first-person voice and under 15 words
+  if (messageCount === 0) {
+    return [
+      "I have a specific experience that comes to mind",
+      "I'd like to start with the big picture",
+      "I'm still figuring out my thoughts on this"
+    ];
+  }
+
+  if (messageCount === 1) {
+    return [
+      topicWord ? `I feel strongly about ${topicWord} in my life` : "I feel strongly about this in my life",
+      "I see it differently than most people do",
+      "I need to think about that more carefully"
+    ];
+  }
+
+  // Deeper exchanges — more nuanced, reflective first-person replies
+  const contextualSets = [
     [
-      "Yes, I have a specific example in mind",
-      "I'd rather explore the broader picture first",
-      "That's something I haven't thought about before"
+      "Yes, that really resonates with how I see it",
+      "I want to share a personal example of this",
+      "I think there's a contradiction I should explore"
     ],
     [
-      "That resonates strongly with me",
-      "I see it a bit differently actually",
-      "Let me think about that for a moment"
+      "I've changed my mind on this over the years",
+      topicWord ? `My experience with ${topicWord} is complex` : "My experience here is more complex than expected",
+      "I want to go deeper into that question"
     ],
     [
-      "I've experienced this in my work life",
-      "This connects to my personal values",
-      "I'm not sure how to put it into words yet"
+      "I have a story that illustrates this perfectly",
+      "I'm realizing something new about myself right now",
+      "I'd like to explore a different angle instead"
     ],
     [
-      "There's a story that comes to mind",
-      "I'd like to go deeper on that question",
-      "Can we look at this from a different angle?"
+      topicWord ? `I'm not sure why ${topicWord} matters so much` : "I'm not sure why this matters so much to me",
+      "I can see both sides of this tension clearly",
+      "I want to challenge my own assumption here"
+    ],
+    [
+      "I've never put this into words before now",
+      "My perspective on this has shifted recently",
+      "I think the answer is more nuanced than that"
     ],
   ];
 
-  return replySets[messageCount % replySets.length];
+  return contextualSets[(messageCount - 2) % contextualSets.length];
 }

@@ -79,6 +79,8 @@ export default function SessionPage() {
   const [noteInsights, setNoteInsights] = useState<Insight[]>([]);
   const [selectedFormat, setSelectedFormat] = useState<NoteFormat>('full_analysis');
   const [showDistillation, setShowDistillation] = useState(false);
+  const [isPausing, setIsPausing] = useState(false);
+  const [isResuming, setIsResuming] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -184,6 +186,68 @@ export default function SessionPage() {
       setError(err instanceof Error ? err.message : 'Failed to distill session');
     } finally {
       setIsDistilling(false);
+    }
+  };
+
+  // Pause session
+  const handlePauseSession = async () => {
+    if (!user || !session) return;
+
+    setIsPausing(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/sessions/${session.id}/pause`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id,
+        },
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to pause session');
+      }
+
+      const data = await res.json();
+      setSession(data.session);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to pause session');
+    } finally {
+      setIsPausing(false);
+    }
+  };
+
+  // Resume session
+  const handleResumeSession = async () => {
+    if (!user || !session) return;
+
+    setIsResuming(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/sessions/${session.id}/resume`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id,
+        },
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to resume session');
+      }
+
+      const data = await res.json();
+      setSession(data.session);
+      // Add the gap-aware greeting message to the messages list
+      if (data.greetingMessage) {
+        setMessages(prev => [...prev, data.greetingMessage]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to resume session');
+    } finally {
+      setIsResuming(false);
     }
   };
 
@@ -470,6 +534,7 @@ export default function SessionPage() {
   const quickReplies = lastAssistantMessage ? parseQuickReplies(lastAssistantMessage.quickReplies) : [];
   const isSessionActive = session.status === 'active';
   const isSessionCompleted = session.status === 'completed';
+  const isSessionPaused = session.status === 'paused';
   const userMessageCount = messages.filter(m => m.role === 'user').length;
   const suggestsCompletion = lastAssistantMessage?.suggestsCompletion || false;
 
@@ -607,9 +672,9 @@ export default function SessionPage() {
               {topic.title}
             </h1>
             <div className="flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${isSessionActive ? 'bg-green-500' : 'bg-gray-400'}`} />
+              <span className={`w-2 h-2 rounded-full ${isSessionActive ? 'bg-green-500 animate-pulse' : isSessionPaused ? 'bg-amber-500' : 'bg-gray-400'}`} />
               <span className="text-xs text-gray-500 dark:text-gray-400">
-                {isSessionActive ? 'Interview Session' : 'Session Completed'}
+                {isSessionActive ? 'Interview Session' : isSessionPaused ? 'Session Paused' : 'Session Completed'}
               </span>
             </div>
           </div>
@@ -618,6 +683,51 @@ export default function SessionPage() {
           <span className="text-xs text-gray-400 dark:text-gray-500">
             {messages.filter(m => m.role === 'user').length} messages
           </span>
+          {/* Pause button */}
+          {isSessionActive && (
+            <button
+              onClick={handlePauseSession}
+              disabled={isPausing || isSending || isDistilling}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isPausing ? (
+                <>
+                  <div className="animate-spin w-3.5 h-3.5 border-2 border-amber-300 border-t-amber-600 rounded-full" />
+                  Pausing...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Pause
+                </>
+              )}
+            </button>
+          )}
+          {/* Resume button */}
+          {isSessionPaused && (
+            <button
+              onClick={handleResumeSession}
+              disabled={isResuming}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg bg-primary-600 hover:bg-primary-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isResuming ? (
+                <>
+                  <div className="animate-spin w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full" />
+                  Resuming...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Resume
+                </>
+              )}
+            </button>
+          )}
           {/* Finish & Distill button */}
           {isSessionActive && userMessageCount >= 1 && (
             <button
@@ -672,6 +782,29 @@ export default function SessionPage() {
               className="text-sm font-medium text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-100 underline shrink-0 ml-4"
             >
               Finish & Distill
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Session paused banner */}
+      {isSessionPaused && (
+        <div className="px-6 py-3 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-sm text-amber-700 dark:text-amber-300">
+                This session is paused. Click Resume to continue your conversation.
+              </span>
+            </div>
+            <button
+              onClick={handleResumeSession}
+              disabled={isResuming}
+              className="text-sm font-medium text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 underline shrink-0 ml-4"
+            >
+              {isResuming ? 'Resuming...' : 'Resume Session'}
             </button>
           </div>
         </div>
@@ -804,7 +937,7 @@ export default function SessionPage() {
       </div>
 
       {/* Quick replies */}
-      {quickReplies.length > 0 && isSessionActive && !isSending && !isDistilling && (
+      {quickReplies.length > 0 && isSessionActive && !isSending && !isDistilling && !isSessionPaused && (
         <div className="px-6 py-2 flex flex-wrap gap-2 shrink-0">
           {quickReplies.map((reply, index) => (
             <button
