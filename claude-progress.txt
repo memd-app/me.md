@@ -1,3 +1,35 @@
+## Session - 2026-02-15 (Agent handling Features #47 and #108)
+
+### Accomplished
+- Feature #47 (Fullscreen session view for distraction-free interview): PASSING
+  - Added isFullscreen state to SessionPage component
+  - Fullscreen toggle button in session header (expand/collapse arrows icon)
+  - When active: fixed positioning (z-[60]) covers entire viewport including sidebar
+  - Sidebar and breadcrumb navigation hidden in fullscreen mode
+  - Topic title shown in status line for context when fullscreen
+  - Escape key exits fullscreen mode
+  - Messages, input, quick replies, error banners all remain fully functional
+  - Max-width constraint (max-w-4xl) in fullscreen for readability
+  - TypeScript compiles clean, Vite build succeeds
+
+- Feature #108 (Landing page responsive on mobile at 375px): PASSING
+  - Root container: overflow-x-hidden prevents horizontal scroll
+  - Header: smaller padding/buttons on mobile (py-3, text-xs, gap-2, shrink-0)
+  - Hero: reduced mobile padding (py-12), smaller heading (text-3xl), CTA full-width (w-full sm:w-auto)
+  - Three Pillars: step badge repositioned (left-4 sm:-left-3) to avoid clip
+  - Feature cards: smaller mobile padding (p-4 sm:p-5, gap-4 sm:gap-6)
+  - Stats: always 3-column grid, smaller values (text-2xl sm:text-4xl), tiny notes (text-[10px])
+  - Testimonials: smaller mobile padding, responsive quote/icon sizes
+  - Waitlist CTA: full-width button, min-h-[48px] tap target, text-base input prevents iOS zoom
+  - Footer: centered on mobile, smaller text
+  - All sections visible and readable at 375px width
+  - No horizontal scrolling
+  - TypeScript compiles clean, Vite build succeeds
+
+### Current Status
+- Features #47 and #108 both passing
+- 88+/209 features passing
+
 ## Session - 2026-02-15 (Agent handling Features #52 and #53)
 
 ### Accomplished
