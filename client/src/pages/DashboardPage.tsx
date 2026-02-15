@@ -29,7 +29,8 @@ interface ActivityItem {
   id: string;
   type: string;
   title: string;
-  status: string;
+  description: string;
+  status?: string;
   date: string;
 }
 
@@ -114,11 +115,83 @@ export default function DashboardPage() {
     },
   ];
 
-  const SESSION_STATUS_LABELS: Record<string, string> = {
-    active: 'Active',
-    paused: 'Paused',
-    completed: 'Completed',
-    abandoned: 'Abandoned',
+  // Activity type styling configuration
+  const ACTIVITY_CONFIG: Record<string, { icon: string; dotColor: string; badgeClass: string; badgeLabel: string }> = {
+    topic_created: {
+      icon: '📋',
+      dotColor: 'bg-indigo-500',
+      badgeClass: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
+      badgeLabel: 'Topic Created',
+    },
+    session_started: {
+      icon: '💬',
+      dotColor: 'bg-blue-500',
+      badgeClass: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+      badgeLabel: 'Session Started',
+    },
+    session_completed: {
+      icon: '✅',
+      dotColor: 'bg-green-500',
+      badgeClass: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+      badgeLabel: 'Session Completed',
+    },
+    session_paused: {
+      icon: '⏸️',
+      dotColor: 'bg-amber-500',
+      badgeClass: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+      badgeLabel: 'Session Paused',
+    },
+    insight_verified: {
+      icon: '🛡️',
+      dotColor: 'bg-emerald-500',
+      badgeClass: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+      badgeLabel: 'Insight Verified',
+    },
+    insight_rejected: {
+      icon: '❌',
+      dotColor: 'bg-red-500',
+      badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+      badgeLabel: 'Insight Rejected',
+    },
+    insight_edited: {
+      icon: '✏️',
+      dotColor: 'bg-purple-500',
+      badgeClass: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+      badgeLabel: 'Insight Edited',
+    },
+    insight_action: {
+      icon: '🔍',
+      dotColor: 'bg-gray-500',
+      badgeClass: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400',
+      badgeLabel: 'Insight Action',
+    },
+    note_created: {
+      icon: '📝',
+      dotColor: 'bg-cyan-500',
+      badgeClass: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
+      badgeLabel: 'Note Created',
+    },
+    bookmark_added: {
+      icon: '⭐',
+      dotColor: 'bg-yellow-500',
+      badgeClass: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+      badgeLabel: 'Bookmark Added',
+    },
+    export_profile: {
+      icon: '📤',
+      dotColor: 'bg-teal-500',
+      badgeClass: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
+      badgeLabel: 'Profile Exported',
+    },
+  };
+
+  const getActivityConfig = (type: string) => {
+    return ACTIVITY_CONFIG[type] || {
+      icon: '📌',
+      dotColor: 'bg-gray-400',
+      badgeClass: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400',
+      badgeLabel: type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+    };
   };
 
   return (
@@ -233,13 +306,13 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Session History Timeline */}
+      {/* Recent Activity Feed */}
       <div className="card p-4 sm:p-6">
         <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-1">
-          Session History
+          Recent Activity
         </h2>
         <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-3 sm:mb-4">
-          Your recent interview sessions, most recent first
+          Your latest actions across the platform
         </p>
         {isLoading ? (
           <div className="space-y-3">
@@ -250,7 +323,7 @@ export default function DashboardPage() {
         ) : activity.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-gray-500 dark:text-gray-400 text-sm">
-              No sessions yet. Start your first interview to see your session history here.
+              No activity yet. Start by creating a topic or having your first interview.
             </p>
           </div>
         ) : (
@@ -259,61 +332,44 @@ export default function DashboardPage() {
             <div className="absolute left-[19px] sm:left-[23px] top-4 bottom-4 w-0.5 bg-gray-200 dark:bg-gray-700" />
             <div className="space-y-1">
               {activity.map((item) => {
-                const sessionDate = new Date(item.date);
-                const statusColor = item.status === 'completed'
-                  ? 'bg-green-500'
-                  : item.status === 'active'
-                    ? 'bg-blue-500'
-                    : item.status === 'paused'
-                      ? 'bg-amber-500'
-                      : 'bg-gray-400';
+                const activityDate = new Date(item.date);
+                const config = getActivityConfig(item.type);
                 return (
-                  <Link
+                  <div
                     key={item.id}
-                    to={`/app/session/${item.id}`}
-                    className="relative flex items-start gap-3 sm:gap-4 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors min-h-[56px] active:bg-gray-100 dark:active:bg-gray-800 group"
+                    className="relative flex items-start gap-3 sm:gap-4 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors min-h-[56px] group"
                   >
-                    {/* Timeline dot */}
-                    <div className="relative z-10 flex-shrink-0 mt-1">
-                      <div className={`w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full ${statusColor} ring-2 ring-white dark:ring-gray-900 group-hover:ring-gray-50 dark:group-hover:ring-gray-800`} />
+                    {/* Timeline dot with icon */}
+                    <div className="relative z-10 flex-shrink-0 mt-0.5">
+                      <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full ${config.dotColor} ring-2 ring-white dark:ring-gray-900 group-hover:ring-gray-50 dark:group-hover:ring-gray-800 flex items-center justify-center text-sm`}>
+                        <span className="text-white text-xs sm:text-sm">{config.icon}</span>
+                      </div>
                     </div>
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                          {item.title}
+                          {item.description}
                         </p>
-                        <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${
-                          item.status === 'completed'
-                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                            : item.status === 'active'
-                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                              : item.status === 'paused'
-                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                                : 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
-                        }`}>
-                          {SESSION_STATUS_LABELS[item.status] || item.status}
+                        <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${config.badgeClass}`}>
+                          {config.badgeLabel}
                         </span>
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        {sessionDate.toLocaleDateString('en-US', {
+                        {activityDate.toLocaleDateString('en-US', {
                           weekday: 'short',
                           month: 'short',
                           day: 'numeric',
-                          year: sessionDate.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
+                          year: activityDate.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
                         })}
                         {' at '}
-                        {sessionDate.toLocaleTimeString('en-US', {
+                        {activityDate.toLocaleTimeString('en-US', {
                           hour: 'numeric',
                           minute: '2-digit',
                         })}
                       </p>
                     </div>
-                    {/* Arrow indicator */}
-                    <svg className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Link>
+                  </div>
                 );
               })}
             </div>
