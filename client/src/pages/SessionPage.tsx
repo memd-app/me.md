@@ -85,6 +85,7 @@ export default function SessionPage() {
   const [isRetrying, setIsRetrying] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isVoiceInputPending, setIsVoiceInputPending] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -375,6 +376,18 @@ export default function SessionPage() {
       }
     };
   }, []);
+
+  // Handle Escape key to exit fullscreen mode
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsFullscreen(false);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isFullscreen]);
 
   // Streaming AI response state
   const [streamingContent, setStreamingContent] = useState<string>('');
@@ -967,35 +980,40 @@ export default function SessionPage() {
   }
 
   return (
-    <div className="flex flex-col h-full max-w-4xl mx-auto -m-6">
+    <div className={`flex flex-col ${isFullscreen ? 'fixed inset-0 z-[60] bg-gray-50 dark:bg-dark-bg' : 'h-full max-w-4xl mx-auto -m-6'}`}>
       {/* Session header with breadcrumb */}
       <div className="flex items-center justify-between px-6 py-3 bg-white dark:bg-dark-surface border-b border-gray-200 dark:border-dark-border shrink-0">
         <div className="flex items-center gap-3 min-w-0">
-          <Link
-            to={`/app/topics/${topic.id}`}
-            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors shrink-0"
-            title="Back to topic"
-          >
-            <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </Link>
+          {!isFullscreen && (
+            <Link
+              to={`/app/topics/${topic.id}`}
+              className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors shrink-0"
+              title="Back to topic"
+            >
+              <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </Link>
+          )}
           <div className="min-w-0">
-            {/* Breadcrumb navigation */}
-            <nav className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 mb-0.5">
-              <Link to="/app/topics" className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
-                Topics
-              </Link>
-              <span>/</span>
-              <Link to={`/app/topics/${topic.id}`} className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors truncate max-w-[150px]" title={topic.title}>
-                {topic.title}
-              </Link>
-              <span>/</span>
-              <span className="text-gray-600 dark:text-gray-300">Session</span>
-            </nav>
+            {/* Breadcrumb navigation - hidden in fullscreen */}
+            {!isFullscreen && (
+              <nav className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 mb-0.5">
+                <Link to="/app/topics" className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
+                  Topics
+                </Link>
+                <span>/</span>
+                <Link to={`/app/topics/${topic.id}`} className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors truncate max-w-[150px]" title={topic.title}>
+                  {topic.title}
+                </Link>
+                <span>/</span>
+                <span className="text-gray-600 dark:text-gray-300">Session</span>
+              </nav>
+            )}
             <div className="flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full ${isSessionActive ? 'bg-green-500 animate-pulse' : isSessionPaused ? 'bg-amber-500' : 'bg-gray-400'}`} />
               <span className="text-xs text-gray-500 dark:text-gray-400">
+                {isFullscreen ? `${topic.title} — ` : ''}
                 {isSessionActive ? 'Interview Session' : isSessionPaused ? 'Session Paused' : 'Session Completed'}
               </span>
             </div>
@@ -1005,6 +1023,23 @@ export default function SessionPage() {
           <span className="text-xs text-gray-400 dark:text-gray-500">
             {messages.filter(m => m.role === 'user').length} messages
           </span>
+          {/* Fullscreen toggle button */}
+          <button
+            onClick={() => setIsFullscreen(!isFullscreen)}
+            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Focus mode'}
+            aria-label={isFullscreen ? 'Exit fullscreen mode' : 'Enter focus mode'}
+          >
+            {isFullscreen ? (
+              <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+              </svg>
+            )}
+          </button>
           {/* Pause button */}
           {isSessionActive && (
             <button
@@ -1158,7 +1193,7 @@ export default function SessionPage() {
       )}
 
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+      <div className={`flex-1 overflow-y-auto px-6 py-4 space-y-4 ${isFullscreen ? 'max-w-4xl mx-auto w-full' : ''}`}>
         {messages.map((message) => (
           <div
             key={message.id}
@@ -1282,7 +1317,7 @@ export default function SessionPage() {
 
       {/* Quick replies */}
       {quickReplies.length > 0 && isSessionActive && !isSending && !isDistilling && !isSessionPaused && (
-        <div className="px-6 py-2 flex flex-wrap gap-2 shrink-0">
+        <div className={`px-6 py-2 flex flex-wrap gap-2 shrink-0 ${isFullscreen ? 'max-w-4xl mx-auto w-full' : ''}`}>
           {quickReplies.map((reply, index) => (
             <button
               key={index}
@@ -1298,7 +1333,7 @@ export default function SessionPage() {
 
       {/* Error banner with retry button */}
       {error && (
-        <div className="px-6 py-2 shrink-0">
+        <div className={`px-6 py-2 shrink-0 ${isFullscreen ? 'max-w-4xl mx-auto w-full' : ''}`}>
           <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
@@ -1349,7 +1384,7 @@ export default function SessionPage() {
 
       {/* Input area */}
       {isSessionActive && !isDistilling && (
-        <div className="px-6 py-4 bg-white dark:bg-dark-surface border-t border-gray-200 dark:border-dark-border shrink-0">
+        <div className={`px-6 py-4 bg-white dark:bg-dark-surface border-t border-gray-200 dark:border-dark-border shrink-0 ${isFullscreen ? 'max-w-4xl mx-auto w-full' : ''}`}>
           <form onSubmit={handleSubmit} className="flex items-end gap-3">
             <div className="flex-1 relative">
               <textarea
