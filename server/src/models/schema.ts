@@ -8,6 +8,7 @@ export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
   firebaseUid: text('firebase_uid').unique().notNull(),
   email: text('email').unique().notNull(),
+  passwordHash: text('password_hash'),
   name: text('name').notNull(),
   dateOfBirth: text('date_of_birth').notNull(),
   location: text('location').notNull(),

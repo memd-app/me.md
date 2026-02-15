@@ -31,6 +31,7 @@ function initializeSchema() {
       id TEXT PRIMARY KEY,
       firebase_uid TEXT UNIQUE NOT NULL,
       email TEXT UNIQUE NOT NULL,
+      password_hash TEXT,
       name TEXT NOT NULL,
       date_of_birth TEXT NOT NULL,
       location TEXT NOT NULL,
@@ -212,6 +213,19 @@ function initializeSchema() {
 }
 
 initializeSchema();
+
+// Migrations: add columns that may not exist in existing databases
+function runMigrations() {
+  // Check if password_hash column exists in users table
+  const tableInfo = sqlite.pragma('table_info(users)') as Array<{ name: string }>;
+  const hasPasswordHash = tableInfo.some((col) => col.name === 'password_hash');
+  if (!hasPasswordHash) {
+    sqlite.exec('ALTER TABLE users ADD COLUMN password_hash TEXT');
+    console.log('[me.md] Migration: added password_hash column to users table');
+  }
+}
+
+runMigrations();
 
 export const db = drizzle(sqlite, {
   schema,

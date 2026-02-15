@@ -3,8 +3,25 @@ import { db } from '../config/database.js';
 import { users } from '../models/schema.js';
 import { eq } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
+import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 
 export const authRouter = Router();
+
+// Hash a password with a random salt
+function hashPassword(password: string): string {
+  const salt = randomBytes(16).toString('hex');
+  const hash = scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+// Verify a password against a stored hash
+function verifyPassword(password: string, storedHash: string): boolean {
+  const [salt, hash] = storedHash.split(':');
+  if (!salt || !hash) return false;
+  const hashBuffer = Buffer.from(hash, 'hex');
+  const derivedKey = scryptSync(password, salt, 64);
+  return timingSafeEqual(hashBuffer, derivedKey);
+}
 
 // POST /api/auth/register - Register a new user (dev mode: no Firebase verification)
 authRouter.post('/register', async (req, res) => {
@@ -42,10 +59,14 @@ authRouter.post('/register', async (req, res) => {
     // In development mode, use a generated firebase_uid
     const firebaseUid = `dev_${uuidv4()}`;
 
+    // Hash the password before storing
+    const passwordHash = hashPassword(password);
+
     const newUser = db.insert(users).values({
       id: userId,
       firebaseUid,
       email,
+      passwordHash,
       name: name || 'Anonymous',
       dateOfBirth: dateOfBirth || '2000-01-01',
       location: location || 'Unknown',
@@ -53,9 +74,12 @@ authRouter.post('/register', async (req, res) => {
       gender: gender || 'unspecified',
     }).returning().get();
 
+    // Don't return password_hash in the response
+    const { passwordHash: _ph, ...userWithoutPassword } = newUser;
+
     res.status(201).json({
       message: 'User registered successfully',
-      user: newUser,
+      user: userWithoutPassword,
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -63,13 +87,17 @@ authRouter.post('/register', async (req, res) => {
   }
 });
 
-// POST /api/auth/login - Login (dev mode: simple email lookup)
+// POST /api/auth/login - Login with email and password
 authRouter.post('/login', async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, password } = req.body;
 
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
+    }
+
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required' });
     }
 
     const user = db.select().from(users).where(eq(users.email, email)).get();
@@ -77,9 +105,20 @@ authRouter.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Verify password - if user has no password_hash (legacy user), allow login with any password
+    if (user.passwordHash) {
+      const isValid = verifyPassword(password, user.passwordHash);
+      if (!isValid) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+    }
+
+    // Don't return password_hash in the response
+    const { passwordHash: _ph, ...userWithoutPassword } = user;
+
     res.json({
       message: 'Login successful',
-      user,
+      user: userWithoutPassword,
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -101,7 +140,10 @@ authRouter.get('/me', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json({ user });
+    // Don't return password_hash in the response
+    const { passwordHash: _ph, ...userWithoutPassword } = user;
+
+    res.json({ user: userWithoutPassword });
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user' });
