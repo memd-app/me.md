@@ -20,6 +20,16 @@ interface EditableField {
   type?: string;
 }
 
+interface McpPermission {
+  id: string;
+  userId: string;
+  agentName: string;
+  isEnabled: boolean;
+  lastAccessedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 const PROFILE_FIELDS: EditableField[] = [
   { key: 'name', label: 'Name', editable: true },
   { key: 'email', label: 'Email', editable: false },
@@ -44,6 +54,16 @@ export default function SettingsPage() {
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // MCP permissions state
+  const [mcpPermissions, setMcpPermissions] = useState<McpPermission[]>([]);
+  const [mcpLoading, setMcpLoading] = useState(false);
+  const [newAgentName, setNewAgentName] = useState('');
+  const [mcpError, setMcpError] = useState<string | null>(null);
+  const [mcpSuccess, setMcpSuccess] = useState<string | null>(null);
+  const [addingAgent, setAddingAgent] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const tabs = [
     { id: 'account', label: 'Account' },
@@ -81,6 +101,135 @@ export default function SettingsPage() {
   useEffect(() => {
     fetchProfile();
   }, [fetchProfile]);
+
+  // MCP permissions management
+  const fetchMcpPermissions = useCallback(async () => {
+    if (!user?.id) return;
+    setMcpLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/mcp/permissions`, {
+        headers: { 'x-user-id': user.id },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMcpPermissions(data.permissions || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch MCP permissions:', err);
+    } finally {
+      setMcpLoading(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (activeTab === 'mcp') {
+      fetchMcpPermissions();
+    }
+  }, [activeTab, fetchMcpPermissions]);
+
+  const handleAddAgent = async () => {
+    if (!user?.id || !newAgentName.trim()) return;
+    setAddingAgent(true);
+    setMcpError(null);
+    setMcpSuccess(null);
+    try {
+      const res = await fetch(`${API_BASE}/mcp/permissions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id,
+        },
+        body: JSON.stringify({ agentName: newAgentName.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to add agent');
+      }
+      const data = await res.json();
+      setMcpPermissions((prev) => [data.permission, ...prev]);
+      setNewAgentName('');
+      setShowAddForm(false);
+      setMcpSuccess(`Agent "${data.permission.agentName}" added successfully`);
+      setTimeout(() => setMcpSuccess(null), 3000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to add agent';
+      setMcpError(message);
+      setTimeout(() => setMcpError(null), 5000);
+    } finally {
+      setAddingAgent(false);
+    }
+  };
+
+  const handleToggleAgent = async (permissionId: string, currentEnabled: boolean) => {
+    if (!user?.id) return;
+    setMcpError(null);
+    setMcpSuccess(null);
+    try {
+      const res = await fetch(`${API_BASE}/mcp/permissions/${permissionId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id,
+        },
+        body: JSON.stringify({ isEnabled: !currentEnabled }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to update permission');
+      }
+      const data = await res.json();
+      setMcpPermissions((prev) =>
+        prev.map((p) => (p.id === permissionId ? data.permission : p))
+      );
+      const action = !currentEnabled ? 'enabled' : 'disabled';
+      setMcpSuccess(`Agent "${data.permission.agentName}" ${action}`);
+      setTimeout(() => setMcpSuccess(null), 3000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update permission';
+      setMcpError(message);
+      setTimeout(() => setMcpError(null), 5000);
+    }
+  };
+
+  const handleDeleteAgent = async (permissionId: string) => {
+    if (!user?.id) return;
+    setMcpError(null);
+    setMcpSuccess(null);
+    const perm = mcpPermissions.find((p) => p.id === permissionId);
+    try {
+      const res = await fetch(`${API_BASE}/mcp/permissions/${permissionId}`, {
+        method: 'DELETE',
+        headers: { 'x-user-id': user.id },
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to revoke access');
+      }
+      setMcpPermissions((prev) => prev.filter((p) => p.id !== permissionId));
+      setConfirmDelete(null);
+      setMcpSuccess(`Agent "${perm?.agentName || ''}" access revoked`);
+      setTimeout(() => setMcpSuccess(null), 3000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to revoke access';
+      setMcpError(message);
+      setTimeout(() => setMcpError(null), 5000);
+    }
+  };
+
+  const formatMcpDate = (dateStr: string | null): string => {
+    if (!dateStr) return 'Never';
+    try {
+      return new Date(dateStr).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return dateStr;
+    }
+  };
 
   const startEditing = (field: string, currentValue: string) => {
     setEditingField(field);
@@ -450,13 +599,200 @@ export default function SettingsPage() {
       )}
 
       {activeTab === 'mcp' && (
-        <div className="card">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">MCP Access Permissions</h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Control which AI agents can access your verified personal context.
-          </p>
-          <div className="text-center py-8">
-            <p className="text-gray-500 dark:text-gray-400">No MCP connections configured yet.</p>
+        <div className="space-y-6">
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">MCP Access Permissions</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  Control which AI agents can access your verified personal context via the Model Context Protocol.
+                </p>
+              </div>
+              {!showAddForm && (
+                <button
+                  onClick={() => { setShowAddForm(true); setMcpError(null); }}
+                  className="btn-primary text-sm flex items-center gap-1.5"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Agent
+                </button>
+              )}
+            </div>
+
+            {/* Status messages */}
+            {mcpSuccess && (
+              <div className="mb-4 p-3 rounded-lg text-sm bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800">
+                {mcpSuccess}
+              </div>
+            )}
+            {mcpError && (
+              <div className="mb-4 p-3 rounded-lg text-sm bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">
+                {mcpError}
+              </div>
+            )}
+
+            {/* Add Agent Form */}
+            {showAddForm && (
+              <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-dark-border">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Add New Agent Connection</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                  Enter the name of the AI agent or application that should have access to your personal context.
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newAgentName}
+                    onChange={(e) => setNewAgentName(e.target.value)}
+                    placeholder="e.g., Claude Desktop, Cursor, Custom Bot"
+                    className="input-field flex-1"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && newAgentName.trim()) handleAddAgent();
+                      if (e.key === 'Escape') { setShowAddForm(false); setNewAgentName(''); }
+                    }}
+                  />
+                  <button
+                    onClick={handleAddAgent}
+                    disabled={addingAgent || !newAgentName.trim()}
+                    className="btn-primary text-sm px-4 py-2"
+                  >
+                    {addingAgent ? 'Adding...' : 'Add'}
+                  </button>
+                  <button
+                    onClick={() => { setShowAddForm(false); setNewAgentName(''); }}
+                    className="btn-secondary text-sm px-4 py-2"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Permissions List */}
+            {mcpLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="animate-pulse flex items-center justify-between py-4 border-b border-gray-100 dark:border-dark-border">
+                    <div>
+                      <div className="h-4 w-36 bg-gray-200 dark:bg-gray-700 rounded mb-2" />
+                      <div className="h-3 w-24 bg-gray-200 dark:bg-gray-700 rounded" />
+                    </div>
+                    <div className="h-6 w-12 bg-gray-200 dark:bg-gray-700 rounded-full" />
+                  </div>
+                ))}
+              </div>
+            ) : mcpPermissions.length === 0 ? (
+              <div className="text-center py-10">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                </div>
+                <p className="text-gray-500 dark:text-gray-400 font-medium">No MCP connections configured yet</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+                  Add an AI agent to allow it to access your verified personal context.
+                </p>
+                {!showAddForm && (
+                  <button
+                    onClick={() => setShowAddForm(true)}
+                    className="mt-4 btn-primary text-sm"
+                  >
+                    Add Your First Agent
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100 dark:divide-dark-border">
+                {mcpPermissions.map((perm) => (
+                  <div key={perm.id} className="py-4 first:pt-0 last:pb-0">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-medium text-gray-900 dark:text-white truncate">
+                            {perm.agentName}
+                          </h3>
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                              perm.isEnabled
+                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                                : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
+                            }`}
+                          >
+                            {perm.isEnabled ? 'Active' : 'Disabled'}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                          <span>Added: {formatMcpDate(perm.createdAt)}</span>
+                          <span>Last accessed: {formatMcpDate(perm.lastAccessedAt)}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 ml-4">
+                        {/* Toggle switch */}
+                        <button
+                          onClick={() => handleToggleAgent(perm.id, perm.isEnabled)}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${
+                            perm.isEnabled ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
+                          }`}
+                          role="switch"
+                          aria-checked={perm.isEnabled}
+                          title={perm.isEnabled ? 'Disable agent access' : 'Enable agent access'}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              perm.isEnabled ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                        {/* Delete button */}
+                        {confirmDelete === perm.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleDeleteAgent(perm.id)}
+                              className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 font-medium px-2 py-1 rounded bg-red-50 dark:bg-red-900/20"
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              onClick={() => setConfirmDelete(null)}
+                              className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 px-2 py-1"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDelete(perm.id)}
+                            className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors p-1"
+                            title="Revoke agent access"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* MCP Info Card */}
+          <div className="card bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800">
+            <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-2">About MCP Access</h3>
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              The Model Context Protocol (MCP) allows AI agents to access your verified personal context.
+              Only verified insights with the &quot;exportable&quot; privacy tier will be shared.
+              Items marked as &quot;never export&quot; are always excluded.
+            </p>
+            <ul className="mt-2 text-sm text-blue-600 dark:text-blue-400 list-disc list-inside space-y-1">
+              <li>Enable or disable access for each agent individually</li>
+              <li>Revoke access at any time by deleting the connection</li>
+              <li>Track when each agent last accessed your data</li>
+            </ul>
           </div>
         </div>
       )}
