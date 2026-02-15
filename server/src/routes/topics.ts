@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../config/database.js';
-import { topics } from '../models/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { topics, sessions, messages, notes, insights, topicConnections, conceptNodes, bookmarks } from '../models/schema.js';
+import { eq, and, or } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export const topicsRouter = Router();
@@ -134,7 +134,7 @@ topicsRouter.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/topics/:id - Delete a topic
+// DELETE /api/topics/:id - Delete a topic (cascades to sessions, messages, notes, insights, connections, concept nodes)
 topicsRouter.delete('/:id', async (req, res) => {
   try {
     const userId = req.headers['x-user-id'] as string || req.query.userId as string;
@@ -152,9 +152,45 @@ topicsRouter.delete('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Topic not found' });
     }
 
+    // Count related data before deletion for response info
+    const relatedSessions = db.select().from(sessions).where(eq(sessions.topicId, topicId)).all();
+    const sessionIds = relatedSessions.map(s => s.id);
+
+    let messageCount = 0;
+    let bookmarkCount = 0;
+    for (const sid of sessionIds) {
+      const msgs = db.select().from(messages).where(eq(messages.sessionId, sid)).all();
+      messageCount += msgs.length;
+      const bks = db.select().from(bookmarks).where(eq(bookmarks.sessionId, sid)).all();
+      bookmarkCount += bks.length;
+    }
+
+    const relatedNotes = db.select().from(notes).where(eq(notes.topicId, topicId)).all();
+    const relatedInsights = db.select().from(insights).where(eq(insights.topicId, topicId)).all();
+    const relatedConnections = db.select().from(topicConnections).where(
+      or(eq(topicConnections.sourceTopicId, topicId), eq(topicConnections.targetTopicId, topicId))
+    ).all();
+    const relatedConceptNodes = db.select().from(conceptNodes).where(eq(conceptNodes.topicId, topicId)).all();
+
+    const cascadedCounts = {
+      sessions: relatedSessions.length,
+      messages: messageCount,
+      notes: relatedNotes.length,
+      insights: relatedInsights.length,
+      connections: relatedConnections.length,
+      conceptNodes: relatedConceptNodes.length,
+      bookmarks: bookmarkCount,
+    };
+
+    // Delete the topic - ON DELETE CASCADE handles all related data
     db.delete(topics).where(eq(topics.id, topicId)).run();
 
-    res.json({ message: 'Topic deleted successfully' });
+    res.json({
+      message: 'Topic deleted successfully',
+      topicId,
+      topicTitle: existing.title,
+      cascaded: cascadedCounts,
+    });
   } catch (error) {
     console.error('Delete topic error:', error);
     res.status(500).json({ error: 'Failed to delete topic' });
