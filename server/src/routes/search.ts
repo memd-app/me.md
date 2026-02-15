@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db, sqlite } from '../config/database.js';
 import { topics, insights, notes, messages, sessions } from '../models/schema.js';
-import { eq, and, like, or, desc } from 'drizzle-orm';
+import { eq, and, like, or, desc, gte, lte } from 'drizzle-orm';
 
 export const searchRouter = Router();
 
@@ -13,13 +13,14 @@ interface SearchResult {
   context?: string;
   topicId?: string;
   topicTitle?: string;
+  topicCategory?: string;
   sessionId?: string;
   verificationStatus?: string;
   confidenceScore?: number;
   createdAt?: string;
 }
 
-// GET /api/search?q=<query>&filter=<all|topics|insights|sessions|notes>&page=<number>&limit=<number>
+// GET /api/search?q=<query>&filter=<type>&verificationStatus=<status>&dateFrom=<date>&dateTo=<date>&minConfidence=<num>&maxConfidence=<num>&page=<num>&limit=<num>
 searchRouter.get('/', async (req, res) => {
   try {
     const userId = req.headers['x-user-id'] as string || req.query.userId as string;
@@ -28,12 +29,22 @@ searchRouter.get('/', async (req, res) => {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
-    const query = (req.query.q as string || '').trim();
+    const rawQuery = (req.query.q as string || '');
+    // Sanitize: trim and limit query length to 500 chars to prevent abuse
+    const query = rawQuery.trim().substring(0, 500);
     const filter = (req.query.filter as string || 'all').toLowerCase();
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
     const offset = (page - 1) * limit;
 
+    // Advanced filter params (Feature #87)
+    const verificationStatusFilter = (req.query.verificationStatus as string || '').trim().toLowerCase();
+    const dateFrom = (req.query.dateFrom as string || '').trim();
+    const dateTo = (req.query.dateTo as string || '').trim();
+    const minConfidence = parseInt(req.query.minConfidence as string) || 0;
+    const maxConfidence = parseInt(req.query.maxConfidence as string) || 100;
+
+    // Handle empty or whitespace-only queries (Feature #88)
     if (!query) {
       return res.json({
         results: [],
@@ -75,6 +86,7 @@ searchRouter.get('/', async (req, res) => {
           context: t.status || undefined,
           topicId: t.id,
           topicTitle: t.title,
+          topicCategory: t.presetCategory || t.intent || undefined,
           createdAt: t.createdAt || undefined,
         });
       }
@@ -85,6 +97,8 @@ searchRouter.get('/', async (req, res) => {
       const insightResults = db.select({
         insight: insights,
         topicTitle: topics.title,
+        topicCategory: topics.presetCategory,
+        topicIntent: topics.intent,
       }).from(insights)
         .leftJoin(topics, eq(insights.topicId, topics.id))
         .where(
@@ -106,6 +120,7 @@ searchRouter.get('/', async (req, res) => {
           context: i.verificationStatus || undefined,
           topicId: i.topicId || undefined,
           topicTitle: row.topicTitle || undefined,
+          topicCategory: row.topicCategory || row.topicIntent || undefined,
           verificationStatus: i.verificationStatus || undefined,
           confidenceScore: i.confidenceScore || undefined,
           createdAt: i.createdAt || undefined,
@@ -115,8 +130,6 @@ searchRouter.get('/', async (req, res) => {
 
     // Search Sessions (via messages)
     if (filter === 'all' || filter === 'sessions') {
-      // Find messages that match, then group by session
-      // Use raw SQL for the join across sessions -> messages -> topics
       const messageResults = sqlite.prepare(`
         SELECT
           m.id as message_id,
@@ -127,7 +140,9 @@ searchRouter.get('/', async (req, res) => {
           s.created_at as session_created_at,
           s.status as session_status,
           t.id as topic_id,
-          t.title as topic_title
+          t.title as topic_title,
+          t.preset_category as topic_category,
+          t.intent as topic_intent
         FROM messages m
         JOIN sessions s ON m.session_id = s.id
         JOIN topics t ON s.topic_id = t.id
@@ -144,6 +159,8 @@ searchRouter.get('/', async (req, res) => {
         session_status: string;
         topic_id: string;
         topic_title: string;
+        topic_category: string | null;
+        topic_intent: string | null;
       }>;
 
       // Deduplicate by session - show first match per session
@@ -161,6 +178,7 @@ searchRouter.get('/', async (req, res) => {
           context: msg.session_status || undefined,
           topicId: msg.topic_id || undefined,
           topicTitle: msg.topic_title || undefined,
+          topicCategory: msg.topic_category || msg.topic_intent || undefined,
           sessionId: msg.session_id,
           createdAt: msg.session_created_at || undefined,
         });
@@ -172,6 +190,8 @@ searchRouter.get('/', async (req, res) => {
       const noteResults = db.select({
         note: notes,
         topicTitle: topics.title,
+        topicCategory: topics.presetCategory,
+        topicIntent: topics.intent,
       }).from(notes)
         .leftJoin(topics, eq(notes.topicId, topics.id))
         .where(
@@ -189,7 +209,6 @@ searchRouter.get('/', async (req, res) => {
 
       for (const row of noteResults) {
         const n = row.note;
-        // Search across all content fields to find the best snippet
         const allContent = [
           n.contentFullAnalysis,
           n.contentBriefSummary,
@@ -203,24 +222,72 @@ searchRouter.get('/', async (req, res) => {
           snippet,
           topicId: n.topicId || undefined,
           topicTitle: row.topicTitle || undefined,
+          topicCategory: row.topicCategory || row.topicIntent || undefined,
           sessionId: n.sessionId || undefined,
           createdAt: n.createdAt || undefined,
         });
       }
     }
 
+    // Apply advanced filters (Feature #87)
+    let filteredResults = results;
+
+    // Filter by verification status (applies mainly to insights, but show others too)
+    if (verificationStatusFilter) {
+      filteredResults = filteredResults.filter(r => {
+        if (r.type === 'insight') {
+          return r.verificationStatus === verificationStatusFilter;
+        }
+        // Non-insight types pass through unless specifically filtering insights
+        return filter !== 'insights';
+      });
+    }
+
+    // Filter by date range
+    if (dateFrom) {
+      const fromDate = new Date(dateFrom);
+      if (!isNaN(fromDate.getTime())) {
+        filteredResults = filteredResults.filter(r => {
+          if (!r.createdAt) return false;
+          return new Date(r.createdAt) >= fromDate;
+        });
+      }
+    }
+    if (dateTo) {
+      const toDate = new Date(dateTo);
+      if (!isNaN(toDate.getTime())) {
+        // Include the full day by setting to end of day
+        toDate.setHours(23, 59, 59, 999);
+        filteredResults = filteredResults.filter(r => {
+          if (!r.createdAt) return false;
+          return new Date(r.createdAt) <= toDate;
+        });
+      }
+    }
+
+    // Filter by confidence score range (applies to insights)
+    if (minConfidence > 0 || maxConfidence < 100) {
+      filteredResults = filteredResults.filter(r => {
+        if (r.type === 'insight' && r.confidenceScore !== undefined) {
+          return r.confidenceScore >= minConfidence && r.confidenceScore <= maxConfidence;
+        }
+        // Non-insight types pass through
+        return true;
+      });
+    }
+
     // Sort all results by createdAt descending (most recent first)
-    results.sort((a, b) => {
+    filteredResults.sort((a, b) => {
       const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
       return dateB - dateA;
     });
 
-    totalCount = results.length;
+    totalCount = filteredResults.length;
     const totalPages = Math.ceil(totalCount / limit);
 
     // Apply pagination
-    const paginatedResults = results.slice(offset, offset + limit);
+    const paginatedResults = filteredResults.slice(offset, offset + limit);
 
     res.json({
       results: paginatedResults,
