@@ -32,6 +32,23 @@ sessionsRouter.post('/', async (req, res) => {
 
     const sessionId = uuidv4();
 
+    // Parse reference URLs from the topic for pre-interview context
+    const referenceUrls = parseJsonArray(topic.referenceUrls);
+    const contextItems = parseJsonArray(topic.contextItems);
+
+    // Build research_data from reference URLs and context items
+    let researchData: Record<string, unknown> | null = null;
+    if (referenceUrls.length > 0 || contextItems.length > 0) {
+      researchData = {
+        referenceUrls: referenceUrls,
+        contextItems: contextItems,
+        processedAt: new Date().toISOString(),
+        urlCount: referenceUrls.length,
+        contextItemCount: contextItems.length,
+        summary: buildContextSummary(referenceUrls, contextItems),
+      };
+    }
+
     const newSession = db.insert(sessions).values({
       id: sessionId,
       topicId,
@@ -39,6 +56,7 @@ sessionsRouter.post('/', async (req, res) => {
       status: 'active',
       isMiniSession: isMiniSession || false,
       timeSpentSeconds: 0,
+      researchData: researchData ? JSON.stringify(researchData) : null,
     }).returning().get();
 
     // Update topic status to in_progress if it's in backlog/scheduled
@@ -49,8 +67,8 @@ sessionsRouter.post('/', async (req, res) => {
       }).where(eq(topics.id, topicId)).run();
     }
 
-    // Create an opening AI message
-    const openingMessageContent = generateOpeningMessage(topic.title, topic.description, topic.intent);
+    // Create an opening AI message (context-aware if URLs provided)
+    const openingMessageContent = generateOpeningMessage(topic.title, topic.description, topic.intent, referenceUrls);
     const openingMessageId = uuidv4();
 
     const openingMessage = db.insert(messages).values({
@@ -190,11 +208,15 @@ sessionsRouter.post('/:id/messages', async (req, res) => {
       .orderBy(messages.createdAt)
       .all();
 
+    // Check if session has research_data (from reference URLs)
+    const hasResearchContext = !!session.researchData;
+
     const aiResponseContent = generateAIResponse(
       topic?.title || 'Unknown Topic',
       topic?.description || '',
       topic?.intent || '',
-      conversationHistory.map(m => ({ role: m.role, content: m.content }))
+      conversationHistory.map(m => ({ role: m.role, content: m.content })),
+      hasResearchContext
     );
 
     const aiMessageId = uuidv4();
@@ -258,8 +280,31 @@ sessionsRouter.put('/:id', async (req, res) => {
   }
 });
 
+// Helper function to parse JSON arrays safely
+function parseJsonArray(jsonStr: string | null): string[] {
+  if (!jsonStr) return [];
+  try {
+    const parsed = JSON.parse(jsonStr);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+// Helper function to build a context summary from reference URLs and context items
+function buildContextSummary(referenceUrls: string[], contextItems: string[]): string {
+  const parts: string[] = [];
+  if (referenceUrls.length > 0) {
+    parts.push(`${referenceUrls.length} reference URL(s) provided: ${referenceUrls.join(', ')}`);
+  }
+  if (contextItems.length > 0) {
+    parts.push(`${contextItems.length} context item(s) provided`);
+  }
+  return parts.join('; ');
+}
+
 // Helper function to generate an opening message based on topic
-function generateOpeningMessage(title: string, description: string | null, intent: string | null): string {
+function generateOpeningMessage(title: string, description: string | null, intent: string | null, referenceUrls: string[] = []): string {
   const intentPhrases: Record<string, string> = {
     articulate: "help you articulate your thoughts on",
     explore: "explore and discover new perspectives about",
@@ -277,7 +322,17 @@ function generateOpeningMessage(title: string, description: string | null, inten
     message += `\n\n${description}`;
   }
 
-  message += `\n\nTo get us started, I'd love to hear: **What first comes to mind when you think about "${title}"?** Feel free to share anything — a thought, a memory, a feeling, or even a question you have about it.`;
+  // If reference URLs are provided, acknowledge them and tailor the approach
+  if (referenceUrls.length > 0) {
+    message += `\n\n**Pre-interview context:** I see you've provided ${referenceUrls.length} reference${referenceUrls.length > 1 ? 's' : ''} to help guide our conversation:`;
+    referenceUrls.forEach((url, index) => {
+      message += `\n- [Reference ${index + 1}](${url})`;
+    });
+    message += `\n\nI'll use these references to ask more targeted questions and better understand your perspective on **${title}**. Let's dive in with a focused approach.`;
+    message += `\n\n**Based on the context you've shared, what's the most important aspect of "${title}" that you'd like to explore?** How does the referenced material connect to your personal experience or thinking?`;
+  } else {
+    message += `\n\nTo get us started, I'd love to hear: **What first comes to mind when you think about "${title}"?** Feel free to share anything — a thought, a memory, a feeling, or even a question you have about it.`;
+  }
 
   return message;
 }
@@ -287,14 +342,24 @@ function generateAIResponse(
   topicTitle: string,
   topicDescription: string,
   topicIntent: string,
-  conversationHistory: Array<{ role: string; content: string }>
+  conversationHistory: Array<{ role: string; content: string }>,
+  hasResearchContext: boolean = false
 ): string {
   const userMessages = conversationHistory.filter(m => m.role === 'user');
   const messageCount = userMessages.length;
   const lastUserMessage = userMessages[userMessages.length - 1]?.content || '';
 
-  // Reflection + focused question pattern
-  const reflections = [
+  // Context-aware reflections (when reference URLs were provided)
+  const contextReflections = [
+    `That's a really thoughtful perspective, especially considering the context you've provided. I can see how the references you shared connect to your understanding of **${topicTitle}**.`,
+    `Thank you for sharing that. Drawing from both your personal experience and the reference materials, what you've described reveals something meaningful about this area.`,
+    `I appreciate you going deeper on that. The richness of your perspective on **${topicTitle}**, combined with the context you've gathered, paints a compelling picture.`,
+    `That's fascinating — your perspective is particularly nuanced, and I can see how the references you provided have informed your thinking about **${topicTitle}**.`,
+    `I hear you. What you've shared connects powerfully to the themes in your reference materials around **${topicTitle}** — let's explore that further.`,
+  ];
+
+  // Standard reflections (no reference URLs)
+  const standardReflections = [
     `That's a really thoughtful perspective. I can see how your experience has shaped your understanding of **${topicTitle}**.`,
     `Thank you for sharing that. What you've described reveals something meaningful about how you approach this area of your life.`,
     `I appreciate you going deeper on that. There's a lot of richness in what you've shared about **${topicTitle}**.`,
@@ -302,7 +367,20 @@ function generateAIResponse(
     `I hear you. What you've shared connects to some important themes around **${topicTitle}** that I think are worth exploring further.`,
   ];
 
-  const questions = [
+  // Context-aware questions (when reference URLs were provided)
+  const contextQuestions = [
+    `Thinking about the references you shared, **how does your personal experience align or diverge** from what those materials describe?`,
+    `Based on the context you've provided, **what's the most surprising or challenging insight** you've encountered? How does it relate to your own views?`,
+    `**How has the research or reading you've done** (reflected in the references) changed how you think about **${topicTitle}**?`,
+    `If you compare your gut feeling about this topic to **what the referenced materials suggest**, where do you see the biggest gaps or confirmations?`,
+    `**What practical implications** from your references do you see applying to your own life or decisions around **${topicTitle}**?`,
+    `Building on the context you've shared, **what aspect of ${topicTitle} still feels unresolved** or needs deeper exploration?`,
+    `**How would you synthesize** your personal experience with the insights from your reference materials into a core belief or principle?`,
+    `Looking at the bigger picture with all the context you've gathered, **what would you want others to know** about your perspective on **${topicTitle}**?`,
+  ];
+
+  // Standard questions (no reference URLs)
+  const standardQuestions = [
     `Can you think of a **specific moment or experience** that shaped this view? What happened, and how did it affect you?`,
     `When you think about this more deeply, **what tensions or contradictions** do you notice in your thinking?`,
     `If you could explain this to someone who knows nothing about you, **what would be the most important thing** for them to understand?`,
@@ -312,6 +390,9 @@ function generateAIResponse(
     `**What's the hardest part** about this topic for you? What makes it challenging?`,
     `If you imagine looking back on this five years from now, **what do you think you'd want to remember** about how you see it today?`,
   ];
+
+  const reflections = hasResearchContext ? contextReflections : standardReflections;
+  const questions = hasResearchContext ? contextQuestions : standardQuestions;
 
   const reflection = reflections[messageCount % reflections.length];
   const question = questions[messageCount % questions.length];
