@@ -1,3 +1,48 @@
+## Session 17 - 2026-02-15 (Agent handling Features #80 and #83)
+
+### Accomplished
+- Feature #80 (Profile summary auto-generates from verified insights): PASSING
+  - Created server/src/routes/profile.ts with full profile API:
+    - GET /api/profile/summary - aggregates verified insights into 6 profile sections
+    - POST /api/profile/regenerate - force-regenerate profile summary
+    - GET /api/profile/export/markdown - export as me.md file (privacy-filtered)
+    - GET /api/profile/export/json - export as JSON (privacy-filtered)
+  - Registered profileRouter in server/src/index.ts
+  - Keyword-based insight categorization into: Personal Portrait, Communication Style,
+    Decision-Making Patterns, Strengths & Expertise, Tone of Voice, Key Themes
+  - Rewrote ProfilePage.tsx with:
+    - Stats bar (verified insights, topics explored, populated sections)
+    - SectionCard components showing insight content with bullet points and source topics
+    - Empty state with links to topics and verification
+    - Regenerate and Export as me.md buttons with loading states
+    - Loading skeleton, error state with retry
+  - Profile content references specific verified insight text, not generic placeholders
+  - Tested with 12 insights across 2 topics, all sections populated correctly
+  - Data persists across server restart
+
+- Feature #83 (Export profile as me.md markdown file): PASSING
+  - Export endpoint filters for privacy_tier = 'exportable' only
+  - never_export insights excluded from export (verified with test)
+  - Markdown output includes all sections: portrait, communication, decisions, strengths, tone, key themes
+  - Content-Disposition header triggers .md file download
+  - Updated ExportPage.tsx with working Download me.md, Download JSON, and Copy to Clipboard buttons
+  - Both ProfilePage and ExportPage trigger download via blob URL creation
+
+### Verification
+- TypeScript compiles clean (client: zero errors, server: only pre-existing database.ts type export issue)
+- Vite build succeeds (no errors)
+- Server starts without errors after restart
+- All API endpoints tested end-to-end (summary, regenerate, export/markdown, export/json)
+- Privacy tier filtering verified: never_export insights excluded from exports
+- Data persists across server restart
+- No mock data patterns found in profile.ts, ProfilePage.tsx, or ExportPage.tsx
+
+### Current Status
+- Features #80 and #83 both passing
+- Profile summary system fully functional
+- Export system supports markdown, JSON, and clipboard copy
+- Privacy tier filtering works correctly
+
 ## Session 16 - 2026-02-15 (Agent handling Features #75 and #139)
 
 ### Accomplished
