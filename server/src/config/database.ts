@@ -213,7 +213,17 @@ function initializeSchema() {
 
 initializeSchema();
 
-export const db = drizzle(sqlite, { schema });
+export const db = drizzle(sqlite, {
+  schema,
+  logger: {
+    logQuery(query: string, params: unknown[]) {
+      console.log(`[me.md:db] SQL: ${query}`);
+      if (params.length > 0) {
+        console.log(`[me.md:db] Params: ${JSON.stringify(params)}`);
+      }
+    },
+  },
+});
 export { sqlite };
 
 console.log('[me.md] Database connection established');
