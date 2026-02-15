@@ -17,6 +17,19 @@ interface Topic {
   updatedAt: string;
 }
 
+const INTENT_OPTIONS = [
+  { value: 'articulate', label: 'Articulate', description: 'Express something you already know' },
+  { value: 'explore', label: 'Explore', description: 'Discover something new about yourself' },
+  { value: 'decide', label: 'Decide', description: 'Work through a decision or choice' },
+  { value: 'document', label: 'Document', description: 'Record knowledge for future reference' },
+];
+
+const PRIORITY_OPTIONS = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+];
+
 interface Session {
   id: string;
   topicId: string;
@@ -24,6 +37,23 @@ interface Session {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+}
+
+interface Insight {
+  id: string;
+  content: string;
+  confidenceScore: number;
+  verificationStatus: string;
+  topicId: string;
+  createdAt: string;
+}
+
+interface ConnectedTopic {
+  id: string;
+  title: string;
+  status: string;
+  connectionType: string;
+  relevanceScore: number;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -61,6 +91,8 @@ export default function TopicDetailPage() {
   const { user } = useAuth();
   const [topic, setTopic] = useState<Topic | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [topicInsights, setTopicInsights] = useState<Insight[]>([]);
+  const [connectedTopics, setConnectedTopics] = useState<ConnectedTopic[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isStartingSession, setIsStartingSession] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -69,6 +101,17 @@ export default function TopicDetailPage() {
   const [newUrl, setNewUrl] = useState('');
   const [isAddingUrl, setIsAddingUrl] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
+
+  // Edit mode state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editPriority, setEditPriority] = useState('');
+  const [editIntent, setEditIntent] = useState('');
+  const [editTags, setEditTags] = useState<string[]>([]);
+  const [editTagInput, setEditTagInput] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   useEffect(() => {
     if (!user || !id) return;
@@ -86,6 +129,8 @@ export default function TopicDetailPage() {
         }
         const topicData = await topicRes.json();
         setTopic(topicData.topic);
+        setTopicInsights(topicData.insights || []);
+        setConnectedTopics(topicData.connectedTopics || []);
 
         // Fetch sessions for this topic
         const sessionsRes = await fetch(`/api/sessions?topicId=${id}`, {
@@ -263,6 +308,88 @@ export default function TopicDetailPage() {
     }
   };
 
+  const startEditing = () => {
+    if (!topic) return;
+    setEditTitle(topic.title);
+    setEditDescription(topic.description || '');
+    setEditPriority(topic.priority || 'medium');
+    setEditIntent(topic.intent || '');
+    setEditTags(parseTags(topic.tags));
+    setEditTagInput('');
+    setIsEditing(true);
+    setSaveSuccess(false);
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
+    setEditTagInput('');
+    setSaveSuccess(false);
+  };
+
+  const handleEditAddTag = () => {
+    const trimmed = editTagInput.trim().toLowerCase();
+    if (trimmed && !editTags.includes(trimmed)) {
+      setEditTags([...editTags, trimmed]);
+      setEditTagInput('');
+    }
+  };
+
+  const handleEditTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleEditAddTag();
+    } else if (e.key === ',' || e.key === 'Tab') {
+      e.preventDefault();
+      handleEditAddTag();
+    }
+  };
+
+  const handleEditRemoveTag = (tagToRemove: string) => {
+    setEditTags(editTags.filter((t) => t !== tagToRemove));
+  };
+
+  const handleSaveEdit = async () => {
+    if (!user || !topic) return;
+    if (!editTitle.trim()) {
+      setError('Title is required');
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/topics/${topic.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id,
+        },
+        body: JSON.stringify({
+          title: editTitle.trim(),
+          description: editDescription.trim() || null,
+          priority: editPriority,
+          intent: editIntent || null,
+          tags: editTags.length > 0 ? editTags : null,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to update topic');
+      }
+
+      const data = await res.json();
+      setTopic(data.topic);
+      setIsEditing(false);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update topic');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="max-w-4xl mx-auto">
@@ -316,62 +443,255 @@ export default function TopicDetailPage() {
         </div>
       )}
 
+      {/* Save success message */}
+      {saveSuccess && (
+        <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 mb-6 flex items-center gap-2">
+          <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          Topic updated successfully
+        </div>
+      )}
+
       {/* Topic header */}
       <div className="card mb-6">
-        <div className="flex items-start justify-between">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 mb-3">
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                {topic.title}
-              </h1>
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[topic.status] || STATUS_COLORS.backlog}`}>
-                {STATUS_LABELS[topic.status] || topic.status}
-              </span>
+        {isEditing ? (
+          /* ===== EDIT MODE ===== */
+          <div className="space-y-5">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Edit Topic</h2>
+              <button
+                onClick={cancelEditing}
+                className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                Cancel
+              </button>
             </div>
 
-            {topic.description && (
-              <p className="text-gray-600 dark:text-gray-400 mb-4">
-                {topic.description}
-              </p>
-            )}
+            {/* Edit Title */}
+            <div>
+              <label htmlFor="edit-title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Title <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="edit-title"
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="input-field"
+                placeholder="Topic title"
+              />
+            </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              {topic.priority && (
-                <span className="inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
-                  <span className="font-medium">Priority:</span> {PRIORITY_LABELS[topic.priority] || topic.priority}
-                </span>
-              )}
-              {topic.intent && (
-                <span className="inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
-                  <span className="font-medium">Intent:</span> {INTENT_LABELS[topic.intent] || topic.intent}
-                </span>
-              )}
-              {tags.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+            {/* Edit Description */}
+            <div>
+              <label htmlFor="edit-description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Description
+              </label>
+              <textarea
+                id="edit-description"
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                className="input-field min-h-[100px] resize-y"
+                placeholder="What do you want to explore about this topic?"
+                rows={3}
+              />
+            </div>
+
+            {/* Edit Priority */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Priority
+              </label>
+              <div className="flex gap-3">
+                {PRIORITY_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setEditPriority(option.value)}
+                    className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                      editPriority === option.value
+                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 dark:border-primary-400 text-primary-700 dark:text-primary-300'
+                        : 'border-gray-200 dark:border-dark-border hover:border-gray-300 dark:hover:border-gray-600 text-gray-700 dark:text-gray-300'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Edit Intent */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Intent
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                {INTENT_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setEditIntent(editIntent === option.value ? '' : option.value)}
+                    className={`p-3 rounded-lg border text-left transition-colors ${
+                      editIntent === option.value
+                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 dark:border-primary-400'
+                        : 'border-gray-200 dark:border-dark-border hover:border-gray-300 dark:hover:border-gray-600'
+                    }`}
+                  >
+                    <div className={`text-sm font-medium ${
+                      editIntent === option.value
+                        ? 'text-primary-700 dark:text-primary-300'
+                        : 'text-gray-900 dark:text-white'
+                    }`}>
+                      {option.label}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      {option.description}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Edit Tags */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Tags
+              </label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {editTags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300"
+                  >
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => handleEditRemoveTag(tag)}
+                      className="ml-0.5 text-primary-500 hover:text-primary-700 dark:hover:text-primary-200"
+                      aria-label={`Remove tag ${tag}`}
                     >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
+                      &times;
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={editTagInput}
+                  onChange={(e) => setEditTagInput(e.target.value)}
+                  onKeyDown={handleEditTagKeyDown}
+                  className="input-field flex-1"
+                  placeholder="Type a tag and press Enter"
+                />
+                <button
+                  type="button"
+                  onClick={handleEditAddTag}
+                  className="btn-secondary"
+                  disabled={!editTagInput.trim()}
+                >
+                  Add
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Press Enter or comma to add a tag
+              </p>
+            </div>
+
+            {/* Save / Cancel buttons */}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={handleSaveEdit}
+                disabled={isSaving || !editTitle.trim()}
+                className="btn-primary flex items-center gap-2"
+              >
+                {isSaving ? (
+                  <>
+                    <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </button>
+              <button
+                onClick={cancelEditing}
+                disabled={isSaving}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
             </div>
           </div>
+        ) : (
+          /* ===== VIEW MODE ===== */
+          <div className="flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3 mb-3">
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {topic.title}
+                </h1>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[topic.status] || STATUS_COLORS.backlog}`}>
+                  {STATUS_LABELS[topic.status] || topic.status}
+                </span>
+              </div>
 
-          {/* Delete button */}
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="ml-4 p-2 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 transition-colors shrink-0"
-            title="Delete topic"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
-        </div>
+              {topic.description && (
+                <p className="text-gray-600 dark:text-gray-400 mb-4">
+                  {topic.description}
+                </p>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3">
+                {topic.priority && (
+                  <span className="inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
+                    <span className="font-medium">Priority:</span> {PRIORITY_LABELS[topic.priority] || topic.priority}
+                  </span>
+                )}
+                {topic.intent && (
+                  <span className="inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
+                    <span className="font-medium">Intent:</span> {INTENT_LABELS[topic.intent] || topic.intent}
+                  </span>
+                )}
+                {tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Edit and Delete buttons */}
+            <div className="flex items-center gap-2 ml-4 shrink-0">
+              <button
+                onClick={startEditing}
+                className="p-2 text-gray-400 hover:text-primary-500 dark:text-gray-500 dark:hover:text-primary-400 transition-colors"
+                title="Edit topic"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="p-2 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 transition-colors"
+                title="Delete topic"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Delete Confirmation Dialog */}
@@ -556,7 +876,7 @@ export default function TopicDetailPage() {
       </div>
 
       {/* Session history */}
-      <div className="card">
+      <div className="card mb-6">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           Session History
         </h2>
@@ -626,6 +946,156 @@ export default function TopicDetailPage() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* Related Insights */}
+      <div className="card mb-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          Related Insights
+          {topicInsights.length > 0 && (
+            <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
+              ({topicInsights.length})
+            </span>
+          )}
+        </h2>
+
+        {topicInsights.length === 0 ? (
+          <div className="text-center py-8 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
+            <svg className="w-8 h-8 mx-auto text-gray-400 dark:text-gray-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              No insights extracted yet. Complete a session and distill it to generate insights.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {topicInsights.map((insight) => {
+              const isVerified = insight.verificationStatus === 'verified';
+              const isRejected = insight.verificationStatus === 'rejected';
+              const isPending = insight.verificationStatus === 'unverified' || insight.verificationStatus === 're_verification_pending';
+
+              return (
+                <div
+                  key={insight.id}
+                  className={`p-4 rounded-lg border ${
+                    isVerified
+                      ? 'border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-900/10'
+                      : isRejected
+                      ? 'border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10 opacity-60'
+                      : 'border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <p className={`text-sm ${isRejected ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-800 dark:text-gray-200'}`}>
+                      {insight.content}
+                    </p>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Confidence badge */}
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        insight.confidenceScore >= 80
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                          : insight.confidenceScore >= 50
+                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                          : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                      }`}>
+                        {insight.confidenceScore}%
+                      </span>
+                      {/* Status badge */}
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        isVerified
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                          : isRejected
+                          ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                          : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                      }`}>
+                        {isVerified ? (
+                          <span className="flex items-center gap-1">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Verified
+                          </span>
+                        ) : isRejected ? (
+                          'Rejected'
+                        ) : isPending ? (
+                          'Pending'
+                        ) : (
+                          insight.verificationStatus
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                    {new Date(insight.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Connected Topics */}
+      <div className="card">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          Connected Topics
+          {connectedTopics.length > 0 && (
+            <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
+              ({connectedTopics.length})
+            </span>
+          )}
+        </h2>
+
+        {connectedTopics.length === 0 ? (
+          <div className="text-center py-8 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
+            <svg className="w-8 h-8 mx-auto text-gray-400 dark:text-gray-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              No connections yet. Connections are created through shared tags and multi-bucket distillation.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {connectedTopics.map((ct) => (
+              <Link
+                key={ct.id}
+                to={`/app/topics/${ct.id}`}
+                className="block p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <svg className="w-5 h-5 text-primary-500 dark:text-primary-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                    </svg>
+                    <div>
+                      <span className="font-medium text-gray-900 dark:text-white">
+                        {ct.title}
+                      </span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[ct.status] || STATUS_COLORS.backlog}`}>
+                          {STATUS_LABELS[ct.status] || ct.status}
+                        </span>
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                          {ct.connectionType === 'multi_bucket' ? 'Multi-bucket link' : ct.connectionType === 'tag_shared' ? 'Shared tags' : ct.connectionType === 'ai_detected' ? 'AI detected' : ct.connectionType}
+                        </span>
+                        {ct.relevanceScore > 0 && (
+                          <span className="text-xs text-gray-400 dark:text-gray-500">
+                            {ct.relevanceScore}% relevant
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <svg className="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </Link>
+            ))}
           </div>
         )}
       </div>
