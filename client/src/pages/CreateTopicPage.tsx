@@ -21,6 +21,7 @@ export default function CreateTopicPage() {
   const [trigger, setTrigger] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isNetworkError, setIsNetworkError] = useState(false);
 
   const handleAddTag = () => {
     const trimmed = tagInput.trim().toLowerCase();
@@ -47,6 +48,7 @@ export default function CreateTopicPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    setIsNetworkError(false);
 
     if (!title.trim()) {
       setError('Title is required');
@@ -77,13 +79,30 @@ export default function CreateTopicPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({ error: 'Server error' }));
         throw new Error(data.error || 'Failed to create topic');
       }
 
       navigate('/app/topics');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create topic');
+      // Detect network errors (fetch throws TypeError on network failure)
+      const isNetwork = err instanceof TypeError ||
+        (err instanceof Error && (
+          err.message === 'Failed to fetch' ||
+          err.message === 'NetworkError when attempting to fetch resource.' ||
+          err.message === 'Network request failed' ||
+          err.message.includes('network') ||
+          err.message.includes('ERR_NETWORK') ||
+          err.message.includes('ERR_CONNECTION')
+        ));
+
+      if (isNetwork) {
+        setIsNetworkError(true);
+        setError('Unable to connect to the server. Please check your internet connection and try again. Your form data has been preserved.');
+      } else {
+        setIsNetworkError(false);
+        setError(err instanceof Error ? err.message : 'Failed to create topic. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -110,8 +129,43 @@ export default function CreateTopicPage() {
       <div className="card">
         <form onSubmit={handleSubmit} className="space-y-5">
           {error && (
-            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm">
-              {error}
+            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm">
+              <div className="flex items-start gap-2">
+                {isNetworkError ? (
+                  <svg className="w-5 h-5 text-red-500 dark:text-red-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728M5.636 18.364a9 9 0 010-12.728m12.728 0l-2.829 2.829m-7.07 7.07l-2.829 2.829M12 12h.01M8.464 8.464L5.636 5.636m12.728 12.728l-2.829-2.829" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5 text-red-500 dark:text-red-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.072 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                )}
+                <div className="flex-1">
+                  <p className="text-red-600 dark:text-red-400">{error}</p>
+                  {isNetworkError && (
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors disabled:opacity-50"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      {isSubmitting ? 'Retrying...' : 'Retry Submission'}
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setError(null); setIsNetworkError(false); }}
+                  className="text-red-400 hover:text-red-600 dark:hover:text-red-300 shrink-0"
+                  title="Dismiss"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
           )}
 
