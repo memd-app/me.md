@@ -81,6 +81,13 @@ export default function VerificationPage() {
   const [privacyUpdating, setPrivacyUpdating] = useState<string | null>(null);
   const [agreementUpdating, setAgreementUpdating] = useState<string | null>(null);
 
+  // Batch review mode state
+  const [batchMode, setBatchMode] = useState(false);
+  const [batchIndex, setBatchIndex] = useState(0);
+  const [batchTotal, setBatchTotal] = useState(0);
+  const [batchReviewed, setBatchReviewed] = useState(0);
+  const [batchInsights, setBatchInsights] = useState<Insight[]>([]);
+
   const fetchData = useCallback(async () => {
     if (!user) return;
     try {
@@ -373,6 +380,84 @@ export default function VerificationPage() {
       setAgreementUpdating(null);
     }
   };
+
+  // ============================================
+  // Batch Review Mode Handlers
+  // ============================================
+
+  const startBatchReview = () => {
+    if (pendingInsights.length === 0) return;
+    // Snapshot the current pending insights for the batch
+    setBatchInsights([...pendingInsights]);
+    setBatchTotal(pendingInsights.length);
+    setBatchIndex(0);
+    setBatchReviewed(0);
+    setBatchMode(true);
+    // Reset edit/history state
+    setEditState(null);
+    setHistoryState(null);
+    setIntervalDropdownOpen(null);
+  };
+
+  const exitBatchReview = () => {
+    setBatchMode(false);
+    setBatchInsights([]);
+    setBatchIndex(0);
+    setBatchReviewed(0);
+    setBatchTotal(0);
+    setEditState(null);
+    setHistoryState(null);
+    setIntervalDropdownOpen(null);
+  };
+
+  const advanceBatch = () => {
+    setBatchReviewed(prev => prev + 1);
+    setEditState(null);
+    setHistoryState(null);
+    setIntervalDropdownOpen(null);
+    // Find the next insight that hasn't been acted on yet
+    // We check against the current pendingInsights which gets updated as items are approved/rejected
+    setBatchIndex(prev => prev + 1);
+  };
+
+  const handleBatchApprove = async (insightId: string, reVerifyInterval?: string) => {
+    await handleApprove(insightId, reVerifyInterval);
+    // Remove from batchInsights too
+    setBatchInsights(prev => prev.map(i => i.id === insightId ? { ...i, verificationStatus: '_done' } : i));
+    advanceBatch();
+  };
+
+  const handleBatchReject = async (insightId: string) => {
+    await handleReject(insightId);
+    setBatchInsights(prev => prev.map(i => i.id === insightId ? { ...i, verificationStatus: '_done' } : i));
+    advanceBatch();
+  };
+
+  const handleBatchSaveEditAndContinue = async () => {
+    await handleSaveEdit();
+    // After save, mark as reviewed and advance
+    if (editState) {
+      setBatchInsights(prev => prev.map(i => i.id === editState.insightId ? { ...i, verificationStatus: '_done' } : i));
+    }
+    advanceBatch();
+  };
+
+  // Get the current batch insight (skipping already-done ones)
+  const getCurrentBatchInsight = (): Insight | null => {
+    if (!batchMode || batchInsights.length === 0) return null;
+    // Find the next un-acted insight starting from batchIndex
+    for (let i = batchIndex; i < batchInsights.length; i++) {
+      if (batchInsights[i].verificationStatus !== '_done') {
+        // Update batchIndex if we skipped some
+        if (i !== batchIndex) setBatchIndex(i);
+        return batchInsights[i];
+      }
+    }
+    return null; // All done
+  };
+
+  const currentBatchInsight = batchMode ? getCurrentBatchInsight() : null;
+  const batchComplete = batchMode && currentBatchInsight === null;
 
   const getAgreementColor = (score: number | null): string => {
     if (score === null) return 'bg-gray-200 dark:bg-gray-700';
@@ -689,8 +774,278 @@ export default function VerificationPage() {
         </div>
       )}
 
-      {/* Pending insights list (Verification Queue view) */}
-      {activeView === 'verification' && (
+      {/* Batch Review Mode */}
+      {activeView === 'verification' && batchMode && (
+        batchComplete ? (
+          <div className="card text-center py-12">
+            <span className="text-4xl block mb-3">&#x1F389;</span>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              Batch Review Complete!
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-2">
+              You reviewed <span className="font-bold text-green-600 dark:text-green-400">{batchReviewed}</span> out of {batchTotal} insights.
+            </p>
+            <div className="flex items-center justify-center gap-3 mt-4">
+              <button
+                onClick={exitBatchReview}
+                className="btn-primary"
+              >
+                Back to Queue
+              </button>
+              {pendingInsights.length > 0 && (
+                <button
+                  onClick={startBatchReview}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  Review Remaining ({pendingInsights.length})
+                </button>
+              )}
+            </div>
+          </div>
+        ) : currentBatchInsight && (() => {
+          const insight = currentBatchInsight;
+          const isReVerification = insight.verificationStatus === 're_verification_pending';
+          return (
+            <div className="space-y-4">
+              {/* Batch progress indicator */}
+              <div className="card bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300 ring-1 ring-indigo-300 dark:ring-indigo-700">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      Batch Review
+                    </span>
+                    <span className="text-sm font-medium text-indigo-700 dark:text-indigo-300">
+                      {batchReviewed + 1} of {batchTotal}
+                    </span>
+                  </div>
+                  <button
+                    onClick={exitBatchReview}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 bg-white dark:bg-gray-800 rounded-md border border-gray-300 dark:border-gray-600 transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Exit Batch
+                  </button>
+                </div>
+                {/* Progress bar */}
+                <div className="w-full h-2 bg-indigo-200 dark:bg-indigo-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-indigo-500 dark:bg-indigo-400 rounded-full transition-all duration-300"
+                    style={{ width: `${(batchReviewed / batchTotal) * 100}%` }}
+                  />
+                </div>
+                <div className="flex justify-between mt-1 text-xs text-indigo-600 dark:text-indigo-400">
+                  <span>{batchReviewed} reviewed</span>
+                  <span>{batchTotal - batchReviewed} remaining</span>
+                </div>
+              </div>
+
+              {/* Single insight card in focus */}
+              <div
+                className={`card border-2 transition-colors ${
+                  isReVerification
+                    ? 'border-purple-300 dark:border-purple-700 bg-purple-50/30 dark:bg-purple-900/10'
+                    : 'border-indigo-300 dark:border-indigo-700 bg-white dark:bg-gray-900'
+                }`}
+              >
+                {/* Re-verification banner */}
+                {isReVerification && (
+                  <div className="flex items-center gap-2 mb-3 pb-3 border-b border-purple-200 dark:border-purple-800">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300 ring-1 ring-purple-300 dark:ring-purple-700">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Re-check
+                    </span>
+                    {insight.verifiedAt && (
+                      <span className="text-xs text-purple-600 dark:text-purple-400">
+                        Last verified: {formatDate(insight.verifiedAt)}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Insight content - view or edit mode */}
+                <div className="mb-4">
+                  {editState?.insightId === insight.id ? (
+                    <div className="space-y-2">
+                      <textarea
+                        ref={editTextareaRef}
+                        value={editState.editedContent}
+                        onChange={(e) => setEditState({ ...editState, editedContent: e.target.value })}
+                        className="w-full px-3 py-2 text-gray-900 dark:text-white bg-white dark:bg-gray-800 border border-blue-400 dark:border-blue-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-y min-h-[80px] leading-relaxed text-lg"
+                        rows={4}
+                        disabled={editSaving}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') handleCancelEdit();
+                        }}
+                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleBatchSaveEditAndContinue}
+                          disabled={editSaving || editState.editedContent.trim() === '' || editState.editedContent.trim() === insight.content}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+                        >
+                          {editSaving ? (
+                            <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                          ) : (
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                          Save &amp; Continue
+                        </button>
+                        <button
+                          onClick={handleCancelEdit}
+                          disabled={editSaving}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-sm font-medium rounded-lg transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-gray-900 dark:text-white leading-relaxed text-lg">
+                      {insight.content}
+                    </p>
+                  )}
+                </div>
+
+                {/* Metadata */}
+                <div className="flex flex-wrap items-center gap-3 mb-4 text-sm">
+                  <span className={`flex items-center gap-1 ${getConfidenceColor(insight.confidenceScore)}`}>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    {insight.confidenceScore}% ({getConfidenceLabel(insight.confidenceScore)})
+                  </span>
+                  {insight.topicTitle && (
+                    <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                      </svg>
+                      {insight.topicTitle}
+                    </span>
+                  )}
+                  {insight.createdAt && (
+                    <span className="text-gray-400 dark:text-gray-500">
+                      {formatDate(insight.createdAt)}
+                    </span>
+                  )}
+                </div>
+
+                {/* Agreement Scale */}
+                <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                      Agreement: {getAgreementLabel(insight.agreementScore)}
+                    </span>
+                    {insight.agreementScore !== null && (
+                      <span className={`text-xs font-bold ${
+                        insight.agreementScore >= 7 ? 'text-green-600 dark:text-green-400' :
+                        insight.agreementScore >= 4 ? 'text-amber-600 dark:text-amber-400' :
+                        'text-red-600 dark:text-red-400'
+                      }`}>
+                        {insight.agreementScore}/10
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(score => (
+                      <button
+                        key={score}
+                        onClick={() => handleSetAgreement(insight.id, score)}
+                        disabled={agreementUpdating === insight.id}
+                        className={`flex-1 h-8 rounded text-xs font-medium transition-all ${
+                          insight.agreementScore === score
+                            ? `${getAgreementColor(score)} text-white ring-2 ring-offset-1 ring-offset-gray-50 dark:ring-offset-gray-800 ${
+                                score >= 8 ? 'ring-green-400' : score >= 5 ? 'ring-amber-400' : 'ring-red-400'
+                              }`
+                            : insight.agreementScore !== null && score <= insight.agreementScore
+                              ? `${getAgreementColor(score)} text-white opacity-60`
+                              : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600'
+                        } ${agreementUpdating === insight.id ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
+                        title={`Set agreement to ${score}/10`}
+                      >
+                        {score}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Batch action buttons - large and prominent */}
+                {editState?.insightId !== insight.id && (
+                  <div className="flex items-center gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <button
+                      onClick={() => handleBatchApprove(insight.id)}
+                      disabled={actionInProgress === insight.id}
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm"
+                    >
+                      {actionInProgress === insight.id ? (
+                        <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                      Approve
+                    </button>
+
+                    <button
+                      onClick={() => handleStartEdit(insight)}
+                      disabled={actionInProgress === insight.id}
+                      className="inline-flex items-center gap-2 px-5 py-3 text-sm font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-700 rounded-lg transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Edit &amp; Continue
+                    </button>
+
+                    <button
+                      onClick={() => handleBatchReject(insight.id)}
+                      disabled={actionInProgress === insight.id}
+                      className="inline-flex items-center gap-2 px-5 py-3 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white text-sm font-semibold rounded-lg transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Reject
+                    </button>
+
+                    {/* Skip button for batch mode */}
+                    <button
+                      onClick={advanceBatch}
+                      className="ml-auto inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                    >
+                      Skip
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()
+      )}
+
+      {/* Pending insights list (Verification Queue view) - hidden in batch mode */}
+      {activeView === 'verification' && !batchMode && (
         pendingInsights.length === 0 ? (
         <div className="card text-center py-12">
           <span className="text-4xl block mb-3">&#x2705;</span>
@@ -703,9 +1058,22 @@ export default function VerificationPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {pendingInsights.length} insight{pendingInsights.length !== 1 ? 's' : ''} awaiting review
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {pendingInsights.length} insight{pendingInsights.length !== 1 ? 's' : ''} awaiting review
+            </p>
+            {pendingInsights.length >= 2 && (
+              <button
+                onClick={startBatchReview}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Start Batch Review ({pendingInsights.length})
+              </button>
+            )}
+          </div>
           {pendingInsights.map(insight => {
             const isReVerification = insight.verificationStatus === 're_verification_pending';
             return (
