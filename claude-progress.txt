@@ -1,3 +1,41 @@
+## Session - 2026-02-15 (Agent handling Features #52 and #53)
+
+### Accomplished
+- Feature #52 (Session distillation generates Brief Summary format): PASSING
+  - Verified Brief Summary output includes all 3 required sections:
+    - TL;DR section with session overview and first response excerpt
+    - Key Takeaways section with numbered list of 4 key points from user messages
+    - One Thing to Remember section with quoted longest user message
+  - contentBriefSummary column populated in notes table
+  - Format switching works via /api/sessions/:id/distill/regenerate
+  - Data persists across server restart
+  - No mock data patterns found
+
+- Feature #53 (Session distillation generates Decision Framework format): PASSING
+  - Verified Decision Framework output includes all 5 required sections:
+    - Decision Context section with session topic context
+    - Guiding Principles section with 3 quotes from value/principle keywords
+    - Decision Criteria section with 3 evaluation questions
+    - Red Flags section with concerns from worry/risk/avoid keywords
+    - Green Lights section with positives from love/enjoy/excited keywords
+  - contentDecisionFramework column populated in notes table
+  - Format switching works via /api/sessions/:id/distill/regenerate
+  - Data persists across server restart
+  - No mock data patterns found
+
+### Verification
+- TypeScript compiles clean (client: zero errors)
+- Server starts without errors after restart
+- All 4 distillation formats generated simultaneously on distill
+- Format switching persists selected format to database
+- Insights extracted correctly (10 insights with confidence scores 55-80)
+- Test data created and cleaned up after verification
+- No mock data patterns in server/src or client/src
+
+### Current Status
+- 88/209 features passing (added #52 and #53)
+- Distillation system fully functional with all 4 formats
+
 ## Session - 2026-02-15 (Agent handling Features #42 and #43)
 
 ### Accomplished
