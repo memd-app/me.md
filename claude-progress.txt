@@ -1,3 +1,73 @@
+## Session - 2026-02-15 (Agent handling Features #84, #91, #92)
+
+### Accomplished
+- Feature #84 (Context testing sandbox side-by-side comparison): PASSING
+  - Enabled sandboxRouter in server/src/index.ts (was commented out)
+  - Rewrote SandboxPage.tsx with full API integration
+  - POST /api/sandbox/compare generates generic vs personalized outputs side-by-side
+  - Context status banner shows verified insight counts
+  - Example prompt chips for quick testing
+  - Labels clearly distinguish "Without your context" vs "With your me.md context"
+  - Multiple prompts generate different comparisons
+  - Loading states, error handling, timestamp display
+
+- Feature #91 (Change email address in settings): PASSING
+  - Made email field editable in SettingsPage PROFILE_FIELDS (was editable: false)
+  - Added email validation in PUT /api/users/profile backend: format regex + uniqueness check
+  - Client-side email regex validation before submit
+  - Input type="email" with placeholder
+  - Success feedback shown after change
+  - New email reflected in profile immediately
+  - Tested: invalid format returns 400, empty returns 400, valid change returns 200
+
+- Feature #92 (Change password in settings): PASSING
+  - Added PUT /api/auth/change-password endpoint with full validation
+  - Password section in Settings > Account tab with "Change Password" button
+  - Form: current password, new password, confirm new password fields
+  - Validates: current password correctness, new password requirements (8+ chars, 1 number, 1 special char), confirm match
+  - Success banner "Password changed successfully" with auto-collapse
+  - Cancel button resets form
+  - Verified end-to-end: old password rejected after change (401), new password login succeeds (200)
+  - All validation cases tested: missing fields, short password, no number, no special char, wrong current password
+
+### Verification
+- TypeScript compiles cleanly (only pre-existing TopicDetailPage isPending warning)
+- No mock data patterns found in client/src or server/src
+- All API endpoints tested with correct and incorrect inputs
+- Data persists across server restart
+- All three features marked passing
+
+### Current Status
+- 114/209 features passing (54.5%)
+- Sandbox fully functional with side-by-side comparison
+- Settings page: email change, password change, account deletion all working
+
+## Session - 2026-02-15 (Agent handling Features #81, #82, #105)
+
+### Accomplished
+- Feature #81 (Profile auto-updates when new insights are verified): PASSING
+  - Enhanced ProfilePage.tsx with auto-refresh on navigation and focus/visibility events
+  - Profile API dynamically queries verified insights from DB on each call
+  - Verified: verify insights → profile immediately reflects new data with correct categorization
+  - Committed: f85a898
+
+- Feature #82 (Profile recalibrates when insights edited or deleted): PASSING
+  - No code changes needed - profile API already dynamically queries verified insights
+  - Verified: edited insight content reflected in profile, rejected insight removed from profile
+  - Profile sections update correctly when insight count changes
+
+- Feature #105 (Dashboard session history timeline is accurate): PASSING
+  - Enhanced DashboardPage.tsx: replaced basic activity list with visual session history timeline
+  - Color-coded status dots (green=completed, blue=active, amber=paused, gray=other)
+  - Status badges with colored pill backgrounds, date+time display, hover arrow indicators
+  - Sessions ordered most-recent-first via desc(updatedAt) query
+  - Each entry links to /app/session/:id for navigation
+  - Committed: 11710df
+
+### Current Status
+- 111/209 features passing (53.1%)
+- All 3 assigned features completed and committed
+
 ## Session - 2026-02-15 (Agent handling Feature #101)
 
 ### Accomplished
