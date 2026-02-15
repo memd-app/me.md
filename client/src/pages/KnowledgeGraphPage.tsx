@@ -181,7 +181,16 @@ export default function KnowledgeGraphPage() {
       return 100;
     }
 
-    // Create simulation
+    // Performance: scale simulation params based on node count
+    const nodeCount = simNodes.length;
+    const isLargeGraph = nodeCount > 40;
+    const alphaDecay = isLargeGraph ? 0.04 : 0.02;
+    const velocityDecay = isLargeGraph ? 0.4 : 0.3;
+    const chargeStrength = isLargeGraph
+      ? ((d: any) => d.type === 'concept' ? -20 : -80)
+      : ((d: any) => d.type === 'concept' ? -30 : -120);
+
+    // Create simulation with performance-tuned parameters
     const simulation = d3.forceSimulation<GraphNode>(simNodes)
       .force('link', d3.forceLink<GraphNode, GraphEdge>(simEdges)
         .id((d: GraphNode) => d.id)
@@ -189,14 +198,17 @@ export default function KnowledgeGraphPage() {
         .strength((d: any) => d.weight * 0.3)
       )
       .force('charge', d3.forceManyBody()
-        .strength((d: any) => d.type === 'concept' ? -30 : -120)
+        .strength(chargeStrength)
+        .theta(isLargeGraph ? 0.9 : 0.8) // Barnes-Hut approximation threshold (higher = faster but less accurate)
+        .distanceMax(isLargeGraph ? 300 : 500) // Limit charge distance for performance
       )
       .force('center', d3.forceCenter(0, 0))
       .force('collision', d3.forceCollide<GraphNode>()
-        .radius((d: GraphNode) => getNodeRadius(d) + 4)
+        .radius((d: GraphNode) => getNodeRadius(d) + (isLargeGraph ? 2 : 4))
+        .iterations(isLargeGraph ? 1 : 2) // Fewer collision iterations for large graphs
       )
-      .alphaDecay(0.02)
-      .velocityDecay(0.3);
+      .alphaDecay(alphaDecay)
+      .velocityDecay(velocityDecay);
 
     simulationRef.current = simulation;
 

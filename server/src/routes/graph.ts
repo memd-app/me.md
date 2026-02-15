@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../config/database.js';
 import { topics, insights, topicConnections, conceptNodes, conceptEdges, sessions } from '../models/schema.js';
-import { eq, and, or } from 'drizzle-orm';
+import { eq, and, or, inArray } from 'drizzle-orm';
 
 export const graphRouter = Router();
 
@@ -34,24 +34,29 @@ graphRouter.get('/', async (req, res) => {
       .where(eq(conceptNodes.userId, userId))
       .all();
 
-    // 5. Get concept edges that connect user's concept nodes
+    // 5. Get concept edges that connect user's concept nodes (optimized with SQL filter)
     const conceptNodeIds = userConceptNodes.map(cn => cn.id);
     let userConceptEdges: any[] = [];
     if (conceptNodeIds.length > 0) {
-      // Get all edges where both source and target belong to user's concept nodes
-      const allEdges = db.select().from(conceptEdges).all();
-      userConceptEdges = allEdges.filter(
-        e => conceptNodeIds.includes(e.sourceNodeId) && conceptNodeIds.includes(e.targetNodeId)
+      const conceptNodeIdSet = new Set(conceptNodeIds);
+      const candidateEdges = db.select().from(conceptEdges)
+        .where(inArray(conceptEdges.sourceNodeId, conceptNodeIds))
+        .all();
+      userConceptEdges = candidateEdges.filter(
+        e => conceptNodeIdSet.has(e.targetNodeId)
       );
     }
 
-    // 6. Get explicit topic connections
+    // 6. Get explicit topic connections (optimized with SQL filter)
     const topicIds = userTopics.map(t => t.id);
     let userTopicConnections: any[] = [];
     if (topicIds.length > 0) {
-      const allConnections = db.select().from(topicConnections).all();
-      userTopicConnections = allConnections.filter(
-        c => topicIds.includes(c.sourceTopicId) && topicIds.includes(c.targetTopicId)
+      const topicIdSet = new Set(topicIds);
+      const candidateConnections = db.select().from(topicConnections)
+        .where(inArray(topicConnections.sourceTopicId, topicIds))
+        .all();
+      userTopicConnections = candidateConnections.filter(
+        c => topicIdSet.has(c.targetTopicId)
       );
     }
 
