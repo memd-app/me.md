@@ -224,14 +224,17 @@ sessionsRouter.post('/:id/messages', async (req, res) => {
     const userMessageCount = conversationHistory.filter(m => m.role === 'user').length;
     const quickRepliesArr = generateQuickReplies(userMessageCount, aiResponseContent, historyForAI);
 
+    // AI suggests completion after 10+ user message exchanges (thorough conversation)
+    const shouldSuggestCompletion = userMessageCount >= 10;
+
     const aiMessageId = uuidv4();
     const aiMessage = db.insert(messages).values({
       id: aiMessageId,
       sessionId,
       role: 'assistant',
-      content: aiResponseContent,
+      content: shouldSuggestCompletion ? aiResponseContent + '\n\n---\n\n*We\'ve explored many angles together. Feel free to **continue exploring** if there\'s more to uncover, or **finish and distill** to capture your insights.*' : aiResponseContent,
       quickReplies: JSON.stringify(quickRepliesArr),
-      suggestsCompletion: conversationHistory.length >= 10,
+      suggestsCompletion: shouldSuggestCompletion,
       isBookmarked: false,
       isVoiceInput: false,
     }).returning().get();

@@ -1,3 +1,46 @@
+## Session - 2026-02-15 (Agent handling Features #37 and #38)
+
+### Accomplished
+- Feature #37 (AI interviewer uses methodology-based questioning): PASSING
+  - Improved stop word filtering in extractKeyPhrases and extractTopicWord functions
+  - Added comprehensive stop word lists to avoid awkward words in reflections/quick replies
+  - Key phrase extraction now prefers longer, more meaningful words (sorted by length)
+  - extractTopicWord requires 6+ char words for personalized quick replies
+  - Verified methodology engine produces:
+    - Reflections (2-4 sentences) that quote user's actual words
+    - Single focused questions with bolded key concepts
+    - Cross-references to prior answers ("Earlier you mentioned...")
+    - Methodology rotation: Clean Language, Micro-phenomenology, Socratic, Appreciative Inquiry, 5 Whys
+    - Angle shifts every 3rd exchange with transition text
+  - Tested with 3-exchange conversation on "My Leadership Style" topic
+  - No mock data patterns in server/src
+
+- Feature #38 (Quick reply suggestions displayed and auto-send on tap): PASSING
+  - 3 quick reply buttons appear below every AI assistant message
+  - Quick replies are all first-person voice ("I have...", "I feel...", "I want...")
+  - All quick replies under 15 words (verified: max is 10 words)
+  - Click/tap immediately sends as user message (no confirmation dialog)
+  - handleQuickReply calls sendMessage directly - auto-send behavior
+  - AI responds to quick reply content with normal methodology-based response
+  - New quick replies generated for each new AI response
+  - Quick replies adapt based on conversation depth (5 different sets for exchanges 2+)
+  - Opening message has tailored first-person quick replies
+  - No mock data patterns in client/src or server/src
+
+### Verification
+- TypeScript compiles (server: only pre-existing updatedAt nullable error, no new errors)
+- TypeScript compiles (client: zero errors)
+- Server starts without errors after changes
+- API tested end-to-end: session creation, 3 message exchanges, all with proper AI responses
+- Data persists across server restart
+- No mock data patterns found
+- Quick replies confirmed: 3 per message, first-person, under 15 words
+
+### Current Status
+- Features #37 and #38 both passing
+- AI interviewer uses 5 methodologies with context-aware questioning
+- Quick replies are first-person, auto-send, and contextually aware
+
 ## Session - 2026-02-15 (Agent handling Features #34 and #176)
 
 ### Accomplished
