@@ -2,13 +2,27 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
+interface CategoryCompleteness {
+  category: string;
+  label: string;
+  totalTopics: number;
+  exploredTopics: number;
+  totalInsights: number;
+  verifiedInsights: number;
+  completeness: number;
+}
+
 interface DashboardStats {
   topics: number;
+  topicsExplored: number;
   sessions: number;
   completedSessions: number;
   insights: number;
   verifiedInsights: number;
+  rejectedInsights: number;
+  verificationRate: number;
   notes: number;
+  categoryCompleteness: CategoryCompleteness[];
 }
 
 interface ActivityItem {
@@ -18,6 +32,22 @@ interface ActivityItem {
   status: string;
   date: string;
 }
+
+const CATEGORY_COLORS: Record<string, { bg: string; fill: string; text: string }> = {
+  identity: { bg: 'bg-blue-100 dark:bg-blue-900/30', fill: 'bg-blue-500', text: 'text-blue-700 dark:text-blue-300' },
+  skills: { bg: 'bg-emerald-100 dark:bg-emerald-900/30', fill: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-300' },
+  experiences: { bg: 'bg-amber-100 dark:bg-amber-900/30', fill: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-300' },
+  perspectives: { bg: 'bg-purple-100 dark:bg-purple-900/30', fill: 'bg-purple-500', text: 'text-purple-700 dark:text-purple-300' },
+  goals: { bg: 'bg-rose-100 dark:bg-rose-900/30', fill: 'bg-rose-500', text: 'text-rose-700 dark:text-rose-300' },
+};
+
+const CATEGORY_ICONS: Record<string, string> = {
+  identity: '🪪',
+  skills: '🛠️',
+  experiences: '🌍',
+  perspectives: '💡',
+  goals: '🎯',
+};
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -56,10 +86,32 @@ export default function DashboardPage() {
   }, [user]);
 
   const statCards = [
-    { label: 'Topics Explored', value: stats?.topics ?? 0, icon: '📋' },
-    { label: 'Verified Insights', value: stats?.verifiedInsights ?? 0, icon: '✅' },
-    { label: 'Sessions Completed', value: stats?.completedSessions ?? 0, icon: '💬' },
-    { label: 'Total Insights', value: stats?.insights ?? 0, icon: '📊' },
+    {
+      label: 'Topics Explored',
+      value: `${stats?.topicsExplored ?? 0} / ${stats?.topics ?? 0}`,
+      icon: '📋',
+      sublabel: stats?.topics ? `${Math.round(((stats?.topicsExplored ?? 0) / stats.topics) * 100)}% explored` : 'No topics yet',
+    },
+    {
+      label: 'Verified Insights',
+      value: stats?.verifiedInsights ?? 0,
+      icon: '✅',
+      sublabel: `of ${stats?.insights ?? 0} total`,
+    },
+    {
+      label: 'Sessions Completed',
+      value: stats?.completedSessions ?? 0,
+      icon: '💬',
+      sublabel: `of ${stats?.sessions ?? 0} total`,
+    },
+    {
+      label: 'Verification Rate',
+      value: `${stats?.verificationRate ?? 0}%`,
+      icon: '📊',
+      sublabel: stats && (stats.verifiedInsights + stats.rejectedInsights) > 0
+        ? `${stats.verifiedInsights} approved, ${stats.rejectedInsights} rejected`
+        : 'No reviews yet',
+    },
   ];
 
   const SESSION_STATUS_LABELS: Record<string, string> = {
@@ -83,22 +135,84 @@ export default function DashboardPage() {
       {/* Stats cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {statCards.map((stat) => (
-          <div key={stat.label} className="card flex items-center gap-4">
-            <span className="text-2xl">{stat.icon}</span>
-            <div>
+          <div key={stat.label} className="card flex items-center gap-4 min-h-[88px]">
+            <span className="text-2xl flex-shrink-0">{stat.icon}</span>
+            <div className="min-w-0">
               {isLoading ? (
-                <div className="h-8 w-12 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                <div className="h-8 w-16 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
               ) : (
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stat.value}</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white truncate">{stat.value}</p>
               )}
               <p className="text-sm text-gray-500 dark:text-gray-400">{stat.label}</p>
+              {!isLoading && stat.sublabel && (
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{stat.sublabel}</p>
+              )}
             </div>
           </div>
         ))}
       </div>
 
+      {/* Knowledge Completeness by Category */}
+      <div className="card mb-8">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          Knowledge Completeness
+        </h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+          Track your progress across the 5 knowledge categories
+        </p>
+        {isLoading ? (
+          <div className="space-y-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-12 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
+            ))}
+          </div>
+        ) : stats?.categoryCompleteness && stats.categoryCompleteness.length > 0 ? (
+          <div className="space-y-5">
+            {stats.categoryCompleteness.map((cat) => {
+              const colors = CATEGORY_COLORS[cat.category] || CATEGORY_COLORS.identity;
+              const icon = CATEGORY_ICONS[cat.category] || '📂';
+              return (
+                <div key={cat.category}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-base flex-shrink-0">{icon}</span>
+                      <span className={`text-sm font-medium ${colors.text}`}>
+                        {cat.label}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
+                      <span>{cat.exploredTopics}/{cat.totalTopics} topics</span>
+                      <span>{cat.verifiedInsights} verified</span>
+                      <span className="font-semibold text-gray-700 dark:text-gray-300">
+                        {cat.completeness}%
+                      </span>
+                    </div>
+                  </div>
+                  {/* Progress bar */}
+                  <div className={`w-full h-3 rounded-full ${colors.bg} overflow-hidden`}>
+                    <div
+                      className={`h-full rounded-full ${colors.fill} transition-all duration-500 ease-out`}
+                      style={{ width: `${cat.completeness}%`, minWidth: cat.completeness > 0 ? '8px' : '0px' }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-6">
+            <p className="text-gray-500 dark:text-gray-400 text-sm">
+              No categorized topics yet. Create topics with preset categories to see progress here.
+            </p>
+            <Link to="/app/topics" className="text-indigo-600 dark:text-indigo-400 text-sm hover:underline mt-2 inline-block">
+              Browse Topics
+            </Link>
+          </div>
+        )}
+      </div>
+
       {/* Quick actions */}
-      <div className="card">
+      <div className="card mb-8">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           Get Started
         </h2>
@@ -112,7 +226,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Recent activity */}
-      <div className="mt-8 card">
+      <div className="card">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           Recent Activity
         </h2>
@@ -136,10 +250,10 @@ export default function DashboardPage() {
                 to={`/app/session/${item.id}`}
                 className="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-lg">💬</span>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-lg flex-shrink-0">💬</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                       {item.title}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -147,7 +261,7 @@ export default function DashboardPage() {
                     </p>
                   </div>
                 </div>
-                <span className="text-xs text-gray-400 dark:text-gray-500">
+                <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0 ml-2">
                   {new Date(item.date).toLocaleDateString()}
                 </span>
               </Link>
