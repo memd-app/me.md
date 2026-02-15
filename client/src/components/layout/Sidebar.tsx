@@ -5,6 +5,7 @@ const navItems = [
   { to: '/app', label: 'Dashboard', icon: '📊', end: true },
   { to: '/app/topics', label: 'Topics', icon: '📋' },
   { to: '/app/session/new', label: 'New Session', icon: '💬' },
+  { to: '/app/notes', label: 'Notes', icon: '📝' },
   { to: '/app/graph', label: 'Knowledge Graph', icon: '🔗' },
   { to: '/app/profile', label: 'Profile', icon: '👤' },
   { to: '/app/verify', label: 'Verification', icon: '✅' },
