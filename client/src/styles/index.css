@@ -3,6 +3,10 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply font-sans text-gray-900 dark:text-gray-100 bg-white dark:bg-dark-bg;
     line-height: 1.6;
