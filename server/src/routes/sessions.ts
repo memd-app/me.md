@@ -527,18 +527,24 @@ function selectMethodology(messageCount: number, intent: string): Methodology {
 // Extract key phrases/words from user's message for reflection
 function extractKeyPhrases(message: string): string[] {
   // Remove common filler words and short words, keep meaningful phrases
-  const words = message.replace(/[^\w\s'-]/g, '').split(/\s+/).filter(w => w.length > 3);
+  const words = message.replace(/[^\w\s'-]/g, '').split(/\s+/).filter(w => w.length > 4);
   const stopWords = new Set([
-    'that', 'this', 'with', 'from', 'have', 'been', 'were', 'they', 'their', 'them',
-    'will', 'would', 'could', 'should', 'about', 'which', 'there', 'these', 'those',
-    'then', 'than', 'just', 'also', 'very', 'really', 'much', 'some', 'into', 'when',
-    'what', 'like', 'know', 'think', 'being', 'going', 'make', 'made', 'does', 'done',
+    'about', 'after', 'again', 'always', 'being', 'biggest', 'could', 'doing',
+    'every', 'feels', 'first', 'going', 'great', 'having', 'honestly', 'image',
+    'instead', 'maybe', 'might', 'myself', 'never', 'often', 'other', 'place',
+    'quite', 'rather', 'really', 'right', 'seems', 'should', 'since', 'small',
+    'sometimes', 'something', 'still', 'their', 'there', 'these', 'thing',
+    'things', 'think', 'those', 'though', 'through', 'turned', 'under', 'until',
+    'where', 'which', 'while', 'would', 'comes', 'makes', 'people', 'wonder',
+    'that', 'this', 'with', 'from', 'have', 'been', 'were', 'they', 'them',
+    'will', 'just', 'also', 'very', 'much', 'some', 'into', 'when', 'what',
+    'like', 'know', 'make', 'made', 'does', 'done', 'more', 'than', 'then',
   ]);
 
   const meaningful = words.filter(w => !stopWords.has(w.toLowerCase()));
 
-  // Return up to 5 key words
-  return meaningful.slice(0, 5);
+  // Return up to 5 key words, preferring longer ones (more likely to be meaningful)
+  return meaningful.sort((a, b) => b.length - a.length).slice(0, 5);
 }
 
 // Extract a brief quote from the user's message for reflection
@@ -739,16 +745,20 @@ function extractTopicWord(conversationHistory: Array<{ role: string; content: st
   if (userMessages.length === 0) return '';
 
   const lastMsg = userMessages[userMessages.length - 1].content;
-  // Look for longer, more meaningful words (5+ chars) to avoid awkward short words
-  const words = lastMsg.replace(/[^\w\s'-]/g, '').split(/\s+/).filter(w => w.length >= 5);
+  // Look for longer, more meaningful words (6+ chars) to avoid awkward short words
+  const words = lastMsg.replace(/[^\w\s'-]/g, '').split(/\s+/).filter(w => w.length >= 6);
   const stopWords = new Set([
-    'about', 'after', 'again', 'being', 'could', 'doing', 'during', 'every',
-    'first', 'going', 'great', 'having', 'might', 'never', 'often', 'other',
-    'place', 'quite', 'really', 'right', 'should', 'since', 'still', 'their',
-    'there', 'these', 'thing', 'think', 'those', 'under', 'until', 'where',
-    'which', 'while', 'would', 'comes', 'feels', 'image', 'makes', 'seems',
-    'something', 'anything', 'everything', 'someone', 'always', 'before',
-    'between', 'different', 'because', 'through', 'people', 'understand',
+    'about', 'after', 'again', 'always', 'anything', 'before', 'being',
+    'between', 'biggest', 'because', 'cannot', 'comes', 'could', 'different',
+    'doing', 'during', 'either', 'enough', 'every', 'everything', 'feels',
+    'first', 'getting', 'going', 'great', 'having', 'honestly', 'however',
+    'image', 'instead', 'itself', 'makes', 'maybe', 'might', 'myself',
+    'never', 'nothing', 'often', 'other', 'people', 'place', 'pretty',
+    'quite', 'rather', 'really', 'right', 'seems', 'should', 'since',
+    'small', 'something', 'someone', 'sometimes', 'still', 'their',
+    'there', 'these', 'thing', 'things', 'think', 'those', 'though',
+    'through', 'turned', 'under', 'understand', 'until', 'where',
+    'which', 'while', 'within', 'without', 'wonder', 'would',
   ]);
 
   const meaningful = words.filter(w => !stopWords.has(w.toLowerCase()));
