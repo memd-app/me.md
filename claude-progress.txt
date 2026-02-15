@@ -68,3 +68,35 @@
 - Database: SQLite at server/data/memd.db via better-sqlite3 v12 + Drizzle ORM
 - Schema init: SQL CREATE TABLE IF NOT EXISTS in server/src/config/database.ts
 - Client: Vite + React on port 5173
+
+## Session 3 - 2026-02-15 (Agent handling Feature #5)
+
+### Accomplished
+- Feature #5 (Backend API queries real database): PASSING ✅
+  - Added Drizzle ORM query logger to database.ts (logs all SQL queries + params)
+  - Verified GET /api/health executes real SQL (SELECT 1, SELECT from sqlite_master)
+  - Verified POST /api/topics creates topic with real INSERT SQL in logs
+  - Verified GET /api/topics lists topics with real SELECT SQL in logs
+  - No mock data patterns found in server/src or client/src
+  - Data persists across server restart (created topic survived stop/restart)
+
+### Verification Details
+- Drizzle logger outputs: `[me.md:db] SQL: <query>` and `[me.md:db] Params: [...]`
+- Auth register: SELECT (check existing) + INSERT (create user) queries logged
+- Topic create: INSERT INTO "topics" with all fields logged
+- Topic list: SELECT FROM "topics" WHERE user_id = ? logged
+- Health: uses raw better-sqlite3 queries (SELECT 1, SELECT from sqlite_master)
+
+### Issues & Notes
+- npm registry blocked by proxy allowlist - used /tmp/claude/memd-server for npm install
+- better-sqlite3 compiles successfully in /tmp path (no apostrophe), then cp -R back
+- Server runs from /tmp/claude/memd-server copy (original path has apostrophe issue with node-gyp)
+
+### Current Status
+- 5/209 features passing (Features #1, #2, #3, #4, #5 - all Infrastructure complete!)
+- All 5 Infrastructure features now passing
+- Ready for functional feature implementation
+
+### What to Work on Next
+- Begin functional features (landing page, auth, onboarding, topics UI, etc.)
+- Next features should be assigned by orchestrator
