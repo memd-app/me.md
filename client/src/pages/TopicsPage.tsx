@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -11,6 +11,8 @@ interface Topic {
   priority: string;
   intent: string | null;
   trigger: string | null;
+  isPreset: boolean;
+  presetCategory: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -31,16 +33,47 @@ const STATUS_COLORS: Record<string, string> = {
   refined: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
 };
 
+const PRIORITY_LABELS: Record<string, string> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+};
+
 const PRIORITY_ICONS: Record<string, string> = {
   low: '🔽',
   medium: '➡️',
   high: '🔼',
 };
 
+const PRIORITY_COLORS: Record<string, string> = {
+  low: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
+  medium: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
+  high: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
+};
+
+type SortOption = 'name_asc' | 'name_desc' | 'date_newest' | 'date_oldest' | 'priority_high' | 'priority_low';
+
+const SORT_LABELS: Record<SortOption, string> = {
+  name_asc: 'Name (A-Z)',
+  name_desc: 'Name (Z-A)',
+  date_newest: 'Newest First',
+  date_oldest: 'Oldest First',
+  priority_high: 'Priority (High-Low)',
+  priority_low: 'Priority (Low-High)',
+};
+
+const PRIORITY_ORDER: Record<string, number> = {
+  high: 3,
+  medium: 2,
+  low: 1,
+};
+
 export default function TopicsPage() {
   const { user } = useAuth();
   const [topics, setTopics] = useState<Topic[]>([]);
-  const [filter, setFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [priorityFilter, setPriorityFilter] = useState('all');
+  const [sortBy, setSortBy] = useState<SortOption>('date_newest');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,9 +102,50 @@ export default function TopicsPage() {
     fetchTopics();
   }, [user]);
 
-  const filteredTopics = filter === 'all'
-    ? topics
-    : topics.filter((t) => t.status === filter);
+  const hasActiveFilters = statusFilter !== 'all' || priorityFilter !== 'all';
+
+  const clearAllFilters = () => {
+    setStatusFilter('all');
+    setPriorityFilter('all');
+    setSortBy('date_newest');
+  };
+
+  // Filter and sort topics
+  const filteredAndSortedTopics = useMemo(() => {
+    let result = [...topics];
+
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      result = result.filter((t) => t.status === statusFilter);
+    }
+
+    // Apply priority filter
+    if (priorityFilter !== 'all') {
+      result = result.filter((t) => t.priority === priorityFilter);
+    }
+
+    // Apply sorting
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case 'name_asc':
+          return a.title.localeCompare(b.title);
+        case 'name_desc':
+          return b.title.localeCompare(a.title);
+        case 'date_newest':
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        case 'date_oldest':
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        case 'priority_high':
+          return (PRIORITY_ORDER[b.priority] || 0) - (PRIORITY_ORDER[a.priority] || 0);
+        case 'priority_low':
+          return (PRIORITY_ORDER[a.priority] || 0) - (PRIORITY_ORDER[b.priority] || 0);
+        default:
+          return 0;
+      }
+    });
+
+    return result;
+  }, [topics, statusFilter, priorityFilter, sortBy]);
 
   const parseTags = (tagsStr: string | null): string[] => {
     if (!tagsStr) return [];
@@ -82,13 +156,37 @@ export default function TopicsPage() {
     }
   };
 
+  // Count topics per status
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    topics.forEach((t) => {
+      counts[t.status] = (counts[t.status] || 0) + 1;
+    });
+    return counts;
+  }, [topics]);
+
+  // Count topics per priority
+  const priorityCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    topics.forEach((t) => {
+      counts[t.priority] = (counts[t.priority] || 0) + 1;
+    });
+    return counts;
+  }, [topics]);
+
   return (
     <div className="max-w-6xl mx-auto">
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Topics</h1>
           <p className="mt-1 text-gray-600 dark:text-gray-400">
             Manage your interview topics and knowledge areas
+            {!isLoading && topics.length > 0 && (
+              <span className="ml-1 text-gray-500 dark:text-gray-500">
+                ({topics.length} total)
+              </span>
+            )}
           </p>
         </div>
         <Link to="/app/topics/new" className="btn-primary">
@@ -96,27 +194,128 @@ export default function TopicsPage() {
         </Link>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-2 mb-6">
-        {['all', 'backlog', 'scheduled', 'in_progress', 'extracted', 'refined'].map((status) => (
-          <button
-            key={status}
-            onClick={() => setFilter(status)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              filter === status
-                ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50'
-            }`}
-          >
-            {status === 'all' ? 'All' : STATUS_LABELS[status] || status}
-            {status === 'all' && topics.length > 0 && (
-              <span className="ml-1 text-xs">({topics.length})</span>
-            )}
-            {status !== 'all' && topics.filter((t) => t.status === status).length > 0 && (
-              <span className="ml-1 text-xs">({topics.filter((t) => t.status === status).length})</span>
-            )}
-          </button>
-        ))}
+      {/* Filters and Sort Controls */}
+      <div className="card mb-6 !p-4">
+        {/* Status Filter Row */}
+        <div className="mb-3">
+          <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5 block">
+            Status
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setStatusFilter('all')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                statusFilter === 'all'
+                  ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50'
+              }`}
+            >
+              All
+              {topics.length > 0 && (
+                <span className="ml-1 text-xs">({topics.length})</span>
+              )}
+            </button>
+            {['backlog', 'scheduled', 'in_progress', 'extracted', 'refined'].map((status) => (
+              <button
+                key={status}
+                onClick={() => setStatusFilter(status)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  statusFilter === status
+                    ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50'
+                }`}
+              >
+                {STATUS_LABELS[status] || status}
+                {(statusCounts[status] || 0) > 0 && (
+                  <span className="ml-1 text-xs">({statusCounts[status]})</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Priority Filter and Sort Row */}
+        <div className="flex flex-wrap items-end gap-4">
+          {/* Priority Filter */}
+          <div className="flex-1 min-w-[200px]">
+            <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5 block">
+              Priority
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setPriorityFilter('all')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  priorityFilter === 'all'
+                    ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50'
+                }`}
+              >
+                All
+              </button>
+              {['high', 'medium', 'low'].map((priority) => (
+                <button
+                  key={priority}
+                  onClick={() => setPriorityFilter(priority)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    priorityFilter === priority
+                      ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50'
+                  }`}
+                >
+                  {PRIORITY_ICONS[priority]} {PRIORITY_LABELS[priority]}
+                  {(priorityCounts[priority] || 0) > 0 && (
+                    <span className="ml-1 text-xs">({priorityCounts[priority]})</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Sort Selector */}
+          <div className="min-w-[180px]">
+            <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5 block">
+              Sort by
+            </label>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              className="input-field !py-1.5 text-sm"
+            >
+              {(Object.entries(SORT_LABELS) as [SortOption, string][]).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Clear Filters Button */}
+          {hasActiveFilters && (
+            <button
+              onClick={clearAllFilters}
+              className="px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+            >
+              Clear Filters
+            </button>
+          )}
+        </div>
+
+        {/* Active filter summary */}
+        {hasActiveFilters && (
+          <div className="mt-3 pt-3 border-t border-gray-200 dark:border-dark-border">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Showing {filteredAndSortedTopics.length} of {topics.length} topics
+              {statusFilter !== 'all' && (
+                <span className="ml-1">
+                  | Status: <span className="font-medium">{STATUS_LABELS[statusFilter]}</span>
+                </span>
+              )}
+              {priorityFilter !== 'all' && (
+                <span className="ml-1">
+                  | Priority: <span className="font-medium">{PRIORITY_LABELS[priorityFilter]}</span>
+                </span>
+              )}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Error state */}
@@ -135,9 +334,9 @@ export default function TopicsPage() {
       )}
 
       {/* Topics list */}
-      {!isLoading && filteredTopics.length > 0 && (
+      {!isLoading && filteredAndSortedTopics.length > 0 && (
         <div className="space-y-3">
-          {filteredTopics.map((topic) => (
+          {filteredAndSortedTopics.map((topic) => (
             <Link
               key={topic.id}
               to={`/app/topics/${topic.id}`}
@@ -149,8 +348,11 @@ export default function TopicsPage() {
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
                       {topic.title}
                     </h3>
-                    <span className="text-sm" title={`Priority: ${topic.priority}`}>
-                      {PRIORITY_ICONS[topic.priority] || ''}
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLORS[topic.priority] || PRIORITY_COLORS.medium}`}
+                      title={`Priority: ${PRIORITY_LABELS[topic.priority] || topic.priority}`}
+                    >
+                      {PRIORITY_ICONS[topic.priority] || ''} {PRIORITY_LABELS[topic.priority] || topic.priority}
                     </span>
                   </div>
                   {topic.description && (
@@ -187,18 +389,25 @@ export default function TopicsPage() {
       )}
 
       {/* Empty state */}
-      {!isLoading && filteredTopics.length === 0 && !error && (
+      {!isLoading && filteredAndSortedTopics.length === 0 && !error && (
         <div className="card text-center py-12">
           <span className="text-4xl block mb-3">📋</span>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            {filter === 'all' ? 'No topics yet' : `No ${STATUS_LABELS[filter] || filter} topics`}
+            {hasActiveFilters ? 'No matching topics' : 'No topics yet'}
           </h2>
           <p className="text-gray-600 dark:text-gray-400 mb-4">
-            {filter === 'all'
-              ? 'Create your first topic to start exploring your knowledge.'
-              : 'No topics match this filter.'}
+            {hasActiveFilters
+              ? 'No topics match the current filters. Try adjusting or clearing your filters.'
+              : 'Create your first topic to start exploring your knowledge.'}
           </p>
-          {filter === 'all' && (
+          {hasActiveFilters ? (
+            <button
+              onClick={clearAllFilters}
+              className="btn-secondary inline-block"
+            >
+              Clear All Filters
+            </button>
+          ) : (
             <Link to="/app/topics/new" className="btn-primary inline-block">
               Create Your First Topic
             </Link>
