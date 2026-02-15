@@ -1,3 +1,24 @@
+## Session 12 - 2026-02-15 (Agent handling Features #85 and #199)
+
+### Accomplished
+- Feature #85 (Global search across all content types): PASSING
+  - Created server/src/routes/search.ts with GET /api/search endpoint
+  - Searches across topics, insights, sessions/messages, and notes
+  - Supports filter parameter: all, topics, insights, sessions, notes
+  - Supports pagination with page/limit params
+  - Generates contextual snippets around matched keywords
+  - Rewrote SearchPage.tsx with debounced search, filter pills, result cards,
+    keyword highlighting, pagination, URL param persistence
+  - No mock data patterns
+
+- Feature #199 (Search filters persist across pagination): PASSING
+  - URL search params store filter state across page navigation
+  - handlePageChange preserves activeFilter when changing pages
+  - Tested with 32 results across 2 pages with topics filter
+
+### Current Status
+- 19+/209 features passing (added #85 and #199)
+
 ## Session 11 - 2026-02-15 (Agent handling Features #90 and #93)
 
 ### Accomplished
