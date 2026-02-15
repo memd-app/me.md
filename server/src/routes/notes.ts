@@ -90,8 +90,8 @@ notesRouter.post('/sessions/:sessionId/distill', async (req, res) => {
       selectedFormat,
     }).returning().get();
 
-    // Extract insights from the session
-    const extractedInsights = extractInsightsFromSession(userMessages, topic.title);
+    // Extract insights from the session (mini sessions use lower threshold)
+    const extractedInsights = extractInsightsFromSession(userMessages, topic.title, !!session.isMiniSession);
     const savedInsights = [];
 
     for (const insight of extractedInsights) {
@@ -143,7 +143,7 @@ notesRouter.post('/sessions/:sessionId/distill/regenerate', async (req, res) => 
   try {
     const userId = req.headers['x-user-id'] as string || req.body.userId;
     const sessionId = req.params.sessionId;
-    const { format } = req.body;
+    const { format, regenerateContent } = req.body;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -162,7 +162,55 @@ notesRouter.post('/sessions/:sessionId/distill/regenerate', async (req, res) => 
       return res.status(404).json({ error: 'Note not found. Distill session first.' });
     }
 
-    // Update selected format
+    // If regenerateContent is true, regenerate the specific format from session messages
+    if (regenerateContent) {
+      const session = db.select().from(sessions).where(
+        and(eq(sessions.id, sessionId), eq(sessions.userId, userId))
+      ).get();
+
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+
+      const topic = db.select().from(topics).where(eq(topics.id, session.topicId)).get();
+      if (!topic) {
+        return res.status(404).json({ error: 'Topic not found' });
+      }
+
+      const sessionMessages = db.select().from(messages)
+        .where(eq(messages.sessionId, sessionId))
+        .orderBy(messages.createdAt)
+        .all();
+
+      const userMessages = sessionMessages.filter(m => m.role === 'user');
+      const assistantMessages = sessionMessages.filter(m => m.role === 'assistant');
+
+      // Regenerate the requested format
+      const updateData: Record<string, string> = {
+        selectedFormat: format,
+        updatedAt: new Date().toISOString(),
+      };
+
+      switch (format) {
+        case 'full_analysis':
+          updateData.contentFullAnalysis = generateFullAnalysis(topic.title, topic.description, userMessages, assistantMessages);
+          break;
+        case 'brief_summary':
+          updateData.contentBriefSummary = generateBriefSummary(topic.title, userMessages, assistantMessages);
+          break;
+        case 'decision_framework':
+          updateData.contentDecisionFramework = generateDecisionFramework(topic.title, userMessages, assistantMessages);
+          break;
+        case 'json':
+          updateData.contentJson = generateJsonContent(topic.title, userMessages, assistantMessages);
+          break;
+      }
+
+      const updated = db.update(notes).set(updateData).where(eq(notes.id, note.id)).returning().get();
+      return res.json({ note: updated, regenerated: true });
+    }
+
+    // Just update selected format (no content regeneration)
     const updated = db.update(notes).set({
       selectedFormat: format,
       updatedAt: new Date().toISOString(),
@@ -539,24 +587,53 @@ function generateJsonContent(
   userMessages: MessageData[],
   assistantMessages: MessageData[]
 ): string {
+  // Extract principles: key belief/value statements from user messages
+  const principles = userMessages
+    .filter(m => m.content.length > 50)
+    .slice(0, 5)
+    .map(m => {
+      const sentences = m.content.split(/[.!?]+/).filter(s => s.trim().length > 15);
+      return sentences[0]?.trim() || m.content.substring(0, 100).trim();
+    });
+
+  // Extract frameworks: mental models & decision-making patterns
+  const frameworkMessages = userMessages.filter(m =>
+    /\b(when|because|always|usually|tend to|approach|strategy|method|process|framework|model|pattern|rule|guideline)\b/i.test(m.content)
+  );
+  const frameworks = frameworkMessages
+    .slice(0, 4)
+    .map(m => {
+      const sentences = m.content.split(/[.!?]+/).filter(s => s.trim().length > 15);
+      return sentences[0]?.trim() || m.content.substring(0, 200).trim();
+    });
+
+  // Extract examples: concrete stories, experiences, and illustrations
+  const examples = userMessages
+    .filter(m => m.content.length > 100 ||
+      /\b(example|instance|time when|remember|experience|once|story)\b/i.test(m.content))
+    .slice(0, 3)
+    .map(m => m.content.substring(0, 300).trim());
+
+  // Extract decisions: choice-related statements and decision-making moments
+  const decisionMessages = userMessages.filter(m =>
+    /\b(decide|decided|decision|chose|choose|choice|option|alternative|trade-?off|weigh|consider|prefer|priority|prioritize)\b/i.test(m.content)
+  );
+  const decisions = decisionMessages
+    .slice(0, 4)
+    .map(m => {
+      const sentences = m.content.split(/[.!?]+/).filter(s => s.trim().length > 15);
+      return sentences[0]?.trim() || m.content.substring(0, 200).trim();
+    });
+
   const data = {
     topic: topicTitle,
     sessionDate: new Date().toISOString(),
     messageCount: userMessages.length + assistantMessages.length,
     userResponseCount: userMessages.length,
-    principles: userMessages
-      .filter(m => m.content.length > 50)
-      .slice(0, 5)
-      .map(m => {
-        const sentences = m.content.split(/[.!?]+/).filter(s => s.trim().length > 15);
-        return sentences[0]?.trim() || m.content.substring(0, 100).trim();
-      }),
-    frameworks: [] as string[],
-    examples: userMessages
-      .filter(m => m.content.length > 100)
-      .slice(0, 3)
-      .map(m => m.content.substring(0, 300).trim()),
-    decisions: [] as string[],
+    principles,
+    frameworks,
+    examples,
+    decisions,
     tags: extractTags(userMessages),
   };
 
@@ -591,17 +668,28 @@ function extractTags(userMessages: MessageData[]): string[] {
 
 function extractInsightsFromSession(
   userMessages: MessageData[],
-  topicTitle: string
+  topicTitle: string,
+  isMiniSession: boolean = false
 ): Array<{ content: string; confidenceScore: number }> {
   const insights: Array<{ content: string; confidenceScore: number }> = [];
+
+  // Mini sessions use a lower threshold since answers are shorter/more direct
+  const minMessageLength = isMiniSession ? 20 : 30;
+  const minSentenceLength = isMiniSession ? 15 : 20;
+  const scoreThreshold = isMiniSession ? 45 : 55;
 
   // Extract insight-worthy statements from user messages
   for (const msg of userMessages) {
     // Skip very short messages
-    if (msg.content.length < 30) continue;
+    if (msg.content.length < minMessageLength) continue;
 
     // Split into sentences and find insight-worthy ones
-    const sentences = msg.content.split(/[.!?]+/).filter(s => s.trim().length > 20);
+    const sentences = msg.content.split(/[.!?]+/).filter(s => s.trim().length > minSentenceLength);
+
+    // For mini sessions, if no sentences found by splitting, use the whole message
+    if (sentences.length === 0 && isMiniSession && msg.content.trim().length > minSentenceLength) {
+      sentences.push(msg.content);
+    }
 
     for (const sentence of sentences) {
       const trimmed = sentence.trim();
@@ -621,9 +709,13 @@ function extractInsightsFromSession(
       if (msg.isBookmarked) {
         score += 20;
       }
+      // Mini session bonus: direct self-describing statements are inherently insightful
+      if (isMiniSession && /\b(I am|I love|I prefer|my|I like|I want|matter|goal|superpower|direct|collaborative|style|strength)\b/i.test(trimmed)) {
+        score += 10;
+      }
 
       // Only include statements with reasonable confidence
-      if (score >= 55 && trimmed.length > 25) {
+      if (score >= scoreThreshold && trimmed.length > (isMiniSession ? 20 : 25)) {
         insights.push({
           content: trimmed.substring(0, 500),
           confidenceScore: Math.min(score, 95),

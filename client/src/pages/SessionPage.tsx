@@ -86,6 +86,12 @@ export default function SessionPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [isVoiceInputPending, setIsVoiceInputPending] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regenerateSuccess, setRegenerateSuccess] = useState(false);
+  const [isEditingNote, setIsEditingNote] = useState(false);
+  const [editContent, setEditContent] = useState('');
+  const [isSavingNote, setIsSavingNote] = useState(false);
+  const [noteSaveSuccess, setNoteSaveSuccess] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -260,6 +266,7 @@ export default function SessionPage() {
   // Change note format
   const handleFormatChange = async (format: NoteFormat) => {
     setSelectedFormat(format);
+    setIsEditingNote(false); // Exit edit mode when changing format
 
     if (!user || !session || !note) return;
 
@@ -274,6 +281,111 @@ export default function SessionPage() {
       });
     } catch {
       // Silent update - format is changed locally anyway
+    }
+  };
+
+  // Regenerate note content in current format from session messages
+  const handleRegenerateContent = async () => {
+    if (!user || !session || !note || isRegenerating) return;
+
+    setIsRegenerating(true);
+    setRegenerateSuccess(false);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/sessions/${session.id}/distill/regenerate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id,
+        },
+        body: JSON.stringify({ format: selectedFormat, regenerateContent: true }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to regenerate note');
+      }
+
+      const data = await res.json();
+      setNote(data.note);
+      setRegenerateSuccess(true);
+      setIsEditingNote(false);
+
+      // Auto-dismiss success message after 3 seconds
+      setTimeout(() => setRegenerateSuccess(false), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to regenerate note');
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
+  // Start editing note content
+  const handleStartEdit = () => {
+    setEditContent(getNoteContent());
+    setIsEditingNote(true);
+    setNoteSaveSuccess(false);
+  };
+
+  // Cancel editing
+  const handleCancelEdit = () => {
+    setIsEditingNote(false);
+    setEditContent('');
+  };
+
+  // Save edited note content
+  const handleSaveNote = async () => {
+    if (!user || !note || isSavingNote) return;
+
+    setIsSavingNote(true);
+    setNoteSaveSuccess(false);
+    setError(null);
+
+    try {
+      // Build update payload with the appropriate content field
+      const updatePayload: Record<string, string> = {};
+      switch (selectedFormat) {
+        case 'full_analysis':
+          updatePayload.contentFullAnalysis = editContent;
+          break;
+        case 'brief_summary':
+          updatePayload.contentBriefSummary = editContent;
+          break;
+        case 'decision_framework':
+          updatePayload.contentDecisionFramework = editContent;
+          break;
+        case 'json':
+          updatePayload.contentJson = editContent;
+          break;
+      }
+
+      const res = await fetch(`/api/notes/${note.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id,
+        },
+        body: JSON.stringify(updatePayload),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to save note');
+      }
+
+      const data = await res.json();
+      setNote(data.note);
+      setIsEditingNote(false);
+      setEditContent('');
+      setNoteSaveSuccess(true);
+
+      // Auto-dismiss success message after 3 seconds
+      setTimeout(() => setNoteSaveSuccess(false), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save note');
+    } finally {
+      setIsSavingNote(false);
     }
   };
 
@@ -900,36 +1012,169 @@ export default function SessionPage() {
           </Link>
         </div>
 
-        {/* Format selector */}
+        {/* Format selector with regenerate and edit buttons */}
         <div className="px-6 py-3 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-dark-border shrink-0">
-          <div className="flex items-center gap-2 overflow-x-auto">
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400 shrink-0">Format:</span>
-            {(Object.entries(FORMAT_LABELS) as [NoteFormat, string][]).map(([format, label]) => (
-              <button
-                key={format}
-                onClick={() => handleFormatChange(format)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors shrink-0 ${
-                  selectedFormat === format
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 overflow-x-auto">
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 shrink-0">Format:</span>
+              {(Object.entries(FORMAT_LABELS) as [NoteFormat, string][]).map(([format, label]) => (
+                <button
+                  key={format}
+                  onClick={() => handleFormatChange(format)}
+                  disabled={isRegenerating || isSavingNote}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors shrink-0 ${
+                    selectedFormat === format
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Edit button */}
+              {!isEditingNote && (
+                <button
+                  onClick={handleStartEdit}
+                  disabled={isRegenerating}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Edit note content"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Edit
+                </button>
+              )}
+              {/* Save and Cancel buttons during editing */}
+              {isEditingNote && (
+                <>
+                  <button
+                    onClick={handleCancelEdit}
+                    disabled={isSavingNote}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveNote}
+                    disabled={isSavingNote}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSavingNote ? (
+                      <>
+                        <div className="animate-spin w-3 h-3 border-2 border-white/30 border-t-white rounded-full" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Save
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
+              {/* Regenerate button */}
+              {!isEditingNote && (
+                <button
+                  onClick={handleRegenerateContent}
+                  disabled={isRegenerating}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Regenerate note content in current format from session messages"
+                >
+                  {isRegenerating ? (
+                    <>
+                      <div className="animate-spin w-3 h-3 border-2 border-amber-300 border-t-amber-600 rounded-full" />
+                      Regenerating...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Regenerate
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
           </div>
+          {/* Success messages */}
+          {regenerateSuccess && (
+            <div className="mt-2 flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              Note regenerated successfully in {FORMAT_LABELS[selectedFormat]} format. Previous content of other formats is preserved.
+            </div>
+          )}
+          {noteSaveSuccess && (
+            <div className="mt-2 flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              Note saved successfully.
+            </div>
+          )}
         </div>
 
         {/* Note content */}
         <div className="flex-1 overflow-y-auto px-6 py-6">
-          {selectedFormat === 'json' ? (
-            <pre className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg text-sm font-mono text-gray-800 dark:text-gray-200 overflow-x-auto whitespace-pre-wrap">
-              {getNoteContent()}
-            </pre>
-          ) : (
-            <div className="prose dark:prose-invert max-w-none">
-              {renderMarkdown(getNoteContent())}
+          {/* Regenerating overlay */}
+          {isRegenerating && (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-center">
+                <div className="animate-spin inline-block w-8 h-8 border-4 border-amber-200 border-t-amber-600 rounded-full mb-3" />
+                <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                  Regenerating {FORMAT_LABELS[selectedFormat]}...
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Re-analyzing session messages
+                </p>
+              </div>
             </div>
+          )}
+
+          {/* Edit mode: Markdown textarea editor */}
+          {isEditingNote && !isRegenerating && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                <span>Editing {FORMAT_LABELS[selectedFormat]} — {selectedFormat === 'json' ? 'Edit JSON data' : 'Markdown supported'}</span>
+              </div>
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                className="w-full h-[calc(100vh-320px)] min-h-[400px] p-4 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 text-sm font-mono leading-relaxed resize-y focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:focus:ring-primary-400 dark:focus:border-primary-400 outline-none"
+                placeholder={selectedFormat === 'json' ? 'Enter JSON content...' : 'Enter markdown content...'}
+                spellCheck={selectedFormat !== 'json'}
+              />
+              <div className="flex items-center justify-between text-xs text-gray-400 dark:text-gray-500">
+                <span>{editContent.length} characters</span>
+                <span>Press Save to persist changes</span>
+              </div>
+            </div>
+          )}
+
+          {/* View mode: Rendered content */}
+          {!isEditingNote && !isRegenerating && (
+            <>
+              {selectedFormat === 'json' ? (
+                <pre className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg text-sm font-mono text-gray-800 dark:text-gray-200 overflow-x-auto whitespace-pre-wrap">
+                  {getNoteContent()}
+                </pre>
+              ) : (
+                <div className="prose dark:prose-invert max-w-none">
+                  {renderMarkdown(getNoteContent())}
+                </div>
+              )}
+            </>
           )}
 
           {/* Extracted insights */}
