@@ -1,3 +1,49 @@
+## Session 19 - 2026-02-15 (Agent handling Features #69 and #136)
+
+### Accomplished
+- Feature #69 (Time-based re-verification triggers work correctly): PASSING
+  - Added insight classification function (classifyInsightInterval) that auto-determines re-verification interval:
+    - Situational insights (contains "currently", "right now", "lately"): weekly (2 weeks)
+    - Preference insights (contains "prefer", "enjoy", "style"): quarterly (3 months)
+    - Core trait insights (contains "always", "identity", "values" + high confidence): biannual (6 months)
+    - Default moderate insights: monthly
+  - Updated POST /api/insights/:id/verify to automatically set reVerifyInterval and reVerifyAt
+  - Client can override interval by passing reVerifyInterval in request body
+  - Added checkReVerificationDue() function that scans verified insights with past reVerifyAt dates
+  - Function marks matched insights as 're_verification_pending' and records history
+  - Runs on server startup and every 15 minutes via setInterval
+  - Added POST /api/insights/check-reverification endpoint with optional asOfDate param
+  - Added PUT /api/insights/:id/re-verify-interval for manual interval override
+  - Updated VerificationPage with:
+    - Re-verification badge (purple) with refresh icon for re_verification_pending items
+    - Interval info and last verified date shown for re-verification items
+    - Schedule dropdown (Approve with specific interval) for all insights
+    - 5 interval options: weekly, monthly, quarterly, biannual, annual
+  - Re-verifying an insight records 're_verified' action in verification history
+  - Re-verification items integrated into standard pending verification flow
+
+- Feature #136 (Re-verification scheduling accounts for time correctly): PASSING
+  - Weekly: 14 days from verification (within 1-4 weeks spec range)
+  - Monthly: +1 month from verification
+  - Quarterly: +3 months from verification (matches 3-6 month preference spec)
+  - Biannual: +6 months from verification (matches 6-12 month core trait spec)
+  - Annual: +1 year from verification
+  - Verified timestamps are accurate via API testing
+  - Check-reverification correctly transitions insights when asOfDate passes reVerifyAt
+  - Before due date: 0 triggered; after due date: insights correctly marked
+
+### Verification
+- TypeScript compiles clean (client: only pre-existing SettingsPage unused var warnings; server: only pre-existing database.ts export issue)
+- Server starts without errors, re-verification check runs on startup
+- Drizzle ORM logs show correct SQL queries for re-verification scanning
+- No mock data patterns in server/src or client/src
+- End-to-end tested: register -> topic -> session -> messages -> distill -> insights -> verify with scheduling -> trigger check with future date -> re-verification pending in queue
+
+### Current Status
+- Features #69 and #136 both passing
+- Re-verification system fully functional with auto-classification and manual override
+- Background periodic check ensures insights are re-queued when due
+
 ## Session 18 - 2026-02-15 (Agent handling Features #96 and #98)
 
 ### Accomplished
