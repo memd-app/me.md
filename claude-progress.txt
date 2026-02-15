@@ -1,3 +1,36 @@
+## Session - 2026-02-15 (Agent handling Features #46 and #48)
+
+### Accomplished
+- Feature #46 (Voice input for answers via Web Speech API): PASSING
+  - Added SpeechRecognition type declarations to vite-env.d.ts
+  - Microphone toggle button (red pulsing when recording, gray when idle)
+  - Recording indicator with animated ping dot
+  - Voice input pending indicator while processing
+  - Voice badge (mic icon) on messages sent via voice
+  - isVoiceInput flag passed to backend API endpoints
+  - Web Speech API with webkitSpeechRecognition fallback
+  - TypeScript compiles clean, Vite build succeeds
+
+- Feature #48 (Quick-win mini session generates starter profile): PASSING
+  - POST /api/sessions/mini endpoint creates topic + session + opening message
+  - 7 high-impact question areas cycle through career, values, communication, etc.
+  - suggestsCompletion at 5+ messages, wrap-up at 7+ messages
+  - generateMiniSessionAIResponse() with key phrase extraction + next question
+  - NewSessionPage wired up with "Start Quick Session" button
+  - Lower insight extraction thresholds for mini sessions (score 45 vs 55)
+  - Mini session bonus scoring for self-describing patterns
+  - Concept nodes created in knowledge graph from extracted insights
+  - Improved JSON content generation with real principle/framework/decision extraction
+  - Added note regeneration and inline editing to session view
+  - End-to-end tested: 9 insights extracted, 9 concept nodes created, all unverified
+  - TypeScript client compiles clean, Vite build succeeds
+
+### Current Status
+- Features #46 and #48 both passing
+- Overall: 91/209 features passing (43.5%)
+
+---
+
 ## Session - 2026-02-15 (Agent handling Features #47 and #108)
 
 ### Accomplished
