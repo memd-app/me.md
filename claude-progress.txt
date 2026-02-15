@@ -1,3 +1,36 @@
+## Session - 2026-02-15 (Agent handling Features #29 and #40)
+
+### Accomplished
+- Feature #29 (Edit topic details): PASSING
+  - Added inline edit mode to TopicDetailPage with edit button in header
+  - Edit form includes: title (required), description, priority (Low/Medium/High toggles), intent (4 options), tags (add/remove with Enter/comma)
+  - Save sends PUT /api/topics/:id, cancel restores original values
+  - Success message shown after save, topic data refreshed from response
+  - Verified end-to-end: create topic, edit all fields, GET confirms persistence
+
+- Feature #40 (Pause and resume session with gap-aware greeting): PASSING
+  - Added POST /api/sessions/:id/pause endpoint - changes status to 'paused'
+  - Added POST /api/sessions/:id/resume endpoint - changes status back to 'active' and generates gap-aware AI greeting
+  - Gap-aware greeting includes: time gap description, reference to user's last message, contextual question
+  - Greeting quick replies: "Let's continue where we left off", "I've had some new thoughts to share", "Can you remind me what we covered?"
+  - SessionPage UI: Pause button (amber, next to Finish & Distill), Resume button (primary), paused status banner
+  - TopicDetailPage: paused sessions shown in amber styling between active and completed sections
+  - Input area and quick replies hidden when session is paused
+  - All previous messages preserved across pause/resume
+  - Error handling: "Only active sessions can be paused", "Only paused sessions can be resumed"
+
+### Verification
+- Vite build succeeds (640 modules, zero errors)
+- Server starts without errors
+- All API endpoints tested end-to-end
+- No mock data patterns in client/src or server/src
+- Test data cleaned up after verification
+
+### Current Status
+- Features #29 and #40 both passing
+- Topic editing fully functional with inline edit mode
+- Session pause/resume with gap-aware greeting fully operational
+
 ## Session - 2026-02-15 (Agent handling Features #26 and #32)
 
 ### Accomplished
