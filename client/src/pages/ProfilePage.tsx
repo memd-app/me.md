@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import VerifiedBadge from '@/components/VerifiedBadge';
 
 interface ProfileSection {
   title: string;
@@ -43,8 +44,11 @@ function SectionCard({
           {section.title}
         </h2>
         {hasContent && (
-          <span className="ml-auto text-xs font-medium px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-full">
-            {section.content.length} insight{section.content.length !== 1 ? 's' : ''}
+          <span className="ml-auto flex items-center gap-2">
+            <VerifiedBadge status="verified" size="sm" />
+            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+              {section.content.length} insight{section.content.length !== 1 ? 's' : ''}
+            </span>
           </span>
         )}
       </div>
@@ -54,7 +58,9 @@ function SectionCard({
           <ul className="space-y-2">
             {section.content.map((item, idx) => (
               <li key={idx} className="flex items-start gap-2 text-gray-700 dark:text-gray-300">
-                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500 dark:bg-indigo-400 flex-shrink-0" />
+                <svg className="mt-1 w-4 h-4 text-green-500 dark:text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
                 <span className="leading-relaxed">{item}</span>
               </li>
             ))}

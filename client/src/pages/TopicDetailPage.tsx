@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import VerifiedBadge from '@/components/VerifiedBadge';
 
 interface Topic {
   id: string;
@@ -1035,28 +1036,7 @@ export default function TopicDetailPage() {
                         {insight.confidenceScore}%
                       </span>
                       {/* Status badge */}
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                        isVerified
-                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                          : isRejected
-                          ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-                          : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                      }`}>
-                        {isVerified ? (
-                          <span className="flex items-center gap-1">
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                            Verified
-                          </span>
-                        ) : isRejected ? (
-                          'Rejected'
-                        ) : isPending ? (
-                          'Pending'
-                        ) : (
-                          insight.verificationStatus
-                        )}
-                      </span>
+                      <VerifiedBadge status={insight.verificationStatus} />
                     </div>
                   </div>
                   <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">

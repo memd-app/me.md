@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import VerifiedBadge from '@/components/VerifiedBadge';
 
 type NoteFormat = 'full_analysis' | 'brief_summary' | 'decision_framework' | 'json';
 
@@ -382,15 +383,7 @@ export default function NotesPage() {
                       <span className="text-xs text-gray-500 dark:text-gray-400">
                         Confidence: {insight.confidenceScore}%
                       </span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        insight.verificationStatus === 'verified'
-                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                          : insight.verificationStatus === 'rejected'
-                          ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                          : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                      }`}>
-                        {insight.verificationStatus}
-                      </span>
+                      <VerifiedBadge status={insight.verificationStatus} />
                     </div>
                   </div>
                 </div>

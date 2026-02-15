@@ -18,12 +18,17 @@ export const isFirebaseConfigured = Boolean(
   firebaseConfig.projectId !== 'your-firebase-project-id'
 );
 
-// Initialize Firebase only if not already initialized
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+// Initialize Firebase only if configured - prevents crash with empty/invalid API keys
+let auth: ReturnType<typeof getAuth> | null = null;
+let googleProvider: GoogleAuthProvider | null = null;
 
-export const auth = getAuth(app);
-export const googleProvider = new GoogleAuthProvider();
+if (isFirebaseConfigured) {
+  const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+  auth = getAuth(app);
+  googleProvider = new GoogleAuthProvider();
+  // Request additional scopes for profile info
+  googleProvider.addScope('profile');
+  googleProvider.addScope('email');
+}
 
-// Request additional scopes for profile info
-googleProvider.addScope('profile');
-googleProvider.addScope('email');
+export { auth, googleProvider };

@@ -125,6 +125,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Trigger Google Sign-In popup via Firebase
+      if (!auth || !googleProvider) {
+        throw new Error('Google Sign-In is not configured.');
+      }
       const result = await signInWithPopup(auth, googleProvider);
       const firebaseUser = result.user;
 
@@ -201,7 +204,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     localStorage.removeItem('memd_user_id');
     // Also sign out of Firebase if configured
-    if (isFirebaseConfigured) {
+    if (isFirebaseConfigured && auth) {
       auth.signOut().catch(() => {
         // Ignore sign-out errors
       });

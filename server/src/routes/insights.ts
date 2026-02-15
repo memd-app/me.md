@@ -320,7 +320,38 @@ insightsRouter.post('/:id/verify', async (req, res) => {
       newContent: insight.content,
     }).run();
 
-    res.json({ insight: updated, message: 'Insight verified successfully' });
+    // Create concept node for newly verified insight (if one doesn't already exist)
+    // This ensures the knowledge graph grows as insights are verified
+    let newConceptNode = null;
+    if (!isReVerification) {
+      const existingConceptNode = db.select().from(conceptNodes)
+        .where(
+          and(
+            eq(conceptNodes.insightId, insightId),
+            eq(conceptNodes.userId, userId)
+          )
+        ).get();
+
+      if (!existingConceptNode) {
+        const nodeId = uuidv4();
+        newConceptNode = db.insert(conceptNodes).values({
+          id: nodeId,
+          userId,
+          topicId: insight.topicId,
+          insightId: insightId,
+          label: insight.content.substring(0, 60),
+          weight: (insight.confidenceScore ?? 50) / 100,
+        }).returning().get();
+        console.log(`[me.md] Created concept node for verified insight: ${nodeId} (label: "${insight.content.substring(0, 40)}...")`);
+      }
+    }
+
+    res.json({
+      insight: updated,
+      message: 'Insight verified successfully',
+      conceptNodeCreated: !!newConceptNode,
+      conceptNode: newConceptNode,
+    });
   } catch (error) {
     console.error('Verify insight error:', error);
     res.status(500).json({ error: 'Failed to verify insight' });
