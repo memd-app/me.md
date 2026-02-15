@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface Insight {
@@ -27,6 +27,11 @@ interface Stats {
   total: number;
 }
 
+interface EditState {
+  insightId: string;
+  editedContent: string;
+}
+
 const INTERVAL_LABELS: Record<string, string> = {
   weekly: '1-4 weeks',
   monthly: '~1 month',
@@ -51,6 +56,9 @@ export default function VerificationPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [intervalDropdownOpen, setIntervalDropdownOpen] = useState<string | null>(null);
+  const [editState, setEditState] = useState<EditState | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const fetchData = useCallback(async () => {
     if (!user) return;
@@ -154,6 +162,67 @@ export default function VerificationPage() {
       setError('Failed to reject insight');
     } finally {
       setActionInProgress(null);
+    }
+  };
+
+  const handleStartEdit = (insight: Insight) => {
+    setEditState({ insightId: insight.id, editedContent: insight.content });
+    setIntervalDropdownOpen(null);
+    // Focus textarea after render
+    setTimeout(() => {
+      editTextareaRef.current?.focus();
+      // Move cursor to end
+      if (editTextareaRef.current) {
+        const len = editTextareaRef.current.value.length;
+        editTextareaRef.current.setSelectionRange(len, len);
+      }
+    }, 50);
+  };
+
+  const handleCancelEdit = () => {
+    setEditState(null);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!user || !editState) return;
+    if (editState.editedContent.trim() === '') {
+      setError('Insight content cannot be empty');
+      return;
+    }
+
+    setEditSaving(true);
+    try {
+      const res = await fetch(`/api/insights/${editState.insightId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id,
+        },
+        body: JSON.stringify({ content: editState.editedContent.trim() }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to save edit');
+      }
+
+      const data = await res.json();
+
+      // Update the insight in the pending list with new content
+      setPendingInsights(prev =>
+        prev.map(i =>
+          i.id === editState.insightId
+            ? { ...i, content: data.insight.content, updatedAt: data.insight.updatedAt }
+            : i
+        )
+      );
+
+      setEditState(null);
+    } catch (err) {
+      console.error('Failed to save insight edit:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save edit');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -273,11 +342,58 @@ export default function VerificationPage() {
               key={insight.id}
               className="card border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
             >
-              {/* Insight content */}
+              {/* Insight content - view or edit mode */}
               <div className="mb-3">
-                <p className="text-gray-900 dark:text-white leading-relaxed">
-                  {insight.content}
-                </p>
+                {editState?.insightId === insight.id ? (
+                  <div className="space-y-2">
+                    <textarea
+                      ref={editTextareaRef}
+                      value={editState.editedContent}
+                      onChange={(e) => setEditState({ ...editState, editedContent: e.target.value })}
+                      className="w-full px-3 py-2 text-gray-900 dark:text-white bg-white dark:bg-gray-800 border border-blue-400 dark:border-blue-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-y min-h-[80px] leading-relaxed"
+                      rows={3}
+                      disabled={editSaving}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          handleCancelEdit();
+                        }
+                      }}
+                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleSaveEdit}
+                        disabled={editSaving || editState.editedContent.trim() === '' || editState.editedContent.trim() === insight.content}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+                      >
+                        {editSaving ? (
+                          <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                        ) : (
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                        Save
+                      </button>
+                      <button
+                        onClick={handleCancelEdit}
+                        disabled={editSaving}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 text-sm font-medium rounded-lg transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <span className="text-xs text-gray-400 dark:text-gray-500 ml-2">
+                        Press Escape to cancel
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-gray-900 dark:text-white leading-relaxed">
+                    {insight.content}
+                  </p>
+                )}
               </div>
 
               {/* Metadata row */}
@@ -342,80 +458,94 @@ export default function VerificationPage() {
                 )}
               </div>
 
-              {/* Action buttons */}
-              <div className="flex items-center gap-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-                {/* Quick approve button */}
-                <button
-                  onClick={() => handleApprove(insight.id)}
-                  disabled={actionInProgress === insight.id}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  {actionInProgress === insight.id ? (
-                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                  Approve
-                </button>
-
-                {/* Re-verification interval selector */}
-                <div className="relative">
+              {/* Action buttons - hidden during edit mode */}
+              {editState?.insightId !== insight.id && (
+                <div className="flex items-center gap-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                  {/* Quick approve button */}
                   <button
-                    onClick={() => setIntervalDropdownOpen(intervalDropdownOpen === insight.id ? null : insight.id)}
+                    onClick={() => handleApprove(insight.id)}
                     disabled={actionInProgress === insight.id}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors border border-gray-300 dark:border-gray-600"
-                    title="Set re-verification interval and approve"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-sm font-medium rounded-lg transition-colors"
                   >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Schedule
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
+                    {actionInProgress === insight.id ? (
+                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                    Approve
                   </button>
 
-                  {/* Dropdown menu */}
-                  {intervalDropdownOpen === insight.id && (
-                    <div className="absolute bottom-full mb-1 left-0 z-10 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
-                      <div className="p-2 border-b border-gray-100 dark:border-gray-700">
-                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                          Approve with re-verification interval
-                        </p>
-                      </div>
-                      <div className="py-1">
-                        {INTERVAL_OPTIONS.map(option => (
-                          <button
-                            key={option.value}
-                            onClick={() => handleApprove(insight.id, option.value)}
-                            className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                          >
-                            <p className="text-sm font-medium text-gray-900 dark:text-white">{option.label}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">{option.description}</p>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  {/* Edit button */}
+                  <button
+                    onClick={() => handleStartEdit(insight)}
+                    disabled={actionInProgress === insight.id}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-700 rounded-lg transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit
+                  </button>
 
-                {/* Reject button */}
-                <button
-                  onClick={() => handleReject(insight.id)}
-                  disabled={actionInProgress === insight.id}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                  Reject
-                </button>
-              </div>
+                  {/* Re-verification interval selector */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setIntervalDropdownOpen(intervalDropdownOpen === insight.id ? null : insight.id)}
+                      disabled={actionInProgress === insight.id}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors border border-gray-300 dark:border-gray-600"
+                      title="Set re-verification interval and approve"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Schedule
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {/* Dropdown menu */}
+                    {intervalDropdownOpen === insight.id && (
+                      <div className="absolute bottom-full mb-1 left-0 z-10 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
+                        <div className="p-2 border-b border-gray-100 dark:border-gray-700">
+                          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Approve with re-verification interval
+                          </p>
+                        </div>
+                        <div className="py-1">
+                          {INTERVAL_OPTIONS.map(option => (
+                            <button
+                              key={option.value}
+                              onClick={() => handleApprove(insight.id, option.value)}
+                              className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            >
+                              <p className="text-sm font-medium text-gray-900 dark:text-white">{option.label}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">{option.description}</p>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Reject button */}
+                  <button
+                    onClick={() => handleReject(insight.id)}
+                    disabled={actionInProgress === insight.id}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Reject
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
