@@ -1,3 +1,42 @@
+## Session - 2026-02-15 (Agent handling Features #26 and #32)
+
+### Accomplished
+- Feature #26 (Onboarding data saved persistently): PASSING
+  - Verified full onboarding flow: register -> save profile fields -> import context -> complete onboarding
+  - Profile fields (name, DOB, location, occupation, gender) persist in SQLite users table
+  - Imported context stored in both imported_files table and users.importedContext JSON array
+  - onboardingCompleted flag persists correctly
+  - Preset topics created during/after onboarding persist in topics table
+  - GET /api/users/profile returns all onboarding data
+  - Settings page displays all profile fields from database
+  - Server restart persistence test: all data survived kill + restart
+  - No mock data patterns found in codebase
+
+- Feature #32 (Topic detail view shows session history and insights): PASSING
+  - Enhanced GET /api/topics/:id to return related insights and connected topics
+  - TopicDetailPage now shows 3 new sections:
+    1. Session History: active/completed sessions with dates and status badges
+    2. Related Insights: insight cards with content, confidence scores (color-coded), verification status badges
+    3. Connected Topics: linked topics with connection type and relevance score
+  - Empty states for each section with descriptive guidance text
+  - Reference URLs section with add/remove functionality already present
+  - All data from real SQLite database (no mocks)
+  - Client build succeeds (640 modules, 0 errors)
+  - Server restart persistence test passed
+  - Test data created, verified, and cleaned up
+
+### Verification
+- TypeScript/Vite build succeeds with zero errors
+- Server starts without errors after restart
+- All API endpoints tested end-to-end
+- No mock data patterns found in TopicDetailPage.tsx or topics.ts
+- Data persists across server restart (insights, sessions, topics all survive)
+- Test data cleaned up after verification
+
+### Current Status
+- Features #26 and #32 both passing
+- 69/209 features passing (approx 33%)
+
 ## Session - 2026-02-15 (Agent handling Features #24 and #25)
 
 ### Accomplished
