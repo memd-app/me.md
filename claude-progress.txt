@@ -1,3 +1,32 @@
+## Session - 2026-02-15 (Agent handling Features #44 and #70)
+
+### Accomplished
+- Feature #44 (Loading and thinking states during AI response): PASSING
+  - Already fully implemented in SessionPage.tsx:
+    - Typing indicator with animated bouncing dots appears when isSending is true
+    - Send button disabled during processing (disabled={!inputValue.trim() || isSending})
+    - Textarea also disabled during processing
+    - Loading state cleared in finally block (never gets stuck)
+    - Error message replaces loading state on failure with dismissible banner
+  - All 5 verification steps confirmed met
+  - Zero mock data patterns
+
+- Feature #70 (Recheck badge distinguishes rechecks from new insights): PASSING
+  - Enhanced VerificationPage.tsx with prominent visual distinction for recheck items
+  - Recheck cards get purple border and subtle purple background tint
+  - Prominent "Re-check" banner at top of card with refresh icon, ring styling
+  - Last verified date shown in banner for recheck items
+  - Recheck schedule/interval shown in banner
+  - New (first-time) insights have normal gray borders and no special badge
+  - Both types share identical approve/reject/edit/schedule/history buttons
+  - Moved recheck metadata from inline metadata row to dedicated card banner
+  - TypeScript compiles cleanly, Vite build succeeds
+  - Zero mock data patterns
+
+### Current Status
+- Features #44 and #70 both passing
+- 79/209 features passing
+
 ## Session - 2026-02-15 (Agent handling Features #37 and #38)
 
 ### Accomplished
