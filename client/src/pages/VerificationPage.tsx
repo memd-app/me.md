@@ -648,11 +648,39 @@ export default function VerificationPage() {
           <p className="text-sm text-gray-500 dark:text-gray-400">
             {pendingInsights.length} insight{pendingInsights.length !== 1 ? 's' : ''} awaiting review
           </p>
-          {pendingInsights.map(insight => (
+          {pendingInsights.map(insight => {
+            const isReVerification = insight.verificationStatus === 're_verification_pending';
+            return (
             <div
               key={insight.id}
-              className="card border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
+              className={`card border transition-colors ${
+                isReVerification
+                  ? 'border-purple-300 dark:border-purple-700 bg-purple-50/30 dark:bg-purple-900/10 hover:border-purple-400 dark:hover:border-purple-600'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600'
+              }`}
             >
+              {/* Re-verification banner at top of card */}
+              {isReVerification && (
+                <div className="flex items-center gap-2 mb-3 pb-3 border-b border-purple-200 dark:border-purple-800">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300 ring-1 ring-purple-300 dark:ring-purple-700">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Re-check
+                  </span>
+                  {insight.verifiedAt && (
+                    <span className="text-xs text-purple-600 dark:text-purple-400">
+                      Last verified: {formatDate(insight.verifiedAt)}
+                    </span>
+                  )}
+                  {insight.reVerifyInterval && (
+                    <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto">
+                      Schedule: {getIntervalLabel(insight.reVerifyInterval)}
+                    </span>
+                  )}
+                </div>
+              )}
+
               {/* Insight content - view or edit mode */}
               <div className="mb-3">
                 {editState?.insightId === insight.id ? (
@@ -744,29 +772,7 @@ export default function VerificationPage() {
                   </span>
                 )}
 
-                {/* Re-verification indicator */}
-                {insight.verificationStatus === 're_verification_pending' && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300">
-                    <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Re-verification
-                  </span>
-                )}
-
-                {/* Previous verification info for re-verification items */}
-                {insight.verificationStatus === 're_verification_pending' && insight.reVerifyInterval && (
-                  <span className="text-xs text-purple-600 dark:text-purple-400">
-                    Interval: {getIntervalLabel(insight.reVerifyInterval)}
-                  </span>
-                )}
-
-                {/* Previously verified date for re-verification items */}
-                {insight.verificationStatus === 're_verification_pending' && insight.verifiedAt && (
-                  <span className="text-xs text-gray-400 dark:text-gray-500">
-                    Last verified: {formatDate(insight.verifiedAt)}
-                  </span>
-                )}
+                {/* Note: Re-verification badge/info shown in card banner above for re-check items */}
 
                 {/* Privacy tier indicator and toggle */}
                 <button
@@ -977,7 +983,8 @@ export default function VerificationPage() {
                 </div>
               )}
             </div>
-          ))}
+          );
+          })}
         </div>
       ))}
 
