@@ -61,6 +61,15 @@ export default function SettingsPage() {
   const [prefsSaving, setPrefsSaving] = useState(false);
   const [prefsStatus, setPrefsStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Change password state
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
   // Delete account state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
@@ -376,6 +385,71 @@ export default function SettingsPage() {
     }
   };
 
+  const handleChangePassword = async () => {
+    if (!user?.id) return;
+
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    // Client-side validation
+    if (!currentPassword) {
+      setPasswordError('Current password is required');
+      return;
+    }
+    if (!newPassword) {
+      setPasswordError('New password is required');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError('New password must be at least 8 characters long');
+      return;
+    }
+    if (!/\d/.test(newPassword)) {
+      setPasswordError('New password must contain at least one number');
+      return;
+    }
+    if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(newPassword)) {
+      setPasswordError('New password must contain at least one special character');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+
+    setIsChangingPassword(true);
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/change-password`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id,
+        },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to change password');
+      }
+
+      setPasswordSuccess('Password changed successfully');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setTimeout(() => {
+        setPasswordSuccess(null);
+        setShowChangePassword(false);
+      }, 3000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to change password';
+      setPasswordError(message);
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
   const handleDeleteAccount = async () => {
     if (!user?.id) return;
 
@@ -647,6 +721,109 @@ export default function SettingsPage() {
               </div>
             ) : (
               <p className="text-gray-500 dark:text-gray-400">Unable to load profile data.</p>
+            )}
+          </div>
+
+          {/* Change Password */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Password</h2>
+              {!showChangePassword && (
+                <button
+                  onClick={() => {
+                    setShowChangePassword(true);
+                    setPasswordError(null);
+                    setPasswordSuccess(null);
+                  }}
+                  className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium"
+                >
+                  Change Password
+                </button>
+              )}
+            </div>
+
+            {!showChangePassword ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Update your password to keep your account secure.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {passwordSuccess && (
+                  <div className="p-3 rounded-lg text-sm bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800">
+                    {passwordSuccess}
+                  </div>
+                )}
+                {passwordError && (
+                  <div className="p-3 rounded-lg text-sm bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">
+                    {passwordError}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Current Password
+                  </label>
+                  <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => { setCurrentPassword(e.target.value); setPasswordError(null); }}
+                    className="input-field max-w-sm"
+                    placeholder="Enter current password"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => { setNewPassword(e.target.value); setPasswordError(null); }}
+                    className="input-field max-w-sm"
+                    placeholder="Min 8 chars, 1 number, 1 special char"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={confirmNewPassword}
+                    onChange={(e) => { setConfirmNewPassword(e.target.value); setPasswordError(null); }}
+                    className="input-field max-w-sm"
+                    placeholder="Re-enter new password"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && currentPassword && newPassword && confirmNewPassword) {
+                        handleChangePassword();
+                      }
+                    }}
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={handleChangePassword}
+                    disabled={isChangingPassword || !currentPassword || !newPassword || !confirmNewPassword}
+                    className="btn-primary text-sm"
+                  >
+                    {isChangingPassword ? 'Changing...' : 'Update Password'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowChangePassword(false);
+                      setCurrentPassword('');
+                      setNewPassword('');
+                      setConfirmNewPassword('');
+                      setPasswordError(null);
+                      setPasswordSuccess(null);
+                    }}
+                    className="btn-secondary text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
             )}
           </div>
 

@@ -289,6 +289,64 @@ authRouter.post('/verify-password', async (req, res) => {
   }
 });
 
+// PUT /api/auth/change-password - Change user's password
+authRouter.put('/change-password', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword) {
+      return res.status(400).json({ error: 'Current password is required' });
+    }
+    if (!newPassword) {
+      return res.status(400).json({ error: 'New password is required' });
+    }
+
+    // Validate new password requirements: 8+ chars, 1 number, 1 special char
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters long' });
+    }
+    if (!/\d/.test(newPassword)) {
+      return res.status(400).json({ error: 'New password must contain at least one number' });
+    }
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword)) {
+      return res.status(400).json({ error: 'New password must contain at least one special character' });
+    }
+
+    const user = db.select().from(users).where(eq(users.id, userId)).get();
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (!user.passwordHash) {
+      return res.status(400).json({ error: 'Account does not have a password set (Google Sign-In account)' });
+    }
+
+    // Verify current password
+    const isValid = verifyPassword(currentPassword, user.passwordHash);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    // Hash new password and update
+    const newHash = hashPassword(newPassword);
+    db.update(users)
+      .set({ passwordHash: newHash, updatedAt: new Date().toISOString() })
+      .where(eq(users.id, userId))
+      .run();
+
+    res.json({ message: 'Password changed successfully' });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
 // POST /api/auth/forgot-password - Request a password reset link
 authRouter.post('/forgot-password', async (req, res) => {
   try {
