@@ -10,6 +10,7 @@ import { usersRouter } from './routes/users.js';
 import { importRouter } from './routes/import.js';
 import { sessionsRouter } from './routes/sessions.js';
 import { searchRouter } from './routes/search.js';
+import { notesRouter } from './routes/notes.js';
 
 dotenv.config();
 
@@ -32,9 +33,12 @@ app.use('/api/users', usersRouter);
 app.use('/api/import', importRouter);
 app.use('/api/sessions', sessionsRouter);
 
+app.use('/api/notes', notesRouter);
+// Distillation routes (mounted under /api for convenience)
+app.use('/api', notesRouter);
+
 // TODO: Add remaining routes as they are implemented
 // app.use('/api/messages', messagesRouter);
-// app.use('/api/notes', notesRouter);
 // app.use('/api/insights', insightsRouter);
 // app.use('/api/graph', graphRouter);
 // app.use('/api/profile', profileRouter);
