@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Topic {
@@ -68,14 +68,32 @@ const PRIORITY_ORDER: Record<string, number> = {
   low: 1,
 };
 
+const EXPLORE_CATEGORY_LABELS: Record<string, string> = {
+  identity: 'Identity',
+  skills: 'Skills',
+  experiences: 'Experiences',
+  perspectives: 'Perspectives',
+  goals: 'Goals',
+};
+
+const EXPLORE_CATEGORY_DESCRIPTIONS: Record<string, string> = {
+  identity: 'Explore your core values, beliefs, personality traits, and what makes you who you are.',
+  skills: 'Discover and document your abilities, expertise, and areas of competence.',
+  experiences: 'Reflect on significant life events, milestones, and formative experiences.',
+  perspectives: 'Examine your worldviews, opinions, and how you see different aspects of life.',
+  goals: 'Clarify your aspirations, objectives, and what you want to achieve.',
+};
+
 export default function TopicsPage() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [topics, setTopics] = useState<Topic[]>([]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [sortBy, setSortBy] = useState<SortOption>('date_newest');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const exploreCategory = searchParams.get('explore');
 
   useEffect(() => {
     if (!user) return;
@@ -204,6 +222,51 @@ export default function TopicsPage() {
           </Link>
         </div>
       </div>
+
+      {/* Explore category banner (from knowledge graph gap click) */}
+      {exploreCategory && EXPLORE_CATEGORY_LABELS[exploreCategory] && (
+        <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center text-amber-600 dark:text-amber-400 text-lg font-bold shrink-0">
+                ?
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                  Start exploring: {EXPLORE_CATEGORY_LABELS[exploreCategory]}
+                </h3>
+                <p className="mt-0.5 text-sm text-amber-700 dark:text-amber-300">
+                  {EXPLORE_CATEGORY_DESCRIPTIONS[exploreCategory]}
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <Link
+                    to="/app/topics/new"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Create a {EXPLORE_CATEGORY_LABELS[exploreCategory]} Topic
+                  </Link>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                const newParams = new URLSearchParams(searchParams);
+                newParams.delete('explore');
+                setSearchParams(newParams);
+              }}
+              className="text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-200 shrink-0"
+              title="Dismiss"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Filters and Sort Controls */}
       <div className="card mb-6 !p-4">

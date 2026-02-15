@@ -146,6 +146,33 @@ export default function KnowledgeGraphPage() {
     fetchGraph();
   }, [fetchGraph]);
 
+  // Auto-refresh graph when page becomes visible (e.g., returning from Verification tab)
+  // This ensures the graph reflects real-time changes when insights are verified
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && user) {
+        fetchGraph();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [fetchGraph, user]);
+
+  // Also auto-refresh when the window regains focus (covers same-tab navigation back)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (user) {
+        fetchGraph();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [fetchGraph, user]);
+
   // Render D3 graph
   useEffect(() => {
     if (!graphData || !svgRef.current || !containerRef.current) return;
