@@ -254,6 +254,242 @@ sessionsRouter.post('/:id/messages', async (req, res) => {
   }
 });
 
+// POST /api/sessions/:id/messages/retry - Retry AI response generation for the last user message
+sessionsRouter.post('/:id/messages/retry', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const sessionId = req.params.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    // Verify session belongs to user
+    const session = db.select().from(sessions).where(
+      and(eq(sessions.id, sessionId), eq(sessions.userId, userId))
+    ).get();
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Get the conversation history
+    const conversationHistory = db.select().from(messages)
+      .where(eq(messages.sessionId, sessionId))
+      .orderBy(messages.createdAt)
+      .all();
+
+    // Check that the last message is from the user (indicating AI response failed)
+    const lastMessage = conversationHistory[conversationHistory.length - 1];
+    if (!lastMessage || lastMessage.role !== 'user') {
+      return res.status(400).json({ error: 'No pending user message to retry. The last message is not from a user.' });
+    }
+
+    // Get the topic for AI context
+    const topic = db.select().from(topics).where(eq(topics.id, session.topicId)).get();
+
+    const hasResearchContext = !!session.researchData;
+    const historyForAI = conversationHistory.map(m => ({ role: m.role, content: m.content }));
+    const aiResponseContent = generateAIResponse(
+      topic?.title || 'Unknown Topic',
+      topic?.description || '',
+      topic?.intent || '',
+      historyForAI,
+      hasResearchContext
+    );
+
+    // Generate context-aware quick replies
+    const userMessageCount = conversationHistory.filter(m => m.role === 'user').length;
+    const quickRepliesArr = generateQuickReplies(userMessageCount, aiResponseContent, historyForAI);
+
+    // AI suggests completion after 10+ user message exchanges
+    const shouldSuggestCompletion = userMessageCount >= 10;
+
+    const aiMessageId = uuidv4();
+    const aiMessage = db.insert(messages).values({
+      id: aiMessageId,
+      sessionId,
+      role: 'assistant',
+      content: shouldSuggestCompletion ? aiResponseContent + '\n\n---\n\n*We\'ve explored many angles together. Feel free to **continue exploring** if there\'s more to uncover, or **finish and distill** to capture your insights.*' : aiResponseContent,
+      quickReplies: JSON.stringify(quickRepliesArr),
+      suggestsCompletion: shouldSuggestCompletion,
+      isBookmarked: false,
+      isVoiceInput: false,
+    }).returning().get();
+
+    // Update session timestamp
+    db.update(sessions).set({
+      updatedAt: new Date().toISOString(),
+    }).where(eq(sessions.id, sessionId)).run();
+
+    res.status(201).json({
+      aiMessage,
+    });
+  } catch (error) {
+    console.error('Retry message error:', error);
+    res.status(500).json({ error: 'Failed to retry AI response', details: error instanceof Error ? error.message : 'Unknown error' });
+  }
+});
+
+// POST /api/sessions/:id/messages/stream - Send a message and stream AI response via SSE
+sessionsRouter.post('/:id/messages/stream', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const sessionId = req.params.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    // Verify session belongs to user
+    const session = db.select().from(sessions).where(
+      and(eq(sessions.id, sessionId), eq(sessions.userId, userId))
+    ).get();
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const { content } = req.body;
+
+    if (!content) {
+      return res.status(400).json({ error: 'Message content is required' });
+    }
+
+    // Save the user message
+    const userMessageId = uuidv4();
+    const userMessage = db.insert(messages).values({
+      id: userMessageId,
+      sessionId,
+      role: 'user',
+      content,
+      isBookmarked: false,
+      isVoiceInput: req.body.isVoiceInput || false,
+    }).returning().get();
+
+    // Generate AI response
+    const topic = db.select().from(topics).where(eq(topics.id, session.topicId)).get();
+
+    // Get conversation history for context
+    const conversationHistory = db.select().from(messages)
+      .where(eq(messages.sessionId, sessionId))
+      .orderBy(messages.createdAt)
+      .all();
+
+    const hasResearchContext = !!session.researchData;
+    const historyForAI = conversationHistory.map(m => ({ role: m.role, content: m.content }));
+    const aiResponseContent = generateAIResponse(
+      topic?.title || 'Unknown Topic',
+      topic?.description || '',
+      topic?.intent || '',
+      historyForAI,
+      hasResearchContext
+    );
+
+    const userMessageCount = conversationHistory.filter(m => m.role === 'user').length;
+    const quickRepliesArr = generateQuickReplies(userMessageCount, aiResponseContent, historyForAI);
+    const shouldSuggestCompletion = userMessageCount >= 10;
+
+    const finalContent = shouldSuggestCompletion
+      ? aiResponseContent + '\n\n---\n\n*We\'ve explored many angles together. Feel free to **continue exploring** if there\'s more to uncover, or **finish and distill** to capture your insights.*'
+      : aiResponseContent;
+
+    // Save the complete AI message to database immediately
+    const aiMessageId = uuidv4();
+    const aiMessage = db.insert(messages).values({
+      id: aiMessageId,
+      sessionId,
+      role: 'assistant',
+      content: finalContent,
+      quickReplies: JSON.stringify(quickRepliesArr),
+      suggestsCompletion: shouldSuggestCompletion,
+      isBookmarked: false,
+      isVoiceInput: false,
+    }).returning().get();
+
+    // Update session timestamp
+    db.update(sessions).set({
+      updatedAt: new Date().toISOString(),
+    }).where(eq(sessions.id, sessionId)).run();
+
+    // Set up SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    // Send the saved user message first
+    res.write(`data: ${JSON.stringify({ type: 'user_message', message: userMessage })}\n\n`);
+
+    // Stream the AI response in chunks for real-time feel
+    // We use a simple synchronous write loop with sleep for timing
+    const chunks = splitIntoStreamChunks(finalContent);
+
+    // Helper: sleep using a sync approach that works in Express
+    const sleep = (ms: number): Promise<void> => new Promise(resolve => { setTimeout(resolve, ms); });
+
+    // Initial thinking delay
+    await sleep(150);
+
+    // Stream each chunk with a small delay between them
+    for (let i = 0; i < chunks.length; i++) {
+      if (res.writableEnded) break;
+      const wrote = res.write(`data: ${JSON.stringify({ type: 'ai_chunk', chunk: chunks[i], chunkIndex: i })}\n\n`);
+      if (!wrote) {
+        // Back-pressure: wait for drain
+        await new Promise<void>(resolve => { res.once('drain', resolve); });
+      }
+      // Small delay between chunks for streaming effect (25-60ms)
+      if (i < chunks.length - 1) {
+        await sleep(25 + Math.floor(Math.random() * 35));
+      }
+    }
+
+    // Send the complete message with metadata at the end
+    if (!res.writableEnded) {
+      res.write(`data: ${JSON.stringify({ type: 'ai_complete', message: aiMessage })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+      res.end();
+    }
+
+  } catch (error) {
+    console.error('Stream message error:', error);
+    // If headers haven't been sent yet, send JSON error
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to send message', details: error instanceof Error ? error.message : 'Unknown error' });
+    } else {
+      // If already streaming, send error event
+      res.write(`data: ${JSON.stringify({ type: 'error', error: 'Failed to generate response' })}\n\n`);
+      res.end();
+    }
+  }
+});
+
+// Split text into natural streaming chunks (words and punctuation groups)
+function splitIntoStreamChunks(text: string): string[] {
+  const chunks: string[] = [];
+  // Split by words, keeping spaces and newlines as part of chunks
+  const words = text.split(/(\s+)/);
+  let currentChunk = '';
+
+  words.forEach((word) => {
+    currentChunk += word;
+    // Emit chunk at word boundaries (every 1-3 words for natural feel)
+    if (currentChunk.length >= 4 && word.match(/\s/)) {
+      chunks.push(currentChunk);
+      currentChunk = '';
+    }
+  });
+
+  // Push remaining content
+  if (currentChunk) {
+    chunks.push(currentChunk);
+  }
+
+  return chunks;
+}
+
 // PUT /api/sessions/:id - Update session status
 sessionsRouter.put('/:id', async (req, res) => {
   try {

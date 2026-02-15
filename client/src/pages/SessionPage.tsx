@@ -81,6 +81,11 @@ export default function SessionPage() {
   const [showDistillation, setShowDistillation] = useState(false);
   const [isPausing, setIsPausing] = useState(false);
   const [isResuming, setIsResuming] = useState(false);
+  const [failedMessageContent, setFailedMessageContent] = useState<string | null>(null);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isVoiceInputPending, setIsVoiceInputPending] = useState(false);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -288,14 +293,113 @@ export default function SessionPage() {
     }
   };
 
-  // Send a message
-  const sendMessage = async (content: string) => {
+  // Voice input via Web Speech API
+  const isSpeechSupported = typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+
+  const startRecording = useCallback(() => {
+    if (!isSpeechSupported) return;
+
+    const SpeechRecognitionClass = (window as unknown as { SpeechRecognition?: typeof SpeechRecognition; webkitSpeechRecognition?: typeof SpeechRecognition }).SpeechRecognition ||
+      (window as unknown as { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition;
+
+    if (!SpeechRecognitionClass) return;
+
+    const recognition = new SpeechRecognitionClass();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    let finalTranscript = '';
+    let interimTranscript = '';
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      finalTranscript = '';
+      interimTranscript = '';
+      for (let i = 0; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+      // Show the transcription in real-time in the input field
+      const currentText = finalTranscript + interimTranscript;
+      setInputValue(prev => {
+        // If the user already had text before starting voice, prepend it
+        const prefix = prev && !isRecording ? prev + ' ' : '';
+        return prefix + currentText;
+      });
+    };
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.error('Speech recognition error:', event.error);
+      setIsRecording(false);
+      recognitionRef.current = null;
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+      if (finalTranscript) {
+        setIsVoiceInputPending(true);
+      }
+      recognitionRef.current = null;
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsRecording(true);
+    setIsVoiceInputPending(false);
+  }, [isSpeechSupported]);
+
+  const stopRecording = useCallback(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      // The onend handler will set isRecording to false and isVoiceInputPending to true
+    }
+  }, []);
+
+  const toggleRecording = useCallback(() => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  }, [isRecording, startRecording, stopRecording]);
+
+  // Cleanup recognition on unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+    };
+  }, []);
+
+  // Streaming AI response state
+  const [streamingContent, setStreamingContent] = useState<string>('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const streamAbortRef = useRef<AbortController | null>(null);
+
+  // Auto-scroll when streaming content changes
+  useEffect(() => {
+    if (isStreaming) {
+      scrollToBottom();
+    }
+  }, [streamingContent, isStreaming, scrollToBottom]);
+
+  // Send a message with SSE streaming
+  const sendMessage = async (content: string, voiceInput?: boolean) => {
     if (!user || !session || !content.trim() || isSending) return;
 
     const trimmedContent = content.trim();
+    const isVoice = voiceInput || isVoiceInputPending;
     setInputValue('');
     setIsSending(true);
+    setIsStreaming(false);
+    setStreamingContent('');
     setError(null);
+    setIsVoiceInputPending(false);
 
     // Optimistically add user message
     const tempUserMessage: Message = {
@@ -306,20 +410,24 @@ export default function SessionPage() {
       quickReplies: null,
       suggestsCompletion: false,
       isBookmarked: false,
-      isVoiceInput: false,
+      isVoiceInput: isVoice,
       createdAt: new Date().toISOString(),
     };
 
     setMessages(prev => [...prev, tempUserMessage]);
 
     try {
-      const res = await fetch(`/api/sessions/${session.id}/messages`, {
+      const abortController = new AbortController();
+      streamAbortRef.current = abortController;
+
+      const res = await fetch(`/api/sessions/${session.id}/messages/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-user-id': user.id,
         },
-        body: JSON.stringify({ content: trimmedContent }),
+        body: JSON.stringify({ content: trimmedContent, isVoiceInput: isVoice }),
+        signal: abortController.signal,
       });
 
       if (!res.ok) {
@@ -327,19 +435,206 @@ export default function SessionPage() {
         throw new Error(data.error || 'Failed to send message');
       }
 
-      const data = await res.json();
+      const reader = res.body?.getReader();
+      if (!reader) {
+        throw new Error('Streaming not supported');
+      }
 
-      // Replace temp user message with real one and add AI response
-      setMessages(prev => {
-        const withoutTemp = prev.filter(m => m.id !== tempUserMessage.id);
-        return [...withoutTemp, data.userMessage, data.aiMessage];
-      });
+      const decoder = new TextDecoder();
+      let accumulatedContent = '';
+      let buffer = '';
+
+      // Process the SSE stream
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete SSE events (lines ending with \n\n)
+        const events = buffer.split('\n\n');
+        buffer = events.pop() || ''; // Keep incomplete event in buffer
+
+        for (const eventStr of events) {
+          const lines = eventStr.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+
+                if (data.type === 'user_message') {
+                  // Replace temp user message with the real one
+                  setMessages(prev => prev.map(m =>
+                    m.id === tempUserMessage.id ? data.message : m
+                  ));
+                } else if (data.type === 'ai_chunk') {
+                  accumulatedContent += data.chunk;
+                  setStreamingContent(accumulatedContent);
+                  setIsStreaming(true);
+                } else if (data.type === 'ai_complete') {
+                  // Replace streaming content with the final complete message
+                  setStreamingContent('');
+                  setIsStreaming(false);
+                  setMessages(prev => [...prev, data.message]);
+                } else if (data.type === 'error') {
+                  throw new Error(data.error || 'Streaming error');
+                }
+              } catch (parseErr) {
+                // Ignore JSON parse errors for incomplete data
+                if (parseErr instanceof SyntaxError) continue;
+                throw parseErr;
+              }
+            }
+          }
+        }
+      }
+
+      // Fallback: if stream ended without ai_complete
+      if (isStreaming) {
+        setStreamingContent('');
+        setIsStreaming(false);
+      }
+
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send message');
-      // Remove optimistic message on error
-      setMessages(prev => prev.filter(m => m.id !== tempUserMessage.id));
+      if (err instanceof Error && err.name === 'AbortError') {
+        return;
+      }
+      setError('Something went wrong while generating the AI response. Please try again.');
+      // Keep the user message visible but store content for retry
+      setFailedMessageContent(trimmedContent);
+      setStreamingContent('');
+      setIsStreaming(false);
     } finally {
       setIsSending(false);
+      streamAbortRef.current = null;
+      inputRef.current?.focus();
+    }
+  };
+
+  // Retry failed AI response
+  const handleRetry = async () => {
+    if (!failedMessageContent || !user || !session || isRetrying) return;
+
+    setIsRetrying(true);
+    setError(null);
+    setStreamingContent('');
+    setIsStreaming(false);
+
+    try {
+      const abortController = new AbortController();
+      streamAbortRef.current = abortController;
+
+      // The user message was already stored on the server from the first attempt.
+      // We need to re-send to get the AI response. Use the non-streaming fallback
+      // endpoint which creates both user message + AI response.
+      // But since the user message may already exist, we use the stream endpoint
+      // which handles the full flow. Let's re-fetch the session to get the latest
+      // messages first, then only request a retry of the AI generation.
+
+      // First, refresh messages to see if the user message was actually saved
+      const sessionRes = await fetch(`/api/sessions/${session.id}`, {
+        headers: { 'x-user-id': user.id },
+      });
+
+      if (sessionRes.ok) {
+        const sessionData = await sessionRes.json();
+        const serverMessages: Message[] = sessionData.messages || [];
+        setMessages(serverMessages);
+
+        // Check if the last message is from the user (meaning AI response failed)
+        const lastMsg = serverMessages[serverMessages.length - 1];
+        if (lastMsg && lastMsg.role === 'user') {
+          // AI response failed - need to regenerate it
+          // Use the retry endpoint
+          const retryRes = await fetch(`/api/sessions/${session.id}/messages/retry`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-user-id': user.id,
+            },
+            signal: abortController.signal,
+          });
+
+          if (!retryRes.ok) {
+            const data = await retryRes.json();
+            throw new Error(data.error || 'Failed to retry');
+          }
+
+          const retryData = await retryRes.json();
+          setMessages(prev => [...prev, retryData.aiMessage]);
+          setFailedMessageContent(null);
+        } else {
+          // The user message wasn't saved, resend it
+          const res = await fetch(`/api/sessions/${session.id}/messages/stream`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-user-id': user.id,
+            },
+            body: JSON.stringify({ content: failedMessageContent }),
+            signal: abortController.signal,
+          });
+
+          if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || 'Failed to send message');
+          }
+
+          const reader = res.body?.getReader();
+          if (!reader) throw new Error('Streaming not supported');
+
+          const decoder = new TextDecoder();
+          let accumulatedContent = '';
+          let bufferStr = '';
+
+          // eslint-disable-next-line no-constant-condition
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            bufferStr += decoder.decode(value, { stream: true });
+            const events = bufferStr.split('\n\n');
+            bufferStr = events.pop() || '';
+
+            for (const eventStr of events) {
+              const lines = eventStr.split('\n');
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  try {
+                    const data = JSON.parse(line.slice(6));
+                    if (data.type === 'user_message') {
+                      setMessages(prev => [...prev, data.message]);
+                    } else if (data.type === 'ai_chunk') {
+                      accumulatedContent += data.chunk;
+                      setStreamingContent(accumulatedContent);
+                      setIsStreaming(true);
+                    } else if (data.type === 'ai_complete') {
+                      setStreamingContent('');
+                      setIsStreaming(false);
+                      setMessages(prev => [...prev, data.message]);
+                    } else if (data.type === 'error') {
+                      throw new Error(data.error || 'Streaming error');
+                    }
+                  } catch (parseErr) {
+                    if (parseErr instanceof SyntaxError) continue;
+                    throw parseErr;
+                  }
+                }
+              }
+            }
+          }
+          setFailedMessageContent(null);
+        }
+      } else {
+        throw new Error('Failed to fetch session state');
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+      setError('Retry failed. Please check your connection and try again.');
+    } finally {
+      setIsRetrying(false);
+      streamAbortRef.current = null;
       inputRef.current?.focus();
     }
   };
@@ -355,6 +650,15 @@ export default function SessionPage() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage(inputValue);
+    }
+  };
+
+  // Clear voice input pending when user types manually
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputValue(e.target.value);
+    // If user is typing manually (not via voice), clear the voice pending flag
+    if (!isRecording) {
+      setIsVoiceInputPending(false);
     }
   };
 
@@ -868,12 +1172,17 @@ export default function SessionPage() {
               }`}
             >
               {/* Role indicator */}
-              <div className={`text-xs font-medium mb-1 ${
+              <div className={`text-xs font-medium mb-1 flex items-center gap-1 ${
                 message.role === 'user'
                   ? 'text-primary-200'
                   : 'text-gray-500 dark:text-gray-400'
               }`}>
                 {message.role === 'user' ? 'You' : 'AI Interviewer'}
+                {message.isVoiceInput && (
+                  <svg className="w-3 h-3 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Voice input">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  </svg>
+                )}
               </div>
 
               {/* Message content */}
@@ -920,12 +1229,27 @@ export default function SessionPage() {
           </div>
         ))}
 
-        {/* Typing indicator when sending */}
-        {isSending && (
+        {/* Streaming AI response bubble */}
+        {isStreaming && streamingContent && (
+          <div className="flex justify-start">
+            <div className="max-w-[80%] bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-2xl rounded-bl-md px-4 py-3">
+              <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                AI Interviewer
+              </div>
+              <div className="text-sm leading-relaxed">
+                {renderContent(streamingContent)}
+                <span className="inline-block w-1.5 h-4 bg-primary-500 dark:bg-primary-400 animate-pulse ml-0.5 align-text-bottom rounded-sm" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Thinking indicator when sending but not yet streaming */}
+        {(isSending || isRetrying) && !isStreaming && (
           <div className="flex justify-start">
             <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-bl-md px-4 py-3">
               <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                AI Interviewer
+                {isRetrying ? 'AI Interviewer (Retrying...)' : 'AI Interviewer'}
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -970,19 +1294,53 @@ export default function SessionPage() {
         </div>
       )}
 
-      {/* Error banner */}
+      {/* Error banner with retry button */}
       {error && (
         <div className="px-6 py-2 shrink-0">
-          <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm flex items-center justify-between">
-            <span>{error}</span>
-            <button
-              onClick={() => setError(null)}
-              className="text-red-400 hover:text-red-600 ml-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+          <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.072 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+                <span>{error}</span>
+              </div>
+              <button
+                onClick={() => { setError(null); setFailedMessageContent(null); }}
+                className="text-red-400 hover:text-red-600 dark:hover:text-red-300 ml-2 shrink-0"
+                title="Dismiss"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            {failedMessageContent && (
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  onClick={handleRetry}
+                  disabled={isRetrying || isSending}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isRetrying ? (
+                    <>
+                      <div className="animate-spin w-3.5 h-3.5 border-2 border-red-300 border-t-red-600 rounded-full" />
+                      Retrying...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Retry
+                    </>
+                  )}
+                </button>
+                <span className="text-xs text-red-500 dark:text-red-400">
+                  Your messages are preserved. Click retry to regenerate the AI response.
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -995,11 +1353,11 @@ export default function SessionPage() {
               <textarea
                 ref={inputRef}
                 value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
+                onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
-                placeholder="Type your response..."
+                placeholder={isRecording ? 'Listening... speak now' : 'Type your response...'}
                 rows={1}
-                className="input-field resize-none min-h-[44px] max-h-32 py-2.5 pr-3"
+                className={`input-field resize-none min-h-[44px] max-h-32 py-2.5 pr-3 ${isRecording ? 'ring-2 ring-red-400 dark:ring-red-500 border-red-300 dark:border-red-600' : ''}`}
                 style={{
                   height: 'auto',
                   minHeight: '44px',
@@ -1012,6 +1370,33 @@ export default function SessionPage() {
                 disabled={isSending}
               />
             </div>
+            {/* Voice input / microphone button */}
+            {isSpeechSupported && (
+              <button
+                type="button"
+                onClick={toggleRecording}
+                disabled={isSending}
+                className={`flex items-center justify-center w-11 h-11 p-0 shrink-0 rounded-xl transition-all ${
+                  isRecording
+                    ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse shadow-lg shadow-red-500/25'
+                    : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title={isRecording ? 'Stop recording' : 'Voice input'}
+                aria-label={isRecording ? 'Stop recording' : 'Start voice input'}
+              >
+                {isRecording ? (
+                  /* Stop icon (square) when recording */
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <rect x="6" y="6" width="12" height="12" rx="2" />
+                  </svg>
+                ) : (
+                  /* Microphone icon when idle */
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  </svg>
+                )}
+              </button>
+            )}
             <button
               type="submit"
               disabled={!inputValue.trim() || isSending}
@@ -1023,9 +1408,34 @@ export default function SessionPage() {
               </svg>
             </button>
           </form>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 text-center">
-            Press Enter to send, Shift+Enter for new line
-          </p>
+          {/* Recording indicator */}
+          {isRecording && (
+            <div className="flex items-center justify-center gap-2 mt-2">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+              </span>
+              <span className="text-xs font-medium text-red-500 dark:text-red-400">
+                Recording... click the stop button or press Enter to send
+              </span>
+            </div>
+          )}
+          {/* Voice input indicator */}
+          {isVoiceInputPending && !isRecording && inputValue.trim() && (
+            <div className="flex items-center justify-center gap-2 mt-2">
+              <svg className="w-3.5 h-3.5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+              </svg>
+              <span className="text-xs text-primary-500 dark:text-primary-400">
+                Voice input captured — press Enter or click Send
+              </span>
+            </div>
+          )}
+          {!isRecording && !isVoiceInputPending && (
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 text-center">
+              Press Enter to send, Shift+Enter for new line{isSpeechSupported ? ', or use the microphone' : ''}
+            </p>
+          )}
         </div>
       )}
     </div>
