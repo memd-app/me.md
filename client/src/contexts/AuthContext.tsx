@@ -164,22 +164,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
+      let res: Response;
+      try {
+        res = await fetch(`${API_BASE}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+      } catch {
+        throw new Error('Unable to connect to the server. Please check your internet connection and try again.');
+      }
 
       if (!res.ok) {
-        const resData = await res.json();
-        throw new Error(resData.error || 'Registration failed');
+        let resData: { error?: string };
+        try {
+          resData = await res.json();
+        } catch {
+          throw new Error('Something went wrong. Please try again later.');
+        }
+        throw new Error(resData.error || 'Registration failed. Please try again.');
       }
 
       const resData = await res.json();
       setUser(resData.user);
       localStorage.setItem('memd_user_id', resData.user.id);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Registration failed';
+      const message = err instanceof Error ? err.message : 'Registration failed. Please try again.';
       setError(message);
       throw err;
     } finally {
