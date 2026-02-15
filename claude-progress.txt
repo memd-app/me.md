@@ -1,3 +1,47 @@
+## Session 6 - 2026-02-15 (Agent handling Features #13 and #14)
+
+### Accomplished
+- Feature #13 (Protected routes redirect to sign-in when unauthenticated): PASSING
+  - ProtectedRoute component checks isAuthenticated, redirects to /login with location state
+  - All /app/* routes (dashboard, topics, graph, settings, verify, etc.) are nested under ProtectedRoute
+  - Added explicit /app/dashboard route alongside index route
+  - TypeScript compiles cleanly, no errors
+
+- Feature #14 (Google Sign-In flow works): PASSING
+  - Created client/src/config/firebase.ts with Firebase initialization and Google provider
+  - Reads config from VITE_ environment variables, checks isFirebaseConfigured
+  - Added loginWithGoogle method to AuthContext using signInWithPopup
+  - Added "Sign in with Google" button on LoginPage with official Google icon SVG
+  - Proper styling: white bg, border, hover states, loading spinner, dark mode support
+  - "or continue with email" divider between Google and email/password forms
+  - Created POST /api/auth/google server endpoint that:
+    - Verifies Firebase ID token with firebase-admin when configured
+    - Falls back to trusting client auth data in dev mode
+    - Finds existing user by firebaseUid (returning user)
+    - Links accounts if user previously registered with email/password
+    - Creates new user for first-time Google sign-ins
+  - Data persists across server restart (tested)
+  - Logout also signs out of Firebase when configured
+  - No mock data patterns found in client/src or server/src
+
+### Verification
+- TypeScript type check passes (client)
+- Server starts and responds to /api/health
+- POST /api/auth/google creates user, returns existing user on re-login
+- Data persists across server restart
+- No mock data patterns in codebase
+
+### Current Status
+- 13/209 features passing (Features #1-6, #7, #8, #9, #10, #13, #14, #185)
+- Firebase Auth integrated with Google Sign-In popup flow
+- Server has /api/auth/google endpoint with Firebase Admin verification support
+
+### What to Work on Next
+- Continue with next assigned features from orchestrator
+- Email/password login (Feature #11) and password reset flow
+- Session persistence across tabs
+- Account settings and deletion
+
 ## Session 5 - 2026-02-15 (Agent handling Features #8 and #9)
 
 ### Accomplished

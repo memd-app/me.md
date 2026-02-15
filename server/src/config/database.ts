@@ -227,6 +227,37 @@ function runMigrations() {
 
 runMigrations();
 
+// Checkpoint WAL to ensure data is written to the main database file
+function checkpointWAL() {
+  try {
+    sqlite.pragma('wal_checkpoint(TRUNCATE)');
+    console.log('[me.md] WAL checkpoint completed');
+  } catch (err) {
+    console.error('[me.md] WAL checkpoint error:', err);
+  }
+}
+
+// Checkpoint after schema init to ensure tables are in the main db
+checkpointWAL();
+
+// Periodic WAL checkpoint every 30 seconds to ensure data durability
+const checkpointInterval = setInterval(() => {
+  checkpointWAL();
+}, 30000);
+
+// Graceful shutdown: checkpoint and close database
+function gracefulShutdown() {
+  console.log('[me.md] Shutting down gracefully...');
+  clearInterval(checkpointInterval);
+  checkpointWAL();
+  sqlite.close();
+  console.log('[me.md] Database closed');
+  process.exit(0);
+}
+
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
+
 export const db = drizzle(sqlite, {
   schema,
   logger: {
