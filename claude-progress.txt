@@ -1,3 +1,65 @@
+## Session 9 - 2026-02-15 (Agent handling Features #35 and #36)
+
+### Accomplished
+- Feature #35 (Start new interview session from topic): PASSING
+  - Created server/src/routes/sessions.ts with full sessions API:
+    - POST /api/sessions - create session linked to topic, generates AI opening message
+    - GET /api/sessions/:id - get session with topic and all messages
+    - GET /api/sessions - list sessions (optionally filtered by topicId)
+    - POST /api/sessions/:id/messages - send user message, get AI response
+    - PUT /api/sessions/:id - update session status
+  - Registered sessionsRouter in server/src/index.ts
+  - Created TopicDetailPage.tsx replacing PlaceholderPage:
+    - Shows topic details (title, description, status, priority, intent, tags)
+    - "Start Session" button creates session and navigates to SessionPage
+    - Session history showing active and completed sessions
+    - Breadcrumb navigation back to topics
+  - Session created in DB with status 'active', linked to topic via topic_id
+  - AI sends contextual opening message based on topic title/description/intent
+  - Topic status updated to 'in_progress' when session starts
+  - Data persists across server restart
+
+- Feature #36 (Chat-style message interface works): PASSING
+  - Created SessionPage.tsx with ChatGPT-like chat interface:
+    - Session header with topic title, back button, message count
+    - Messages area with scrollable container and auto-scroll to bottom
+    - User messages: blue bubbles, right-aligned, rounded-br-md
+    - Assistant messages: gray bubbles, left-aligned, rounded-bl-md
+    - Role labels ("You" vs "AI Interviewer") on each bubble
+    - Timestamps on each message
+    - Bold text rendering for **markdown** in messages
+    - Typing indicator with animated dots while AI responds
+    - Quick reply buttons from last assistant message
+    - Input area with auto-resizing textarea
+    - Enter to send, Shift+Enter for newline
+    - Send button with disabled state
+    - Optimistic message display for instant feedback
+    - Error handling with dismissible error banner
+  - Messages ordered chronologically from database
+  - Scroll follows new messages via scrollToBottom useEffect
+
+### Verification
+- TypeScript type check passes with zero errors (client)
+- Server starts and health check returns OK
+- POST /api/sessions creates session with opening AI message
+- POST /api/sessions/:id/messages saves user message and returns AI response
+- GET /api/sessions/:id returns session, topic, and all messages in order
+- Data persists across server restart (session, messages all intact)
+- No mock data patterns in server/src or client/src
+- Vite dev server handles HMR updates without errors
+
+### Current Status
+- 18/209 features passing (Features #1-6, #7-11, #13-14, #20, #35, #36, #185)
+- Sessions API fully operational with message exchange
+- Topic detail page with Start Session and session history
+- Chat-style session interface with full message display
+
+### What to Work on Next
+- Continue with next assigned features from orchestrator
+- Key areas: voice input, quick replies auto-send, session bookmarks
+- AI response streaming via SSE for real-time feel
+- Session completion and distillation features
+
 ## Session 8 - 2026-02-15 (Agent handling Features #20 and #192)
 
 ### Accomplished
