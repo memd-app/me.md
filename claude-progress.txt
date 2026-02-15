@@ -1,3 +1,47 @@
+## Session - 2026-02-15 (Agent handling Features #100 and #102)
+
+### Accomplished
+- Feature #100 (MCP server serves verified profile context): PASSING
+  - Created server/src/routes/mcp.ts with full MCP REST API
+  - GET /api/mcp/resources/profile - user://profile resource serving verified profile context
+  - GET /api/mcp/resources/knowledge/:topicId - user://knowledge/{topic} resource
+  - GET /api/mcp/tools/search - search_knowledge tool for semantic search
+  - GET /api/mcp/tools/context-summary - get_context_summary tool returning portable me.md markdown
+  - Agent access control via mcp_access_permissions table
+  - Only verified insights with 'exportable' privacy tier are served
+  - 'never_export' insights excluded from all MCP resources
+  - Unverified insights excluded from all MCP resources
+  - Registered mcpRouter in server/src/index.ts
+  - Tested: 3 verified+exportable insights served, 1 never_export and 1 unverified correctly excluded
+
+- Feature #102 (MCP access permissions can be managed): PASSING
+  - Backend: Full CRUD API for MCP permissions
+    - GET /api/mcp/permissions - list all permissions for user
+    - POST /api/mcp/permissions - add new agent connection
+    - PUT /api/mcp/permissions/:id - toggle isEnabled
+    - DELETE /api/mcp/permissions/:id - revoke/delete connection
+  - Frontend: Full MCP permissions tab in SettingsPage.tsx
+    - Add agent form with name input and validation
+    - Toggle switch to enable/disable agent access per agent
+    - Delete confirmation with two-step flow
+    - Empty state with icon and guidance text
+    - Success/error status messages with auto-dismiss
+    - Last accessed timestamp display
+    - Info card explaining MCP access and privacy controls
+  - Access control verified:
+    - Unknown agent: 403 denied
+    - Disabled agent: 403 denied
+    - Enabled agent: full access to profile/knowledge resources
+    - lastAccessedAt updated on each agent access
+  - Data persists across server restart (verified)
+  - No mock data patterns found
+  - TypeScript compiles with zero errors
+  - Vite build succeeds
+
+### Current Status
+- Features #100 and #102 both passing
+- MCP routes: /api/mcp/permissions/*, /api/mcp/resources/profile, /api/mcp/resources/knowledge/:topicId, /api/mcp/tools/search, /api/mcp/tools/context-summary
+
 ## Session 19 - 2026-02-15 (Agent handling Features #69 and #136)
 
 ### Accomplished
