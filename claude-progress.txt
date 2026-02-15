@@ -1,3 +1,47 @@
+## Session - 2026-02-15 (Agent handling Features #49 and #50)
+
+### Accomplished
+- Feature #49 (Bookmark a message during interview): PASSING
+  - Created /api/bookmarks routes: POST (create), DELETE /:messageId (remove), GET (list all)
+  - POST creates bookmark record in bookmarks table and sets is_bookmarked=true on message
+  - DELETE removes bookmark and sets is_bookmarked=false on message
+  - GET returns enriched bookmarks with message content, session info, and topic title
+  - Added star/bookmark toggle icon to each message in SessionPage chat interface
+  - Optimistic UI updates for instant feedback on toggle
+  - Star icon: filled yellow when bookmarked, outline when not
+  - Fixed route ordering: bookmarks route registered BEFORE /api catch-all notesRouter
+  - Duplicate bookmark attempts return 200 with existing bookmark (idempotent)
+  - Verified: bookmark creates, shows in session, unbookmark works, data in real SQLite
+
+- Feature #50 (Bookmarked moments browsable collection page): PASSING
+  - Rewrote BookmarksPage.tsx with full bookmark listing from API
+  - Bookmarks grouped by session, each group shows topic title and session date
+  - Each bookmark card displays: role badge (AI Interviewer/You), message content preview,
+    timestamp, bookmarked date
+  - "View Session" link on each session group navigates to /app/sessions/:id
+  - Per-bookmark "Go to session" icon link for direct navigation
+  - Remove bookmark button with optimistic UI update
+  - Bookmark count badge in page subtitle
+  - Empty state with star emoji and "Go to Topics" link
+  - Loading spinner while fetching
+  - Error handling with red banner
+  - Markdown bold markers cleaned for display (** stripped)
+  - Long messages truncated to 300 chars with ellipsis
+
+### Verification
+- TypeScript compiles clean (client: zero errors, server: only pre-existing database.ts type export)
+- Vite build succeeds (636 modules, no errors)
+- API tested end-to-end: create bookmark, list bookmarks, unbookmark, re-check
+- Bookmarks from multiple sessions verified (3 bookmarks across 2 sessions)
+- Each bookmark has message content, session context, topic, and date
+- No mock data patterns found in client/src or server/src
+
+### Current Status
+- Features #49 and #50 both passing
+- Bookmarks route: /api/bookmarks (GET, POST, DELETE)
+- SessionPage: star icon on every message for bookmarking
+- BookmarksPage: full browsable collection grouped by session
+
 ## Session - 2026-02-15 (Agent handling Features #64 and #197)
 
 ### Accomplished
