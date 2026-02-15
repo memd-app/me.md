@@ -11,7 +11,7 @@ import { importRouter } from './routes/import.js';
 import { sessionsRouter } from './routes/sessions.js';
 import { searchRouter } from './routes/search.js';
 import { notesRouter } from './routes/notes.js';
-import { insightsRouter } from './routes/insights.js';
+import { insightsRouter, checkReVerificationDue } from './routes/insights.js';
 import { dashboardRouter } from './routes/dashboard.js';
 import { graphRouter } from './routes/graph.js';
 import { profileRouter } from './routes/profile.js';
@@ -68,6 +68,23 @@ app.listen(PORT, () => {
   console.log(`[me.md] Server running on http://localhost:${PORT}`);
   console.log(`[me.md] Database connected: ${db ? 'yes' : 'no'}`);
   console.log(`[me.md] Environment: ${process.env.NODE_ENV || 'development'}`);
+
+  // Run re-verification check on startup
+  try {
+    const count = checkReVerificationDue();
+    console.log(`[me.md] Re-verification check on startup: ${count} insight(s) due for re-verification`);
+  } catch (err) {
+    console.error('[me.md] Re-verification startup check failed:', err);
+  }
+
+  // Run re-verification check every 15 minutes
+  setInterval(() => {
+    try {
+      checkReVerificationDue();
+    } catch (err) {
+      console.error('[me.md] Periodic re-verification check failed:', err);
+    }
+  }, 15 * 60 * 1000);
 });
 
 export default app;
