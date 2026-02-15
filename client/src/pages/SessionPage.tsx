@@ -96,6 +96,7 @@ export default function SessionPage() {
   const [selectedConnectionIds, setSelectedConnectionIds] = useState<Set<string>>(new Set());
   const [isSavingConnections, setIsSavingConnections] = useState(false);
   const [connectionsSaved, setConnectionsSaved] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -491,6 +492,61 @@ export default function SessionPage() {
         return note.contentJson || '{}';
       default:
         return note.contentFullAnalysis || 'No content available';
+    }
+  };
+
+  // Download note as markdown file
+  const handleDownloadNote = () => {
+    if (!note) return;
+    const content = getNoteContent();
+    const title = note.title || 'Untitled Note';
+    // Build markdown header with metadata
+    const topicTitle = topic?.title || 'Unknown Topic';
+    const createdDate = note.createdAt ? new Date(note.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+    const formatLabel = FORMAT_LABELS[selectedFormat] || 'Full Analysis';
+
+    let markdownContent: string;
+    if (selectedFormat === 'json') {
+      // Wrap JSON in a code block for markdown
+      markdownContent = `# ${title}\n\n**Topic:** ${topicTitle}  \n**Format:** ${formatLabel}  \n**Date:** ${createdDate}\n\n---\n\n\`\`\`json\n${content}\n\`\`\`\n`;
+    } else {
+      markdownContent = `# ${title}\n\n**Topic:** ${topicTitle}  \n**Format:** ${formatLabel}  \n**Date:** ${createdDate}\n\n---\n\n${content}\n`;
+    }
+
+    // Create blob and trigger download
+    const blob = new Blob([markdownContent], { type: 'text/markdown; charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    // Sanitize filename
+    const safeTitle = title.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '_').substring(0, 50);
+    link.download = `${safeTitle}.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Copy note content to clipboard
+  const handleCopyNote = async () => {
+    if (!note) return;
+    const content = getNoteContent();
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = content;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-9999px';
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
     }
   };
 
@@ -1121,6 +1177,49 @@ export default function SessionPage() {
               ))}
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              {/* Copy to clipboard button */}
+              {!isEditingNote && (
+                <button
+                  onClick={handleCopyNote}
+                  disabled={isRegenerating || copySuccess}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                    copySuccess
+                      ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  }`}
+                  title="Copy note content to clipboard"
+                >
+                  {copySuccess ? (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                      </svg>
+                      Copy
+                    </>
+                  )}
+                </button>
+              )}
+              {/* Download as markdown button */}
+              {!isEditingNote && (
+                <button
+                  onClick={handleDownloadNote}
+                  disabled={isRegenerating}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Download note as markdown file"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Download .md
+                </button>
+              )}
               {/* Edit button */}
               {!isEditingNote && (
                 <button
