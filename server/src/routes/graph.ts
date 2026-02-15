@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db } from '../config/database.js';
 import { topics, insights, topicConnections, conceptNodes, conceptEdges, sessions } from '../models/schema.js';
 import { eq, and, or, inArray, isNull, not } from 'drizzle-orm';
+import { v4 as uuidv4 } from 'uuid';
 
 export const graphRouter = Router();
 
@@ -324,5 +325,97 @@ graphRouter.get('/topic/:id', async (req, res) => {
   } catch (error) {
     console.error('Get topic graph error:', error);
     res.status(500).json({ error: 'Failed to get topic graph data' });
+  }
+});
+
+// POST /api/graph/concept-nodes - Create a concept node
+graphRouter.post('/concept-nodes', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const { topicId, insightId, label, weight } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    if (!topicId || !label) {
+      return res.status(400).json({ error: 'topicId and label are required' });
+    }
+
+    // Verify topic belongs to user
+    const topic = db.select().from(topics).where(
+      and(eq(topics.id, topicId), eq(topics.userId, userId))
+    ).get();
+
+    if (!topic) {
+      return res.status(404).json({ error: 'Topic not found' });
+    }
+
+    // Verify insight belongs to user if provided
+    if (insightId) {
+      const insight = db.select().from(insights).where(
+        and(eq(insights.id, insightId), eq(insights.userId, userId))
+      ).get();
+
+      if (!insight) {
+        return res.status(404).json({ error: 'Insight not found' });
+      }
+    }
+
+    const node = db.insert(conceptNodes).values({
+      id: uuidv4(),
+      userId,
+      topicId,
+      insightId: insightId || null,
+      label,
+      weight: weight || 1.0,
+    }).returning().get();
+
+    res.status(201).json({ conceptNode: node });
+  } catch (error) {
+    console.error('Create concept node error:', error);
+    res.status(500).json({ error: 'Failed to create concept node' });
+  }
+});
+
+// POST /api/graph/concept-edges - Create a concept edge
+graphRouter.post('/concept-edges', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const { sourceNodeId, targetNodeId, relationship, weight } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    if (!sourceNodeId || !targetNodeId) {
+      return res.status(400).json({ error: 'sourceNodeId and targetNodeId are required' });
+    }
+
+    // Verify both nodes belong to user
+    const sourceNode = db.select().from(conceptNodes).where(
+      and(eq(conceptNodes.id, sourceNodeId), eq(conceptNodes.userId, userId))
+    ).get();
+
+    const targetNode = db.select().from(conceptNodes).where(
+      and(eq(conceptNodes.id, targetNodeId), eq(conceptNodes.userId, userId))
+    ).get();
+
+    if (!sourceNode || !targetNode) {
+      return res.status(404).json({ error: 'One or both concept nodes not found' });
+    }
+
+    const edge = db.insert(conceptEdges).values({
+      id: uuidv4(),
+      sourceNodeId,
+      targetNodeId,
+      relationship: relationship || 'related',
+      weight: weight || 1.0,
+    }).returning().get();
+
+    res.status(201).json({ conceptEdge: edge });
+  } catch (error) {
+    console.error('Create concept edge error:', error);
+    res.status(500).json({ error: 'Failed to create concept edge' });
   }
 });
