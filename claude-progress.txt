@@ -1,3 +1,41 @@
+## Session - 2026-02-15 (Agent handling Features #89 and #95)
+
+### Accomplished
+- Feature #89 (Dark light mode toggle persisted): PASSING
+  - Created ThemeContext (client/src/contexts/ThemeContext.tsx) with full theme management
+  - Theme applies `dark` class to document.documentElement for Tailwind dark mode
+  - Initializes from localStorage (fast) then syncs from user.themePreference on login
+  - Toggle switch with sun/moon icons in Settings > Preferences tab
+  - Saves to server via PUT /api/users/profile with themePreference field
+  - Backend validates themePreference must be "light" or "dark"
+  - ThemeProvider wraps app inside AuthProvider in App.tsx
+  - Preference persists across page refresh (localStorage) and across login sessions (server)
+
+- Feature #95 (Settings persistence across sessions and devices): PASSING
+  - Extended PUT /api/users/profile to accept notificationPreferences (JSON) and sessionLengthDefault (15/30/45/60)
+  - Updated AuthContext User interface with notificationPreferences and sessionLengthDefault fields
+  - Settings Preferences tab split into 3 cards: Appearance, Session Settings, Notifications
+  - Session length dropdown saves immediately on change
+  - 3 notification toggles: Session Reminders, Verification Alerts, Insight Updates
+  - Each toggle saves immediately to server with success/error feedback
+  - Settings loaded from user profile on mount (syncs from user object)
+  - All settings verified to persist: across server restart, across logout/login
+  - No mock data patterns found
+
+### Verification
+- TypeScript compiles clean (only pre-existing VerificationPage unused variable warnings)
+- Server starts without errors after restart
+- All API endpoints tested via curl with real data
+- Data persists across server restart (verified with RESTART test)
+- Settings returned correctly in login, me, and profile endpoints
+- Test data cleaned up after verification
+- No mock data patterns in client/src or server/src
+
+### Current Status
+- Features #89 and #95 both passing
+- Settings page fully functional with persisting theme, session length, and notification preferences
+- ThemeContext provides app-wide dark/light mode management
+
 ## Session - 2026-02-15 (Agent handling Features #65 and #72)
 
 ### Accomplished
