@@ -12,6 +12,8 @@ interface User {
   gender?: string;
   onboardingCompleted?: boolean;
   themePreference?: string;
+  notificationPreferences?: string;
+  sessionLengthDefault?: number;
   createdAt?: string;
 }
 

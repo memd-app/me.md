@@ -38,7 +38,7 @@ usersRouter.put('/profile', async (req, res) => {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
-    const { name, dateOfBirth, location, occupation, gender, themePreference } = req.body;
+    const { name, dateOfBirth, location, occupation, gender, themePreference, notificationPreferences, sessionLengthDefault } = req.body;
 
     // Validate required fields
     const errors: string[] = [];
@@ -63,6 +63,19 @@ usersRouter.put('/profile', async (req, res) => {
       errors.push('Theme preference must be "light" or "dark"');
     }
 
+    // Validate session length default
+    if (sessionLengthDefault !== undefined) {
+      const validLengths = [15, 30, 45, 60];
+      if (!validLengths.includes(Number(sessionLengthDefault))) {
+        errors.push('Session length must be 15, 30, 45, or 60 minutes');
+      }
+    }
+
+    // Validate notification preferences (must be valid JSON object if provided)
+    if (notificationPreferences !== undefined && typeof notificationPreferences !== 'object') {
+      errors.push('Notification preferences must be a JSON object');
+    }
+
     // Validate date format if provided
     if (dateOfBirth && dateOfBirth.trim().length > 0) {
       const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -81,13 +94,17 @@ usersRouter.put('/profile', async (req, res) => {
     }
 
     // Build update object with only provided fields
-    const updateData: Record<string, string> = {};
+    const updateData: Record<string, string | number> = {};
     if (name !== undefined) updateData.name = name.trim();
     if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth.trim();
     if (location !== undefined) updateData.location = location.trim();
     if (occupation !== undefined) updateData.occupation = occupation.trim();
     if (gender !== undefined) updateData.gender = gender.trim();
     if (themePreference !== undefined) updateData.themePreference = themePreference;
+    if (sessionLengthDefault !== undefined) updateData.sessionLengthDefault = Number(sessionLengthDefault);
+    if (notificationPreferences !== undefined) {
+      updateData.notificationPreferences = JSON.stringify(notificationPreferences);
+    }
 
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({ error: 'No fields to update' });

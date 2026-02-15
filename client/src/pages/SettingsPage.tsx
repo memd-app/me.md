@@ -51,6 +51,16 @@ export default function SettingsPage() {
   const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Session length and notification preferences state
+  const [sessionLength, setSessionLength] = useState<number>(15);
+  const [notifications, setNotifications] = useState({
+    sessionReminders: true,
+    verificationAlerts: true,
+    insightUpdates: false,
+  });
+  const [prefsSaving, setPrefsSaving] = useState(false);
+  const [prefsStatus, setPrefsStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
   // Delete account state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
@@ -103,6 +113,23 @@ export default function SettingsPage() {
   useEffect(() => {
     fetchProfile();
   }, [fetchProfile]);
+
+  // Sync session length and notification prefs from user profile
+  useEffect(() => {
+    if (user?.sessionLengthDefault) {
+      setSessionLength(user.sessionLengthDefault);
+    }
+    if (user?.notificationPreferences) {
+      try {
+        const parsed = typeof user.notificationPreferences === 'string'
+          ? JSON.parse(user.notificationPreferences)
+          : user.notificationPreferences;
+        setNotifications((prev) => ({ ...prev, ...parsed }));
+      } catch {
+        // ignore parse errors
+      }
+    }
+  }, [user?.sessionLengthDefault, user?.notificationPreferences]);
 
   // MCP permissions management
   const fetchMcpPermissions = useCallback(async () => {
@@ -334,6 +361,65 @@ export default function SettingsPage() {
     }
   };
 
+  const saveSessionLength = async (newLength: number) => {
+    if (!user?.id) return;
+    setSessionLength(newLength);
+    setPrefsSaving(true);
+    setPrefsStatus(null);
+    try {
+      const res = await fetch(`${API_BASE}/users/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id,
+        },
+        body: JSON.stringify({ sessionLengthDefault: newLength }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to save session length');
+      }
+      updateUser({ sessionLengthDefault: newLength });
+      setPrefsStatus({ type: 'success', message: 'Session length updated' });
+      setTimeout(() => setPrefsStatus(null), 3000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to save';
+      setPrefsStatus({ type: 'error', message });
+    } finally {
+      setPrefsSaving(false);
+    }
+  };
+
+  const saveNotificationPref = async (key: string, value: boolean) => {
+    if (!user?.id) return;
+    const updated = { ...notifications, [key]: value };
+    setNotifications(updated);
+    setPrefsSaving(true);
+    setPrefsStatus(null);
+    try {
+      const res = await fetch(`${API_BASE}/users/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id,
+        },
+        body: JSON.stringify({ notificationPreferences: updated }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to save notification preferences');
+      }
+      updateUser({ notificationPreferences: JSON.stringify(updated) });
+      setPrefsStatus({ type: 'success', message: 'Notification preference updated' });
+      setTimeout(() => setPrefsStatus(null), 3000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to save';
+      setPrefsStatus({ type: 'error', message });
+    } finally {
+      setPrefsSaving(false);
+    }
+  };
+
   const formatDisplayValue = (field: EditableField, value: string): string => {
     if (!value || value === 'Unknown' || value === 'unspecified') return 'Not set';
     if (field.key === 'dateOfBirth' && value !== 'Not set') {
@@ -562,9 +648,23 @@ export default function SettingsPage() {
       )}
 
       {activeTab === 'preferences' && (
-        <div className="card">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Preferences</h2>
-          <div className="space-y-6">
+        <div className="space-y-6">
+          {/* Preferences status message */}
+          {prefsStatus && (
+            <div
+              className={`p-3 rounded-lg text-sm ${
+                prefsStatus.type === 'success'
+                  ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800'
+                  : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
+              }`}
+            >
+              {prefsStatus.message}
+            </div>
+          )}
+
+          {/* Appearance */}
+          <div className="card">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Appearance</h2>
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-gray-900 dark:text-white">Theme</p>
@@ -619,17 +719,97 @@ export default function SettingsPage() {
                 </svg>
               </div>
             </div>
+          </div>
+
+          {/* Session Settings */}
+          <div className="card">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Session Settings</h2>
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-gray-900 dark:text-white">Session Length</p>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Default interview session duration</p>
               </div>
-              <select className="input-field w-auto">
-                <option value="15">15 minutes</option>
-                <option value="30">30 minutes</option>
-                <option value="45">45 minutes</option>
-                <option value="60">60 minutes</option>
+              <select
+                className="input-field w-auto"
+                value={sessionLength}
+                onChange={(e) => saveSessionLength(Number(e.target.value))}
+                disabled={prefsSaving}
+              >
+                <option value={15}>15 minutes</option>
+                <option value={30}>30 minutes</option>
+                <option value={45}>45 minutes</option>
+                <option value={60}>60 minutes</option>
               </select>
+            </div>
+          </div>
+
+          {/* Notification Preferences */}
+          <div className="card">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Notifications</h2>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-white">Session Reminders</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Get reminded about scheduled interview sessions</p>
+                </div>
+                <button
+                  onClick={() => saveNotificationPref('sessionReminders', !notifications.sessionReminders)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${
+                    notifications.sessionReminders ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
+                  }`}
+                  role="switch"
+                  aria-checked={notifications.sessionReminders}
+                  disabled={prefsSaving}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      notifications.sessionReminders ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-white">Verification Alerts</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Get notified when insights need re-verification</p>
+                </div>
+                <button
+                  onClick={() => saveNotificationPref('verificationAlerts', !notifications.verificationAlerts)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${
+                    notifications.verificationAlerts ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
+                  }`}
+                  role="switch"
+                  aria-checked={notifications.verificationAlerts}
+                  disabled={prefsSaving}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      notifications.verificationAlerts ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-white">Insight Updates</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Get notified about new insights from sessions</p>
+                </div>
+                <button
+                  onClick={() => saveNotificationPref('insightUpdates', !notifications.insightUpdates)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${
+                    notifications.insightUpdates ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
+                  }`}
+                  role="switch"
+                  aria-checked={notifications.insightUpdates}
+                  disabled={prefsSaving}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      notifications.insightUpdates ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
           </div>
         </div>
