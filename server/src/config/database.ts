@@ -23,6 +23,12 @@ const sqlite = new Database(DB_PATH);
 // Enable WAL mode for better concurrent access
 sqlite.pragma('journal_mode = WAL');
 sqlite.pragma('foreign_keys = ON');
+// Ensure WAL writes are synced to disk - critical for data durability after kill -9
+sqlite.pragma('synchronous = NORMAL');
+// Prevent busy errors under concurrent access
+sqlite.pragma('busy_timeout = 5000');
+// Auto-checkpoint after every 100 pages written to WAL (default is 1000)
+sqlite.pragma('wal_autocheckpoint = 100');
 
 // Create tables if they don't exist (schema push)
 function initializeSchema() {
