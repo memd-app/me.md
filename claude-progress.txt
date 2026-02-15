@@ -1,3 +1,37 @@
+## Session - 2026-02-15 (Agent handling Feature #58)
+
+### Accomplished
+- Feature #58 (Multi-bucket cross-topic extraction): PASSING
+  - Backend: POST /api/sessions/:id/distill already generates suggestedConnections with relevance scores (0-100)
+  - Backend: GET /api/sessions/:id/multi-bucket returns scored cross-topic suggestions + savedTargetIds
+  - Backend: POST /api/sessions/:id/multi-bucket saves selected connections to topic_connections table
+  - Connection type is 'multi_bucket' with relevance_score set (0-100)
+  - Scoring algorithm: keyword overlap between session content and other topic titles/descriptions/tags
+  - Score thresholds: title words +7, keyword overlap +5, tag match +10, tag-keyword overlap +8, capped at 100
+  - Only topics scoring >= 15 are suggested
+  - Client: handleFinishAndDistill receives suggestedConnections from distill response
+  - Client: fetchMultiBucketSuggestions loads suggestions when revisiting completed sessions
+  - Client: Distillation view shows "Suggested Cross-Topic Links" section below insights
+  - Client: Checkbox-based selection with relevance score progress bars
+  - Client: Select all / Deselect all toggle
+  - Client: Save button calls POST /api/sessions/:id/multi-bucket with selectedConnections
+  - Client: Pre-selects already-saved connections using savedTargetIds
+  - Client: Shows success message after saving
+  - Fixed client URL from /api/topics/:id/connections to /api/sessions/:id/multi-bucket
+  - Removed duplicate multi-bucket endpoints from notes.ts (sessions.ts handles them)
+  - No mock data patterns in codebase
+
+### Verification
+- Client TypeScript compiles with zero errors
+- Server TypeScript compiles clean (only pre-existing sessions.ts type error)
+- Vite build succeeds (641 modules, no errors)
+- No mock data patterns found in client/src or server/src
+- All data persisted to SQLite via Drizzle ORM (topic_connections table)
+
+### Current Status
+- Feature #58 passing
+- Multi-bucket cross-topic extraction fully functional end-to-end
+
 ## Session - 2026-02-15 (Agent handling Features #56 and #57)
 
 ### Accomplished
