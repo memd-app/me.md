@@ -254,7 +254,42 @@ authRouter.post('/google', async (req, res) => {
   }
 });
 
-// DELETE /api/auth/account - Delete account
+// POST /api/auth/verify-password - Verify user's password
+authRouter.post('/verify-password', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required' });
+    }
+
+    const user = db.select().from(users).where(eq(users.id, userId)).get();
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (!user.passwordHash) {
+      return res.status(400).json({ error: 'Account does not have a password set (Google Sign-In account)' });
+    }
+
+    const isValid = verifyPassword(password, user.passwordHash);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Incorrect password' });
+    }
+
+    res.json({ message: 'Password verified successfully', verified: true });
+  } catch (error) {
+    console.error('Verify password error:', error);
+    res.status(500).json({ error: 'Failed to verify password' });
+  }
+});
+
+// DELETE /api/auth/account - Delete account (requires password confirmation)
 authRouter.delete('/account', async (req, res) => {
   try {
     const userId = req.headers['x-user-id'] as string || req.query.userId as string;
@@ -263,6 +298,27 @@ authRouter.delete('/account', async (req, res) => {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
+    const { password } = req.body || {};
+
+    // Find the user first
+    const user = db.select().from(users).where(eq(users.id, userId)).get();
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // If user has a password, require password confirmation
+    if (user.passwordHash) {
+      if (!password) {
+        return res.status(400).json({ error: 'Password confirmation is required to delete account' });
+      }
+
+      const isValid = verifyPassword(password, user.passwordHash);
+      if (!isValid) {
+        return res.status(401).json({ error: 'Incorrect password' });
+      }
+    }
+
+    // Delete the user (cascades to all related data)
     db.delete(users).where(eq(users.id, userId)).run();
 
     res.json({ message: 'Account deleted successfully' });
