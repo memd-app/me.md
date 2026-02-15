@@ -1,3 +1,44 @@
+## Session - 2026-02-15 (Agent handling Features #54 and #55)
+
+### Accomplished
+- Feature #54 (Session distillation generates JSON structured data): PASSING
+  - Updated generateJsonContent() in server/src/routes/notes.ts
+  - Previously `frameworks` and `decisions` arrays were always empty (`[] as string[]`)
+  - Added regex-based extraction for frameworks: matches messages containing when/because/always/usually/tend to/approach/strategy/method/process/framework/model/pattern/rule/guideline
+  - Added regex-based extraction for decisions: matches messages containing decide/decided/decision/chose/choose/choice/option/alternative/trade-off/weigh/consider/prefer/priority/prioritize
+  - Enhanced examples extraction: also matches messages with example/instance/time when/remember/experience/once/story keywords
+  - Verified JSON output is valid parseable JSON with all required arrays populated:
+    - principles array (extracted key belief/value statements)
+    - frameworks array (mental models & decision-making patterns)
+    - examples array (concrete stories and experiences)
+    - decisions array (choice-related statements)
+    - tags array (auto-detected thematic tags)
+  - Data persists across server restart
+
+- Feature #55 (User can select and switch between note formats): PASSING
+  - Format selector UI already fully implemented in SessionPage.tsx
+  - FORMAT_LABELS shows all 4 formats: Full Analysis, Brief Summary, Decision Framework, JSON Data
+  - handleFormatChange updates local state and calls /api/sessions/:id/distill/regenerate
+  - getNoteContent returns correct content field based on selectedFormat
+  - JSON renders in <pre> with monospace font; other formats render via renderMarkdown
+  - selectedFormat is persisted to database via API
+  - Verified all 4 format switches work end-to-end via API
+  - Data persists across server restart (selectedFormat and all content fields retained)
+  - No mock data patterns in client/src or server/src
+
+### Verification
+- TypeScript compiles clean (client: zero errors)
+- Server starts without errors after restart
+- All API endpoints tested end-to-end
+- Data persists across server restart
+- No mock data patterns found
+- Test data cleaned up after verification
+
+### Current Status
+- Features #54 and #55 both passing
+- JSON distillation now populates all 5 required arrays
+- Format switching fully functional with database persistence
+
 ## Session - 2026-02-15 (Agent handling Features #46 and #48)
 
 ### Accomplished
