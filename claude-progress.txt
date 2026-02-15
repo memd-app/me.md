@@ -1,3 +1,41 @@
+## Session - 2026-02-15 (Agent handling Features #64 and #197)
+
+### Accomplished
+- Feature #64 (Reject insight removes it from profile): PASSING
+  - Verified existing reject endpoint (POST /api/insights/:id/reject) correctly sets status to 'rejected'
+  - Verified verification_history record created with action='rejected' and reason stored
+  - Verified rejected insight removed from pending queue (GET /api/insights/pending)
+  - Verified profile summary (GET /api/profile/summary) only includes verified insights, not rejected
+  - Verified JSON/Markdown exports exclude rejected insights
+  - Enhanced reject endpoint to also delete concept nodes linked to rejected insight
+  - No mock data patterns in server/src or client/src
+
+- Feature #197 (Rejecting an insight removes it from knowledge graph): PASSING
+  - Added POST /api/graph/concept-nodes endpoint for creating concept nodes
+  - Added POST /api/graph/concept-edges endpoint for creating concept edges
+  - Enhanced reject endpoint: deletes concept nodes linked to rejected insight + their edges
+  - Updated GET /api/graph to filter out rejected insights from node weight/count calculations
+  - Added safety filter: concept nodes linked to rejected insights excluded from graph even if not deleted
+  - Updated GET /api/graph/topic/:id to exclude rejected insights from sub-graph
+  - Verified end-to-end: created concept node linked to insight, rejected insight, concept node + edges removed
+  - After rejection: conceptCount dropped 2->1, edgeCount 4->2, insightCount 1->0, no orphaned nodes
+
+### Verification Details
+- TypeScript compiles clean (only pre-existing database.ts export type issue)
+- Server restarts cleanly after code changes
+- All API endpoints tested end-to-end with correct responses
+- Mock data grep: no patterns found in server/src or client/src
+- Data flow: reject insight -> concept node deleted -> edges cleaned up -> graph updated
+
+### Files Changed
+- server/src/routes/insights.ts - Import conceptNodes/conceptEdges, add cleanup logic in reject endpoint
+- server/src/routes/graph.ts - Filter rejected insights, add safety filter for concept nodes, add POST endpoints
+
+### Current Status
+- Features #64 and #197 both passing
+- Graph API now properly excludes rejected insights and their concept nodes
+- Reject endpoint performs full cleanup: status update + history record + concept node removal
+
 ## Session - 2026-02-15 (Agent handling Features #104 and #107)
 
 ### Accomplished
