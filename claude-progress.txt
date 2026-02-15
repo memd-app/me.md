@@ -1,3 +1,49 @@
+## Session - 2026-02-15 (Agent handling Features #34 and #176)
+
+### Accomplished
+- Feature #34 (Use case template browsing and selection): PASSING
+  - Created server/src/routes/templates.ts with full templates API
+  - GET /api/templates - List all 8 use case templates
+  - GET /api/templates/:id - Get single template with details
+  - POST /api/templates/:id/create-topic - Create topic from template with use_case_template_id set
+  - Seeds 8 templates: email writing, management style, feedback, decision-making, communication, problem-solving, creative process, work priorities
+  - Each template has title, description, aiUseCaseTag, and 5 interview prompts
+  - Deduplication logic in seed function prevents duplicate templates on restart
+  - Created TemplatesPage.tsx with expandable card UI showing template details and prompts
+  - Clicking a template expands to show all interview prompts with numbered list
+  - "Create Topic from Template" button creates a topic linked to the template
+  - Topic created has use_case_template_id, tags include AI use case tag, trigger is first prompt
+  - Added /app/templates route in App.tsx
+  - Added "Templates" button on TopicsPage header next to "New Topic"
+  - Registered templatesRouter in server index.ts (before notesRouter catch-all)
+  - No mock data patterns in client/src or server/src
+  - Data persists in real SQLite database
+
+- Feature #176 (Breadcrumbs or back navigation in nested views): PASSING
+  - TopicDetailPage: Topics / [Topic Title] breadcrumb (already existed)
+  - CreateTopicPage: Added Topics / New Topic breadcrumb
+  - TemplatesPage: Topics / Use Case Templates breadcrumb (added with Feature #34)
+  - SessionPage chat view: Topics / [Topic Title] / Session breadcrumb (replaced plain title)
+  - SessionPage notes view: Topics / [Topic Title] / Notes breadcrumb
+  - All breadcrumb levels are clickable Link components with hover effects
+  - Back arrow button still present for quick single-step navigation
+  - Topic title truncated in breadcrumb (max-w-[150px]) with title tooltip
+  - Consistent styling across all pages: text-xs, gray-400, hover:text-primary-600
+
+### Verification
+- TypeScript compiles clean (client: zero errors)
+- Server starts without errors, templates API returns correct data
+- Templates seeded on startup, deduplication works
+- Topic created from template has correct use_case_template_id
+- Test data cleaned up after verification
+- No mock data patterns found
+- Vite dev server starts cleanly with no errors
+
+### Current Status
+- Features #34 and #176 both passing
+- 8 use case templates available at /app/templates
+- Breadcrumb navigation consistent across all nested views
+
 ## Session - 2026-02-15 (Agent handling Features #29 and #40)
 
 ### Accomplished
