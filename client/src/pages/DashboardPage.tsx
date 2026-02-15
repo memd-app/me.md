@@ -122,28 +122,28 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+    <div className="max-w-6xl mx-auto overflow-x-hidden">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
           Welcome back, {user?.name || 'there'}
         </h1>
-        <p className="mt-1 text-gray-600 dark:text-gray-400">
+        <p className="mt-1 text-gray-600 dark:text-gray-400 text-sm sm:text-base">
           Here&apos;s your knowledge overview
         </p>
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
         {statCards.map((stat) => (
-          <div key={stat.label} className="card flex items-center gap-4 min-h-[88px]">
-            <span className="text-2xl flex-shrink-0">{stat.icon}</span>
+          <div key={stat.label} className="card flex items-center gap-3 sm:gap-4 min-h-[80px] sm:min-h-[88px] p-4 sm:p-6">
+            <span className="text-xl sm:text-2xl flex-shrink-0">{stat.icon}</span>
             <div className="min-w-0">
               {isLoading ? (
-                <div className="h-8 w-16 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                <div className="h-7 sm:h-8 w-16 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
               ) : (
-                <p className="text-2xl font-bold text-gray-900 dark:text-white truncate">{stat.value}</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white truncate">{stat.value}</p>
               )}
-              <p className="text-sm text-gray-500 dark:text-gray-400">{stat.label}</p>
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">{stat.label}</p>
               {!isLoading && stat.sublabel && (
                 <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{stat.sublabel}</p>
               )}
@@ -153,11 +153,11 @@ export default function DashboardPage() {
       </div>
 
       {/* Knowledge Completeness by Category */}
-      <div className="card mb-8">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+      <div className="card mb-6 sm:mb-8 p-4 sm:p-6">
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-2 sm:mb-4">
           Knowledge Completeness
         </h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-4 sm:mb-6">
           Track your progress across the 5 knowledge categories
         </p>
         {isLoading ? (
@@ -167,29 +167,33 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : stats?.categoryCompleteness && stats.categoryCompleteness.length > 0 ? (
-          <div className="space-y-5">
+          <div className="space-y-4 sm:space-y-5">
             {stats.categoryCompleteness.map((cat) => {
               const colors = CATEGORY_COLORS[cat.category] || CATEGORY_COLORS.identity;
               const icon = CATEGORY_ICONS[cat.category] || '📂';
               return (
                 <div key={cat.category}>
-                  <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-1.5 gap-0.5 sm:gap-0">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="text-base flex-shrink-0">{icon}</span>
                       <span className={`text-sm font-medium ${colors.text}`}>
                         {cat.label}
                       </span>
+                      {/* Show percentage inline on mobile */}
+                      <span className="sm:hidden text-xs font-semibold text-gray-700 dark:text-gray-300 ml-auto">
+                        {cat.completeness}%
+                      </span>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
+                    <div className="flex items-center gap-2 sm:gap-3 text-xs text-gray-500 dark:text-gray-400 flex-shrink-0 pl-7 sm:pl-0">
                       <span>{cat.exploredTopics}/{cat.totalTopics} topics</span>
                       <span>{cat.verifiedInsights} verified</span>
-                      <span className="font-semibold text-gray-700 dark:text-gray-300">
+                      <span className="hidden sm:inline font-semibold text-gray-700 dark:text-gray-300">
                         {cat.completeness}%
                       </span>
                     </div>
                   </div>
                   {/* Progress bar */}
-                  <div className={`w-full h-3 rounded-full ${colors.bg} overflow-hidden`}>
+                  <div className={`w-full h-2.5 sm:h-3 rounded-full ${colors.bg} overflow-hidden`}>
                     <div
                       className={`h-full rounded-full ${colors.fill} transition-all duration-500 ease-out`}
                       style={{ width: `${cat.completeness}%`, minWidth: cat.completeness > 0 ? '8px' : '0px' }}
@@ -204,7 +208,7 @@ export default function DashboardPage() {
             <p className="text-gray-500 dark:text-gray-400 text-sm">
               No categorized topics yet. Create topics with preset categories to see progress here.
             </p>
-            <Link to="/app/topics" className="text-indigo-600 dark:text-indigo-400 text-sm hover:underline mt-2 inline-block">
+            <Link to="/app/topics" className="text-indigo-600 dark:text-indigo-400 text-sm hover:underline mt-2 inline-block min-h-[44px] flex items-center justify-center">
               Browse Topics
             </Link>
           </div>
@@ -212,22 +216,26 @@ export default function DashboardPage() {
       </div>
 
       {/* Quick actions */}
-      <div className="card mb-8">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+      <div className="card mb-6 sm:mb-8 p-4 sm:p-6">
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">
           Get Started
         </h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-4">
+        <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-4">
           Start your journey by exploring a topic and having your first AI-guided interview.
         </p>
-        <div className="flex flex-wrap gap-3">
-          <Link to="/app/new-session" className="btn-primary">Start Quick Interview</Link>
-          <Link to="/app/topics" className="btn-secondary">Browse Topics</Link>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Link to="/app/new-session" className="btn-primary text-center min-h-[44px] flex items-center justify-center">
+            Start Quick Interview
+          </Link>
+          <Link to="/app/topics" className="btn-secondary text-center min-h-[44px] flex items-center justify-center">
+            Browse Topics
+          </Link>
         </div>
       </div>
 
       {/* Recent activity */}
-      <div className="card">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+      <div className="card p-4 sm:p-6">
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">
           Recent Activity
         </h2>
         {isLoading ? (
@@ -238,20 +246,20 @@ export default function DashboardPage() {
           </div>
         ) : activity.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-gray-500 dark:text-gray-400">
+            <p className="text-gray-500 dark:text-gray-400 text-sm">
               No activity yet. Start your first interview session to see activity here.
             </p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2 sm:space-y-3">
             {activity.map((item) => (
               <Link
                 key={item.id}
                 to={`/app/session/${item.id}`}
-                className="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                className="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors min-h-[48px] active:bg-gray-100 dark:active:bg-gray-800"
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-lg flex-shrink-0">💬</span>
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <span className="text-base sm:text-lg flex-shrink-0">💬</span>
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                       {item.title}
