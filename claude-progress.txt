@@ -1,3 +1,40 @@
+## Session - 2026-02-15 (Agent handling Features #22 and #23)
+
+### Accomplished
+- Feature #22 (Onboarding context import via paste text): PASSING
+  - Added tabbed import interface to onboarding context step: URL, Paste Text, File Upload tabs
+  - Paste Text tab: textarea with optional title field, character count, validation (min 10 chars)
+  - Calls POST /api/import/text which stores in imported_files table with fileType='text'
+  - Updated backend /api/import/text to also update user's importedContext JSON field
+  - Import results display with source type badge (URL/Text/File) and summary preview
+  - Data persists across server restart (verified)
+  - No mock data patterns found
+
+- Feature #23 (Onboarding context import via file upload): PASSING
+  - File Upload tab: click-to-upload area, accepts .txt/.md/.csv/.json/.pdf up to 5MB
+  - Upload progress spinner shown during file processing
+  - Added POST /api/import/file endpoint using multer with memory storage
+  - Server extracts text from uploaded files (PDF stream extraction, UTF-8 for text files)
+  - File content stored in imported_files table with fileType='file', original filename preserved
+  - Updates user's importedContext JSON field with file reference
+  - File size validation (5MB max), MIME type filtering
+  - Data persists across server restart (verified)
+  - No mock data patterns found
+
+### Verification
+- TypeScript compiles clean (client: zero errors, server: only pre-existing database.ts type issue)
+- Backend: POST /api/import/text returns id, title, summary - stored in imported_files
+- Backend: POST /api/import/file accepts multipart upload, returns id, filename, title, summary, size
+- GET /api/import/status returns all imports for user with parsed content
+- Data persists across server restart
+- No mock data patterns in client/src or server/src
+- Test data cleaned up after verification
+
+### Current Status
+- Features #22 and #23 both passing
+- Onboarding context step now supports 3 import methods: URL, Paste Text, File Upload
+- All imports stored in imported_files table and referenced in user's importedContext
+
 ## Session - 2026-02-15 (Agent handling Features #18 and #99)
 
 ### Accomplished
