@@ -38,7 +38,7 @@ usersRouter.put('/profile', async (req, res) => {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
-    const { name, dateOfBirth, location, occupation, gender } = req.body;
+    const { name, dateOfBirth, location, occupation, gender, themePreference } = req.body;
 
     // Validate required fields
     const errors: string[] = [];
@@ -56,6 +56,11 @@ usersRouter.put('/profile', async (req, res) => {
     }
     if (gender !== undefined && (!gender || gender.trim().length === 0)) {
       errors.push('Gender is required');
+    }
+
+    // Validate theme preference
+    if (themePreference !== undefined && !['light', 'dark'].includes(themePreference)) {
+      errors.push('Theme preference must be "light" or "dark"');
     }
 
     // Validate date format if provided
@@ -82,6 +87,7 @@ usersRouter.put('/profile', async (req, res) => {
     if (location !== undefined) updateData.location = location.trim();
     if (occupation !== undefined) updateData.occupation = occupation.trim();
     if (gender !== undefined) updateData.gender = gender.trim();
+    if (themePreference !== undefined) updateData.themePreference = themePreference;
 
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({ error: 'No fields to update' });

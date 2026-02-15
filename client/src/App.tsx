@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { ThemeProvider } from '@/contexts/ThemeContext';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import OnboardingGuard from '@/components/auth/OnboardingGuard';
 import AppLayout from '@/components/layout/AppLayout';
@@ -26,6 +27,7 @@ import SessionPage from '@/pages/SessionPage';
 function App() {
   return (
     <AuthProvider>
+      <ThemeProvider>
       <div className="min-h-screen bg-white dark:bg-dark-bg text-gray-900 dark:text-gray-100">
         <Routes>
           {/* Public routes */}
@@ -75,6 +77,7 @@ function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </div>
+      </ThemeProvider>
     </AuthProvider>
   );
 }
