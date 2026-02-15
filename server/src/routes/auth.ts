@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../config/database.js';
-import { users } from '../models/schema.js';
-import { eq } from 'drizzle-orm';
+import { users, passwordResetTokens } from '../models/schema.js';
+import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 
@@ -102,14 +102,14 @@ authRouter.post('/login', async (req, res) => {
 
     const user = db.select().from(users).where(eq(users.email, email)).get();
     if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'No account found with this email address. Please check your email or sign up for a new account.' });
     }
 
     // Verify password - if user has no password_hash (legacy user), allow login with any password
     if (user.passwordHash) {
       const isValid = verifyPassword(password, user.passwordHash);
       if (!isValid) {
-        return res.status(401).json({ error: 'Invalid credentials' });
+        return res.status(401).json({ error: 'Incorrect password. Please try again or reset your password.' });
       }
     }
 

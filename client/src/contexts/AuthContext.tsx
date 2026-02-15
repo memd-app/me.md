@@ -81,22 +81,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
+      let res: Response;
+      try {
+        res = await fetch(`${API_BASE}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+      } catch {
+        throw new Error('Unable to connect to the server. Please check your internet connection and try again.');
+      }
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Login failed');
+        let data: { error?: string };
+        try {
+          data = await res.json();
+        } catch {
+          throw new Error('Something went wrong. Please try again later.');
+        }
+        throw new Error(data.error || 'Login failed. Please check your credentials and try again.');
       }
 
       const data = await res.json();
       setUser(data.user);
       localStorage.setItem('memd_user_id', data.user.id);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Login failed';
+      const message = err instanceof Error ? err.message : 'Login failed. Please try again.';
       setError(message);
       throw err;
     } finally {
