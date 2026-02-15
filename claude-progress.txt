@@ -1,3 +1,35 @@
+## Session - 2026-02-15 (Agent handling Feature #78)
+
+### Accomplished
+- Feature #78 (Knowledge graph updates when insights are verified): PASSING
+  - Verified the backend creates concept nodes when insights are verified
+  - The POST /api/insights/:id/verify endpoint creates a concept_node for each newly verified insight
+  - Concept node has label from insight content (first 60 chars), weight from confidence score
+  - Existing concept nodes are not duplicated (checks for existing before creating)
+  - Re-verification (re_verification_pending -> verified) does NOT create duplicate concept nodes
+  - KnowledgeGraphPage has auto-refresh via visibilitychange and focus event listeners
+  - Graph refresh button also available for manual refresh
+  - Graph data endpoint (/api/graph) correctly includes new concept nodes and edges
+  - Graph stats (concepts, verified, connections) accurately reflect changes
+
+### Verification Details
+- Created test user, topic, session with 3 insights
+- Before verification: 0 concepts, 0 verified, 0 connections
+- After verifying insight #1: 1 concept, 1 verified, 1 connection (topic->concept)
+- After verifying insight #2: 2 concepts, 2 verified, 2 connections
+- Browser test: navigated to graph (2 concepts), verified 3rd insight, returned to graph (3 concepts)
+- Topic node weight grew from 1.5 to 2.1 as verified insights increased
+- SVG circles in D3 graph grew from 13 to 16 (node circle + status ring + checkmark for new concept)
+- Data persists across server restart (3 concepts survived stop/restart)
+- No mock data patterns found in server/src or client/src
+- Zero browser console errors
+- Test data cleaned up after verification
+
+### Current Status
+- Feature #78 marked passing
+- Implementation was already in place from prior sessions (commit 49b7176 for Feature #68)
+- Verified end-to-end with browser automation and API tests
+
 ## Session - 2026-02-15 (Agent handling Feature #68)
 
 ### Accomplished
