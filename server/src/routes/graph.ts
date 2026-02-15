@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../config/database.js';
 import { topics, insights, topicConnections, conceptNodes, conceptEdges, sessions } from '../models/schema.js';
-import { eq, and, or, inArray } from 'drizzle-orm';
+import { eq, and, or, inArray, isNull, not } from 'drizzle-orm';
 
 export const graphRouter = Router();
 
@@ -19,9 +19,15 @@ graphRouter.get('/', async (req, res) => {
       .where(eq(topics.userId, userId))
       .all();
 
-    // 2. Get all insights grouped by topic (for sizing nodes)
+    // 2. Get all non-rejected insights grouped by topic (for sizing nodes)
+    // Rejected insights should not appear in graph calculations
     const userInsights = db.select().from(insights)
-      .where(eq(insights.userId, userId))
+      .where(
+        and(
+          eq(insights.userId, userId),
+          not(eq(insights.verificationStatus, 'rejected'))
+        )
+      )
       .all();
 
     // 3. Get all sessions (for counting depth per topic)
@@ -30,9 +36,21 @@ graphRouter.get('/', async (req, res) => {
       .all();
 
     // 4. Get concept nodes for this user
-    const userConceptNodes = db.select().from(conceptNodes)
+    // Note: Concept nodes linked to rejected insights are deleted when insights are rejected.
+    // We also collect rejected insight IDs to filter any remaining nodes for safety.
+    const rejectedInsightIds = new Set(
+      db.select({ id: insights.id }).from(insights)
+        .where(and(eq(insights.userId, userId), eq(insights.verificationStatus, 'rejected')))
+        .all()
+        .map(i => i.id)
+    );
+    const allUserConceptNodes = db.select().from(conceptNodes)
       .where(eq(conceptNodes.userId, userId))
       .all();
+    // Filter out concept nodes that are still linked to rejected insights (safety check)
+    const userConceptNodes = allUserConceptNodes.filter(
+      cn => !cn.insightId || !rejectedInsightIds.has(cn.insightId)
+    );
 
     // 5. Get concept edges that connect user's concept nodes (optimized with SQL filter)
     const conceptNodeIds = userConceptNodes.map(cn => cn.id);
@@ -264,14 +282,27 @@ graphRouter.get('/topic/:id', async (req, res) => {
       return res.status(404).json({ error: 'Topic not found' });
     }
 
-    // Get concept nodes for this topic
-    const topicConceptNodes = db.select().from(conceptNodes)
+    // Get concept nodes for this topic (exclude those linked to rejected insights)
+    const topicRejectedInsightIds = new Set(
+      db.select({ id: insights.id }).from(insights)
+        .where(and(eq(insights.topicId, topicId), eq(insights.userId, userId), eq(insights.verificationStatus, 'rejected')))
+        .all()
+        .map(i => i.id)
+    );
+    const allTopicConceptNodes = db.select().from(conceptNodes)
       .where(and(eq(conceptNodes.topicId, topicId), eq(conceptNodes.userId, userId)))
       .all();
+    const topicConceptNodes = allTopicConceptNodes.filter(
+      cn => !cn.insightId || !topicRejectedInsightIds.has(cn.insightId)
+    );
 
-    // Get insights for this topic
+    // Get non-rejected insights for this topic
     const topicInsights = db.select().from(insights)
-      .where(and(eq(insights.topicId, topicId), eq(insights.userId, userId)))
+      .where(and(
+        eq(insights.topicId, topicId),
+        eq(insights.userId, userId),
+        not(eq(insights.verificationStatus, 'rejected'))
+      ))
       .all();
 
     // Get concept edges

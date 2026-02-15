@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../config/database.js';
-import { insights, topics, sessions, verificationHistory } from '../models/schema.js';
+import { insights, topics, sessions, verificationHistory, conceptNodes, conceptEdges } from '../models/schema.js';
 import { eq, and, desc, or, sql, inArray, lte } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -362,7 +362,30 @@ insightsRouter.post('/:id/reject', async (req, res) => {
       newContent: reason || null,
     }).run();
 
-    res.json({ insight: updated, message: 'Insight rejected' });
+    // Clean up concept nodes linked to this rejected insight
+    // First, find concept nodes linked to this insight
+    const linkedConceptNodes = db.select().from(conceptNodes)
+      .where(eq(conceptNodes.insightId, insightId))
+      .all();
+
+    if (linkedConceptNodes.length > 0) {
+      const linkedNodeIds = linkedConceptNodes.map(cn => cn.id);
+
+      // Delete concept edges that reference these nodes
+      for (const nodeId of linkedNodeIds) {
+        db.delete(conceptEdges).where(
+          or(
+            eq(conceptEdges.sourceNodeId, nodeId),
+            eq(conceptEdges.targetNodeId, nodeId)
+          )
+        ).run();
+      }
+
+      // Delete the concept nodes themselves
+      db.delete(conceptNodes).where(eq(conceptNodes.insightId, insightId)).run();
+    }
+
+    res.json({ insight: updated, message: 'Insight rejected', removedConceptNodes: linkedConceptNodes.length });
   } catch (error) {
     console.error('Reject insight error:', error);
     res.status(500).json({ error: 'Failed to reject insight' });
