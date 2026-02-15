@@ -38,12 +38,30 @@ usersRouter.put('/profile', async (req, res) => {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
-    const { name, dateOfBirth, location, occupation, gender, themePreference, notificationPreferences, sessionLengthDefault } = req.body;
+    const { name, email, dateOfBirth, location, occupation, gender, themePreference, notificationPreferences, sessionLengthDefault } = req.body;
 
     // Validate required fields
     const errors: string[] = [];
     if (name !== undefined && (!name || name.trim().length === 0)) {
       errors.push('Name is required');
+    }
+
+    // Validate email if provided
+    if (email !== undefined) {
+      if (!email || email.trim().length === 0) {
+        errors.push('Email is required');
+      } else {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email.trim())) {
+          errors.push('Please enter a valid email address');
+        } else {
+          // Check uniqueness (different from current user)
+          const existing = db.select().from(users).where(eq(users.email, email.trim().toLowerCase())).get();
+          if (existing && existing.id !== userId) {
+            errors.push('This email address is already in use');
+          }
+        }
+      }
     }
     if (dateOfBirth !== undefined && (!dateOfBirth || dateOfBirth.trim().length === 0)) {
       errors.push('Date of birth is required');
@@ -96,6 +114,7 @@ usersRouter.put('/profile', async (req, res) => {
     // Build update object with only provided fields
     const updateData: Record<string, string | number> = {};
     if (name !== undefined) updateData.name = name.trim();
+    if (email !== undefined) updateData.email = email.trim().toLowerCase();
     if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth.trim();
     if (location !== undefined) updateData.location = location.trim();
     if (occupation !== undefined) updateData.occupation = occupation.trim();

@@ -33,7 +33,7 @@ interface McpPermission {
 
 const PROFILE_FIELDS: EditableField[] = [
   { key: 'name', label: 'Name', editable: true },
-  { key: 'email', label: 'Email', editable: false },
+  { key: 'email', label: 'Email', editable: true, type: 'email' },
   { key: 'dateOfBirth', label: 'Date of Birth', editable: true, type: 'date' },
   { key: 'location', label: 'Location', editable: true },
   { key: 'occupation', label: 'Occupation', editable: true },
@@ -327,6 +327,15 @@ export default function SettingsPage() {
   const saveField = async (fieldKey: string) => {
     if (!user?.id || !profile) return;
 
+    // Client-side email validation
+    if (fieldKey === 'email') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(editValue.trim())) {
+        setSaveStatus({ type: 'error', message: 'Please enter a valid email address' });
+        return;
+      }
+    }
+
     setIsSaving(true);
     setSaveStatus(null);
 
@@ -581,10 +590,11 @@ export default function SettingsPage() {
                               </select>
                             ) : (
                               <input
-                                type={field.type === 'date' ? 'date' : 'text'}
+                                type={field.type === 'date' ? 'date' : field.type === 'email' ? 'email' : 'text'}
                                 value={editValue}
                                 onChange={(e) => setEditValue(e.target.value)}
                                 className="input-field max-w-sm"
+                                placeholder={field.type === 'email' ? 'Enter new email address' : undefined}
                                 autoFocus
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter') saveField(field.key);
