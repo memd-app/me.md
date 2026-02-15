@@ -79,6 +79,7 @@ export default function VerificationPage() {
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [historyState, setHistoryState] = useState<HistoryState | null>(null);
   const [privacyUpdating, setPrivacyUpdating] = useState<string | null>(null);
+  const [agreementUpdating, setAgreementUpdating] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!user) return;
@@ -330,6 +331,63 @@ export default function VerificationPage() {
     } finally {
       setPrivacyUpdating(null);
     }
+  };
+
+  const handleSetAgreement = async (insightId: string, score: number) => {
+    if (!user) return;
+    setAgreementUpdating(insightId);
+    try {
+      const res = await fetch(`/api/insights/${insightId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id,
+        },
+        body: JSON.stringify({ agreementScore: score }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to update agreement score');
+      }
+
+      const data = await res.json();
+      const updatedScore = data.insight.agreementScore;
+
+      // Update in pending insights
+      setPendingInsights(prev =>
+        prev.map(i =>
+          i.id === insightId ? { ...i, agreementScore: updatedScore, updatedAt: data.insight.updatedAt } : i
+        )
+      );
+      // Update in verified insights
+      setVerifiedInsights(prev =>
+        prev.map(i =>
+          i.id === insightId ? { ...i, agreementScore: updatedScore, updatedAt: data.insight.updatedAt } : i
+        )
+      );
+    } catch (err) {
+      console.error('Failed to update agreement score:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update agreement score');
+    } finally {
+      setAgreementUpdating(null);
+    }
+  };
+
+  const getAgreementColor = (score: number | null): string => {
+    if (score === null) return 'bg-gray-200 dark:bg-gray-700';
+    if (score >= 8) return 'bg-green-500';
+    if (score >= 5) return 'bg-amber-500';
+    return 'bg-red-500';
+  };
+
+  const getAgreementLabel = (score: number | null): string => {
+    if (score === null) return 'Not rated';
+    if (score >= 9) return 'Strongly agree';
+    if (score >= 7) return 'Agree';
+    if (score >= 5) return 'Somewhat agree';
+    if (score >= 3) return 'Somewhat disagree';
+    return 'Strongly disagree';
   };
 
   const getActionLabel = (action: string): string => {
@@ -794,6 +852,48 @@ export default function VerificationPage() {
                   </svg>
                   {insight.privacyTier === 'never_export' ? 'Never Export' : 'Exportable'}
                 </button>
+              </div>
+
+              {/* Agreement Scale 1-10 */}
+              <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    Agreement: {getAgreementLabel(insight.agreementScore)}
+                  </span>
+                  {insight.agreementScore !== null && (
+                    <span className={`text-xs font-bold ${
+                      insight.agreementScore >= 7 ? 'text-green-600 dark:text-green-400' :
+                      insight.agreementScore >= 4 ? 'text-amber-600 dark:text-amber-400' :
+                      'text-red-600 dark:text-red-400'
+                    }`}>
+                      {insight.agreementScore}/10
+                    </span>
+                  )}
+                </div>
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(score => (
+                    <button
+                      key={score}
+                      onClick={() => handleSetAgreement(insight.id, score)}
+                      disabled={agreementUpdating === insight.id}
+                      className={`flex-1 h-7 rounded text-xs font-medium transition-all ${
+                        insight.agreementScore === score
+                          ? `${getAgreementColor(score)} text-white ring-2 ring-offset-1 ring-offset-gray-50 dark:ring-offset-gray-800 ${
+                              score >= 8 ? 'ring-green-400' : score >= 5 ? 'ring-amber-400' : 'ring-red-400'
+                            }`
+                          : insight.agreementScore !== null && score <= insight.agreementScore
+                            ? `${getAgreementColor(score)} text-white opacity-60`
+                            : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600'
+                      } ${agreementUpdating === insight.id ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
+                      title={`Set agreement to ${score}/10`}
+                    >
+                      {score}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Action buttons - hidden during edit mode */}
