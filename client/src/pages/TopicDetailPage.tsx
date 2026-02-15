@@ -11,6 +11,8 @@ interface Topic {
   priority: string;
   intent: string | null;
   trigger: string | null;
+  referenceUrls: string | null;
+  contextItems: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -61,7 +63,12 @@ export default function TopicDetailPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isStartingSession, setIsStartingSession] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [newUrl, setNewUrl] = useState('');
+  const [isAddingUrl, setIsAddingUrl] = useState(false);
+  const [urlError, setUrlError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user || !id) return;
@@ -127,12 +134,132 @@ export default function TopicDetailPage() {
     }
   };
 
+  const handleDeleteTopic = async () => {
+    if (!user || !topic) return;
+
+    setIsDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/topics/${topic.id}`, {
+        method: 'DELETE',
+        headers: { 'x-user-id': user.id },
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to delete topic');
+      }
+
+      // Navigate back to topics list after successful deletion
+      navigate('/app/topics', { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete topic');
+      setShowDeleteConfirm(false);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const parseTags = (tagsStr: string | null): string[] => {
     if (!tagsStr) return [];
     try {
       return JSON.parse(tagsStr);
     } catch {
       return [];
+    }
+  };
+
+  const parseReferenceUrls = (urlsStr: string | null): string[] => {
+    if (!urlsStr) return [];
+    try {
+      return JSON.parse(urlsStr);
+    } catch {
+      return [];
+    }
+  };
+
+  const isValidUrl = (url: string): boolean => {
+    try {
+      const parsed = new URL(url);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  };
+
+  const handleAddUrl = async () => {
+    if (!user || !topic) return;
+
+    const trimmedUrl = newUrl.trim();
+    if (!trimmedUrl) {
+      setUrlError('Please enter a URL');
+      return;
+    }
+
+    if (!isValidUrl(trimmedUrl)) {
+      setUrlError('Please enter a valid URL (starting with http:// or https://)');
+      return;
+    }
+
+    const currentUrls = parseReferenceUrls(topic.referenceUrls);
+    if (currentUrls.includes(trimmedUrl)) {
+      setUrlError('This URL has already been added');
+      return;
+    }
+
+    setIsAddingUrl(true);
+    setUrlError(null);
+    try {
+      const updatedUrls = [...currentUrls, trimmedUrl];
+      const res = await fetch(`/api/topics/${topic.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id,
+        },
+        body: JSON.stringify({ referenceUrls: updatedUrls }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to add URL');
+      }
+
+      const data = await res.json();
+      setTopic(data.topic);
+      setNewUrl('');
+    } catch (err) {
+      setUrlError(err instanceof Error ? err.message : 'Failed to add URL');
+    } finally {
+      setIsAddingUrl(false);
+    }
+  };
+
+  const handleRemoveUrl = async (urlToRemove: string) => {
+    if (!user || !topic) return;
+
+    const currentUrls = parseReferenceUrls(topic.referenceUrls);
+    const updatedUrls = currentUrls.filter(url => url !== urlToRemove);
+
+    try {
+      const res = await fetch(`/api/topics/${topic.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id,
+        },
+        body: JSON.stringify({ referenceUrls: updatedUrls }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to remove URL');
+      }
+
+      const data = await res.json();
+      setTopic(data.topic);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove URL');
     }
   };
 
@@ -167,6 +294,7 @@ export default function TopicDetailPage() {
   if (!topic) return null;
 
   const tags = parseTags(topic.tags);
+  const referenceUrls = parseReferenceUrls(topic.referenceUrls);
   const activeSessions = sessions.filter(s => s.status === 'active');
   const completedSessions = sessions.filter(s => s.status === 'completed');
 
@@ -232,8 +360,74 @@ export default function TopicDetailPage() {
               )}
             </div>
           </div>
+
+          {/* Delete button */}
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="ml-4 p-2 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 transition-colors shrink-0"
+            title="Delete topic"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-dark-card rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Delete Topic
+              </h3>
+            </div>
+
+            <p className="text-gray-600 dark:text-gray-400 mb-2">
+              Are you sure you want to delete <span className="font-semibold text-gray-900 dark:text-white">&quot;{topic.title}&quot;</span>?
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-500 mb-4">
+              This will permanently delete this topic and all associated data including:
+            </p>
+            <ul className="text-sm text-gray-500 dark:text-gray-500 mb-6 list-disc list-inside space-y-1">
+              {sessions.length > 0 && <li>{sessions.length} session{sessions.length !== 1 ? 's' : ''} and their messages</li>}
+              <li>All notes and distilled content</li>
+              <li>All extracted insights</li>
+              <li>Knowledge graph connections</li>
+            </ul>
+
+            <div className="flex items-center gap-3 justify-end">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteTopic}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg transition-colors flex items-center gap-2"
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete Topic'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Start Session CTA */}
       <div className="card mb-6 border-primary-200 dark:border-primary-800 bg-primary-50/50 dark:bg-primary-900/10">
@@ -266,6 +460,99 @@ export default function TopicDetailPage() {
             )}
           </button>
         </div>
+      </div>
+
+      {/* Reference URLs */}
+      <div className="card mb-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          Reference URLs
+        </h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          Add reference URLs as context for this topic. These will be used by the AI during interview sessions.
+        </p>
+
+        {/* Add URL form */}
+        <div className="flex gap-2 mb-4">
+          <div className="flex-1">
+            <input
+              type="url"
+              value={newUrl}
+              onChange={(e) => {
+                setNewUrl(e.target.value);
+                setUrlError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddUrl();
+                }
+              }}
+              placeholder="https://example.com/article"
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+              disabled={isAddingUrl}
+            />
+            {urlError && (
+              <p className="mt-1 text-xs text-red-500 dark:text-red-400">{urlError}</p>
+            )}
+          </div>
+          <button
+            onClick={handleAddUrl}
+            disabled={isAddingUrl || !newUrl.trim()}
+            className="btn-primary flex items-center gap-1.5 shrink-0 text-sm px-4"
+          >
+            {isAddingUrl ? (
+              <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            )}
+            Add URL
+          </button>
+        </div>
+
+        {/* URL list */}
+        {referenceUrls.length === 0 ? (
+          <div className="text-center py-6 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
+            <svg className="w-8 h-8 mx-auto text-gray-400 dark:text-gray-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              No reference URLs added yet. Add URLs to provide context for AI interviews.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {referenceUrls.map((url, index) => (
+              <div
+                key={`${url}-${index}`}
+                className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 group"
+              >
+                <svg className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 text-sm text-primary-600 dark:text-primary-400 hover:underline truncate"
+                  title={url}
+                >
+                  {url}
+                </a>
+                <button
+                  onClick={() => handleRemoveUrl(url)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 shrink-0"
+                  title="Remove URL"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Session history */}
