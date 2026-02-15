@@ -289,6 +289,7 @@ profileRouter.get('/summary', async (req, res) => {
     }
 
     // Get all verified insights with exportable privacy tier, joined with topic titles
+    // Excludes insights marked as 'never_export' so profile summary respects privacy settings
     const verifiedInsights = db.select({
       content: insights.content,
       topicTitle: topics.title,
@@ -299,7 +300,8 @@ profileRouter.get('/summary', async (req, res) => {
       .where(
         and(
           eq(insights.userId, userId),
-          eq(insights.verificationStatus, 'verified')
+          eq(insights.verificationStatus, 'verified'),
+          eq(insights.privacyTier, 'exportable')
         )
       )
       .orderBy(desc(insights.confidenceScore))
@@ -333,7 +335,8 @@ profileRouter.post('/regenerate', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Get all verified insights joined with topics
+    // Get all verified exportable insights joined with topics
+    // Respects privacy tier settings - excludes 'never_export' insights
     const verifiedInsights = db.select({
       content: insights.content,
       topicTitle: topics.title,
@@ -344,7 +347,8 @@ profileRouter.post('/regenerate', async (req, res) => {
       .where(
         and(
           eq(insights.userId, userId),
-          eq(insights.verificationStatus, 'verified')
+          eq(insights.verificationStatus, 'verified'),
+          eq(insights.privacyTier, 'exportable')
         )
       )
       .orderBy(desc(insights.confidenceScore))
