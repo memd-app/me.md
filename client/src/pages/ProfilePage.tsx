@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLocation } from 'react-router-dom';
 import VerifiedBadge from '@/components/VerifiedBadge';
 
 interface ProfileSection {
@@ -83,16 +84,19 @@ function SectionCard({
 
 export default function ProfilePage() {
   const { user } = useAuth();
+  const location = useLocation();
   const [summary, setSummary] = useState<ProfileSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const previousInsightCount = useRef<number | null>(null);
+  const isMounted = useRef(true);
 
-  const fetchSummary = useCallback(async () => {
+  const fetchSummary = useCallback(async (showLoadingState = true) => {
     if (!user) return;
     try {
-      setLoading(true);
+      if (showLoadingState) setLoading(true);
       setError(null);
       const res = await fetch('/api/profile/summary', {
         headers: { 'x-user-id': user.id },
@@ -101,17 +105,47 @@ export default function ProfilePage() {
         throw new Error('Failed to fetch profile summary');
       }
       const data = await res.json();
-      setSummary(data.summary);
+      if (isMounted.current) {
+        setSummary(data.summary);
+        previousInsightCount.current = data.summary.totalVerifiedInsights;
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load profile');
+      if (isMounted.current) {
+        setError(err instanceof Error ? err.message : 'Failed to load profile');
+      }
     } finally {
-      setLoading(false);
+      if (isMounted.current && showLoadingState) {
+        setLoading(false);
+      }
     }
   }, [user]);
 
+  // Fetch on mount and when navigating back to this page
   useEffect(() => {
+    isMounted.current = true;
     fetchSummary();
-  }, [fetchSummary]);
+    return () => { isMounted.current = false; };
+  }, [fetchSummary, location.key]);
+
+  // Auto-refresh when tab regains focus (user may have verified insights in another tab/page)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && user) {
+        fetchSummary(false);
+      }
+    };
+    const handleFocus = () => {
+      if (user) {
+        fetchSummary(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [fetchSummary, user]);
 
   const handleRegenerate = async () => {
     if (!user) return;
@@ -183,7 +217,7 @@ export default function ProfilePage() {
       <div className="max-w-4xl mx-auto">
         <div className="card bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
           <p className="text-red-700 dark:text-red-300">{error}</p>
-          <button onClick={fetchSummary} className="btn-primary mt-3">
+          <button onClick={() => fetchSummary()} className="btn-primary mt-3">
             Retry
           </button>
         </div>
@@ -336,11 +370,14 @@ export default function ProfilePage() {
       {/* Generated at timestamp */}
       {summary && summary.generatedAt && (
         <p className="mt-6 text-xs text-gray-400 dark:text-gray-500 text-center">
-          Profile generated{' '}
+          Profile auto-generated from verified insights &middot; Last updated{' '}
           {new Date(summary.generatedAt).toLocaleString('en-US', {
             dateStyle: 'medium',
             timeStyle: 'short',
           })}
+          <span className="block mt-1 text-gray-400 dark:text-gray-600">
+            Profile updates automatically when insights are verified, edited, or removed
+          </span>
         </p>
       )}
     </div>
