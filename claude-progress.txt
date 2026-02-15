@@ -1,3 +1,47 @@
+## Session - 2026-02-15 (Agent handling Features #65 and #72)
+
+### Accomplished
+- Feature #65 (Edit insight inline with immediate save): PASSING
+  - Added Edit button alongside Approve/Reject on each insight card in VerificationPage
+  - Clicking Edit activates inline edit mode: content text becomes editable textarea
+  - Save/Cancel buttons appear with Escape key shortcut to cancel
+  - Save calls PUT /api/insights/:id which:
+    - Updates insight content in database
+    - Creates verification_history record with action='edited', previousContent, newContent
+  - Content updates immediately in UI after save
+  - Edit mode hides action buttons to prevent accidental approve/reject during editing
+  - Disabled Save button when content unchanged or empty
+  - TypeScript compiles clean, no mock data patterns
+
+- Feature #72 (Verification history audit trail): PASSING
+  - Added History button on each insight card (pushed to right side of action bar)
+  - Clicking History fetches GET /api/insights/:id which returns full verificationHistory
+  - Expandable timeline UI with:
+    - Color-coded action icons: green (verified/re-verified), red (rejected), blue (edited), purple (re-verification triggered)
+    - Timestamps for each action
+    - "Latest" badge on most recent entry
+    - Before/after content diff for edit actions
+    - Re-verification interval info for trigger actions
+  - Chronological ordering verified end-to-end
+  - Full audit trail cycle tested: verify -> edit -> re-verification trigger -> re-verify
+  - All 12 automated test assertions passed
+  - No mock data patterns in codebase
+
+### Verification
+- TypeScript compiles with zero errors (client)
+- Backend API endpoints all function correctly:
+  - POST /api/insights/:id/verify creates 'verified' or 're_verified' history record
+  - PUT /api/insights/:id creates 'edited' history record with previous/new content
+  - POST /api/insights/check-reverification creates 're_verification_triggered' records
+- No mock data patterns found in client/src or server/src
+- Data persists across server restart
+- 12/12 automated tests passed for Feature #72
+
+### Current Status
+- Features #65 and #72 both passing
+- Verification page now has full Edit + History functionality
+- Audit trail tracks all verification lifecycle events
+
 ## Session - 2026-02-15 (Agent handling Features #49 and #50)
 
 ### Accomplished
