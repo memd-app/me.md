@@ -4,6 +4,225 @@ import { useTheme } from '@/contexts/ThemeContext';
 
 const API_BASE = '/api';
 
+// ============================================
+// Privacy Tab Component
+// ============================================
+interface PrivacyInsightItem {
+  id: string;
+  content: string;
+  privacyTier: string;
+  verificationStatus: string;
+  topicTitle: string | null;
+  confidenceScore: number | null;
+}
+
+function PrivacyTab({ userId }: { userId: string }) {
+  const [insights, setInsights] = useState<PrivacyInsightItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [filter, setFilter] = useState<'all' | 'exportable' | 'never_export'>('all');
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const fetchInsights = useCallback(async () => {
+    if (!userId) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/insights?status=verified`, {
+        headers: { 'x-user-id': userId },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setInsights((data.insights || []).map((i: PrivacyInsightItem) => ({
+          id: i.id,
+          content: i.content,
+          privacyTier: i.privacyTier || 'exportable',
+          verificationStatus: i.verificationStatus,
+          topicTitle: i.topicTitle || null,
+          confidenceScore: i.confidenceScore,
+        })));
+      }
+    } catch (err) {
+      console.error('Failed to fetch insights for privacy:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    fetchInsights();
+  }, [fetchInsights]);
+
+  const togglePrivacyTier = async (insightId: string, currentTier: string) => {
+    if (!userId) return;
+    const newTier = currentTier === 'exportable' ? 'never_export' : 'exportable';
+    setTogglingId(insightId);
+    setStatus(null);
+    try {
+      const res = await fetch(`${API_BASE}/insights/${insightId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': userId,
+        },
+        body: JSON.stringify({ privacyTier: newTier }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to update privacy tier');
+      }
+      setInsights(prev => prev.map(i =>
+        i.id === insightId ? { ...i, privacyTier: newTier } : i
+      ));
+      setStatus({
+        type: 'success',
+        message: `Insight marked as "${newTier === 'never_export' ? 'Never Export' : 'Exportable'}"`,
+      });
+      setTimeout(() => setStatus(null), 3000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update';
+      setStatus({ type: 'error', message });
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const filteredInsights = filter === 'all'
+    ? insights
+    : insights.filter(i => i.privacyTier === filter);
+
+  const exportableCount = insights.filter(i => i.privacyTier === 'exportable').length;
+  const neverExportCount = insights.filter(i => i.privacyTier === 'never_export').length;
+
+  return (
+    <div className="space-y-6">
+      {/* Privacy overview card */}
+      <div className="card">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Privacy Settings</h2>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          Control which verified insights are included in exports. Items marked as &quot;Never Export&quot; will be
+          excluded from all export formats, MCP access, and profile sharing.
+        </p>
+
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-4 mb-4">
+          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 text-center">
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">{insights.length}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Total Verified</p>
+          </div>
+          <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center">
+            <p className="text-2xl font-bold text-green-700 dark:text-green-300">{exportableCount}</p>
+            <p className="text-xs text-green-600 dark:text-green-400">Exportable</p>
+          </div>
+          <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-3 text-center">
+            <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{neverExportCount}</p>
+            <p className="text-xs text-amber-600 dark:text-amber-400">Never Export</p>
+          </div>
+        </div>
+
+        {/* Status message */}
+        {status && (
+          <div className={`mb-4 p-3 rounded-lg text-sm ${
+            status.type === 'success'
+              ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800'
+              : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
+          }`}>
+            {status.message}
+          </div>
+        )}
+
+        {/* Filter buttons */}
+        <div className="flex gap-2 mb-4">
+          {(['all', 'exportable', 'never_export'] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                filter === f
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+              }`}
+            >
+              {f === 'all' ? `All (${insights.length})` :
+               f === 'exportable' ? `Exportable (${exportableCount})` :
+               `Never Export (${neverExportCount})`}
+            </button>
+          ))}
+        </div>
+
+        {/* Insights list */}
+        {loading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="animate-pulse flex items-center gap-3 py-3">
+                <div className="h-4 w-full bg-gray-200 dark:bg-gray-700 rounded" />
+                <div className="h-6 w-12 bg-gray-200 dark:bg-gray-700 rounded-full flex-shrink-0" />
+              </div>
+            ))}
+          </div>
+        ) : filteredInsights.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-gray-500 dark:text-gray-400">
+              {insights.length === 0
+                ? 'No verified insights yet. Verify insights to manage their privacy settings.'
+                : 'No insights match this filter.'}
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100 dark:divide-dark-border">
+            {filteredInsights.map((insight) => (
+              <div key={insight.id} className="py-3 first:pt-0 last:pb-0">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-900 dark:text-gray-100 line-clamp-2">
+                      {insight.content}
+                    </p>
+                    <div className="mt-1 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+                      {insight.topicTitle && <span>Topic: {insight.topicTitle}</span>}
+                      {insight.confidenceScore != null && <span>Confidence: {insight.confidenceScore}%</span>}
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
+                        insight.privacyTier === 'never_export'
+                          ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                          : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                      }`}>
+                        {insight.privacyTier === 'never_export' ? 'Never Export' : 'Exportable'}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => togglePrivacyTier(insight.id, insight.privacyTier)}
+                    disabled={togglingId === insight.id}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${
+                      insight.privacyTier === 'exportable' ? 'bg-green-500' : 'bg-amber-500'
+                    } ${togglingId === insight.id ? 'opacity-50' : ''}`}
+                    role="switch"
+                    aria-checked={insight.privacyTier === 'exportable'}
+                    title={insight.privacyTier === 'exportable' ? 'Click to mark as Never Export' : 'Click to mark as Exportable'}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        insight.privacyTier === 'exportable' ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Export exclusion info */}
+      <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+        <p className="text-sm text-amber-800 dark:text-amber-200">
+          <strong>How it works:</strong> Items marked as &quot;Never Export&quot; are automatically excluded from:
+          profile exports (Markdown and JSON), clipboard copy, MCP tool access, and the context testing sandbox.
+          Only verified insights with the &quot;Exportable&quot; tier are shared.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 interface ProfileData {
   name: string;
   email: string;
@@ -85,6 +304,8 @@ export default function SettingsPage() {
   const [addingAgent, setAddingAgent] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmToggle, setConfirmToggle] = useState<{ id: string; agentName: string; currentEnabled: boolean } | null>(null);
+  const [confirmAddAgent, setConfirmAddAgent] = useState(false);
 
   // MCP Tools test state
   const [searchQuery, setSearchQuery] = useState('');
@@ -172,8 +393,14 @@ export default function SettingsPage() {
     }
   }, [activeTab, fetchMcpPermissions]);
 
-  const handleAddAgent = async () => {
+  const requestAddAgent = () => {
+    if (!newAgentName.trim()) return;
+    setConfirmAddAgent(true);
+  };
+
+  const handleAddAgentConfirmed = async () => {
     if (!user?.id || !newAgentName.trim()) return;
+    setConfirmAddAgent(false);
     setAddingAgent(true);
     setMcpError(null);
     setMcpSuccess(null);
@@ -205,8 +432,14 @@ export default function SettingsPage() {
     }
   };
 
-  const handleToggleAgent = async (permissionId: string, currentEnabled: boolean) => {
-    if (!user?.id) return;
+  const requestToggleAgent = (permissionId: string, agentName: string, currentEnabled: boolean) => {
+    setConfirmToggle({ id: permissionId, agentName, currentEnabled });
+  };
+
+  const handleToggleAgentConfirmed = async () => {
+    if (!user?.id || !confirmToggle) return;
+    const { id: permissionId, currentEnabled } = confirmToggle;
+    setConfirmToggle(null);
     setMcpError(null);
     setMcpSuccess(null);
     try {
@@ -236,11 +469,13 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDeleteAgent = async (permissionId: string) => {
-    if (!user?.id) return;
+  const handleDeleteAgentConfirmed = async () => {
+    if (!user?.id || !confirmDelete) return;
+    const permissionId = confirmDelete;
+    const perm = mcpPermissions.find((p) => p.id === permissionId);
+    setConfirmDelete(null);
     setMcpError(null);
     setMcpSuccess(null);
-    const perm = mcpPermissions.find((p) => p.id === permissionId);
     try {
       const res = await fetch(`${API_BASE}/mcp/permissions/${permissionId}`, {
         method: 'DELETE',
@@ -251,7 +486,6 @@ export default function SettingsPage() {
         throw new Error(data.error || 'Failed to revoke access');
       }
       setMcpPermissions((prev) => prev.filter((p) => p.id !== permissionId));
-      setConfirmDelete(null);
       setMcpSuccess(`Agent "${perm?.agentName || ''}" access revoked`);
       setTimeout(() => setMcpSuccess(null), 3000);
     } catch (err) {
@@ -1056,12 +1290,7 @@ export default function SettingsPage() {
       )}
 
       {activeTab === 'privacy' && (
-        <div className="card">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Privacy Settings</h2>
-          <p className="text-gray-600 dark:text-gray-400">
-            Control which knowledge items are included in exports. Items marked as &quot;never export&quot; will be excluded from all export formats.
-          </p>
-        </div>
+        <PrivacyTab userId={user?.id || ''} />
       )}
 
       {activeTab === 'mcp' && (
@@ -1115,12 +1344,12 @@ export default function SettingsPage() {
                     className="input-field flex-1"
                     autoFocus
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && newAgentName.trim()) handleAddAgent();
+                      if (e.key === 'Enter' && newAgentName.trim()) requestAddAgent();
                       if (e.key === 'Escape') { setShowAddForm(false); setNewAgentName(''); }
                     }}
                   />
                   <button
-                    onClick={handleAddAgent}
+                    onClick={requestAddAgent}
                     disabled={addingAgent || !newAgentName.trim()}
                     className="btn-primary text-sm px-4 py-2"
                   >
@@ -1197,7 +1426,7 @@ export default function SettingsPage() {
                       <div className="flex items-center gap-2 ml-4">
                         {/* Toggle switch */}
                         <button
-                          onClick={() => handleToggleAgent(perm.id, perm.isEnabled)}
+                          onClick={() => requestToggleAgent(perm.id, perm.agentName, perm.isEnabled)}
                           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${
                             perm.isEnabled ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
                           }`}
@@ -1212,32 +1441,15 @@ export default function SettingsPage() {
                           />
                         </button>
                         {/* Delete button */}
-                        {confirmDelete === perm.id ? (
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => handleDeleteAgent(perm.id)}
-                              className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 font-medium px-2 py-1 rounded bg-red-50 dark:bg-red-900/20"
-                            >
-                              Confirm
-                            </button>
-                            <button
-                              onClick={() => setConfirmDelete(null)}
-                              className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 px-2 py-1"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => setConfirmDelete(perm.id)}
-                            className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors p-1"
-                            title="Revoke agent access"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        )}
+                        <button
+                          onClick={() => setConfirmDelete(perm.id)}
+                          className="text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors p-1"
+                          title="Revoke agent access"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1342,6 +1554,146 @@ export default function SettingsPage() {
               <li>Revoke access at any time by deleting the connection</li>
               <li>Track when each agent last accessed your data</li>
             </ul>
+          </div>
+        </div>
+      )}
+      {/* MCP Confirmation Dialogs */}
+
+      {/* Confirm Add Agent Dialog */}
+      {confirmAddAgent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" data-testid="confirm-add-dialog">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Enable Agent Access</h3>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+              Are you sure you want to grant MCP access to:
+            </p>
+            <p className="text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700/50 rounded px-3 py-2 mb-4">
+              {newAgentName.trim()}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">
+              This agent will be able to access your verified, exportable personal context through the Model Context Protocol.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmAddAgent(false)}
+                className="btn-secondary text-sm px-4 py-2"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddAgentConfirmed}
+                className="btn-primary text-sm px-4 py-2"
+              >
+                Confirm & Add
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Toggle Agent Dialog */}
+      {confirmToggle && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" data-testid="confirm-toggle-dialog">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                confirmToggle.currentEnabled
+                  ? 'bg-amber-100 dark:bg-amber-900/30'
+                  : 'bg-green-100 dark:bg-green-900/30'
+              }`}>
+                <svg className={`w-5 h-5 ${
+                  confirmToggle.currentEnabled
+                    ? 'text-amber-600 dark:text-amber-400'
+                    : 'text-green-600 dark:text-green-400'
+                }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {confirmToggle.currentEnabled ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  )}
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {confirmToggle.currentEnabled ? 'Disable' : 'Enable'} Agent Access
+              </h3>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+              {confirmToggle.currentEnabled
+                ? 'Are you sure you want to disable MCP access for:'
+                : 'Are you sure you want to enable MCP access for:'}
+            </p>
+            <p className="text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700/50 rounded px-3 py-2 mb-4">
+              {confirmToggle.agentName}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">
+              {confirmToggle.currentEnabled
+                ? 'This agent will no longer be able to access your personal context until re-enabled.'
+                : 'This agent will be able to access your verified, exportable personal context through MCP.'}
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmToggle(null)}
+                className="btn-secondary text-sm px-4 py-2"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleToggleAgentConfirmed}
+                className={`text-sm px-4 py-2 rounded-lg font-medium text-white ${
+                  confirmToggle.currentEnabled
+                    ? 'bg-amber-600 hover:bg-amber-700'
+                    : 'bg-green-600 hover:bg-green-700'
+                }`}
+              >
+                {confirmToggle.currentEnabled ? 'Disable Access' : 'Enable Access'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Delete Agent Dialog */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" data-testid="confirm-delete-dialog">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Revoke Agent Access</h3>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+              Are you sure you want to permanently revoke MCP access for:
+            </p>
+            <p className="text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700/50 rounded px-3 py-2 mb-4">
+              {mcpPermissions.find((p) => p.id === confirmDelete)?.agentName || 'Unknown agent'}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">
+              This will permanently remove this agent connection. You can add it again later if needed.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="btn-secondary text-sm px-4 py-2"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAgentConfirmed}
+                className="btn-danger text-sm px-4 py-2"
+              >
+                Revoke Access
+              </button>
+            </div>
           </div>
         </div>
       )}
