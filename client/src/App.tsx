@@ -25,6 +25,7 @@ import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import CreateTopicPage from '@/pages/CreateTopicPage';
 import TopicDetailPage from '@/pages/TopicDetailPage';
 import SessionPage from '@/pages/SessionPage';
+import TemplatesPage from '@/pages/TemplatesPage';
 
 function App() {
   return (
@@ -65,6 +66,7 @@ function App() {
             <Route path="topics" element={<TopicsPage />} />
             <Route path="topics/new" element={<CreateTopicPage />} />
             <Route path="topics/:id" element={<TopicDetailPage />} />
+            <Route path="templates" element={<TemplatesPage />} />
             <Route path="session/new" element={<NewSessionPage />} />
             <Route path="session/:id" element={<SessionPage />} />
             <Route path="graph" element={<KnowledgeGraphPage />} />

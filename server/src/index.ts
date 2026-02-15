@@ -18,6 +18,7 @@ import { profileRouter } from './routes/profile.js';
 import { mcpRouter } from './routes/mcp.js';
 import { bookmarksRouter } from './routes/bookmarks.js';
 import { conflictsRouter } from './routes/conflicts.js';
+import { templatesRouter } from './routes/templates.js';
 
 dotenv.config();
 
@@ -57,10 +58,12 @@ app.use('/api/bookmarks', bookmarksRouter);
 // Conflicts route
 app.use('/api/conflicts', conflictsRouter);
 
+// Templates route (before catch-all notesRouter)
+app.use('/api/templates', templatesRouter);
+
 // Distillation routes (mounted under /api AFTER all more specific routes to prevent /:id catch-all conflicts)
 app.use('/api', notesRouter);
 app.use('/api/mcp', mcpRouter);
-// app.use('/api/templates', templatesRouter);
 // app.use('/api/export', exportRouter);
 
 // Error handling middleware
