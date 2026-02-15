@@ -1,3 +1,33 @@
+## Session - 2026-02-15 (Agent handling Feature #77)
+
+### Accomplished
+- Feature #77 (Knowledge graph gap visualization shows unexplored areas): PASSING
+  - Added gap/unexplored placeholder nodes to graph API (server/src/routes/graph.ts)
+  - 5 knowledge categories tracked: identity, skills, experiences, perspectives, goals
+  - Categories with no topics show as dim, dashed-border "gap" nodes with "?" icon
+  - Categories with topics show as bright, filled topic nodes (normal rendering)
+  - Clear visual distinction: gap nodes are 35% opacity with dashed borders, topic nodes are 100%
+  - Each gap node has category-specific dim color from CATEGORY_COLORS_DIM palette
+  - Clicking an unexplored node navigates to /app/topics?explore={category}
+  - Topics page shows amber gradient "Start exploring" banner with category info and CTA
+  - Banner has dismiss button that removes the explore param from URL
+  - "Show Gaps" toggle checkbox added to hide/show gap nodes
+  - Stats bar shows "N unexplored areas" count in amber text
+  - Legend updated: "Topic (explored)" and "Unexplored area" entries
+  - Graph stats API returns unexploredCategories, exploredCategories, totalCategories
+  - No mock data patterns in client/src or server/src
+  - TypeScript compiles clean (only pre-existing TopicDetailPage isPending warning)
+  - Verified with automated Playwright browser tests:
+    - 3 gap nodes visible for unexplored categories
+    - 2 topic nodes visible for explored categories
+    - Show Gaps toggle correctly hides/shows gap nodes
+    - Gap click navigates to topics page with explore param
+    - Explore banner renders with category description and CTA
+
+### Current Status
+- Feature #77 passing
+- Knowledge graph now shows complete picture including unexplored areas
+
 ## Session - 2026-02-15 (Agent handling Feature #76)
 
 ### Accomplished
