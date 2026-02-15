@@ -1,3 +1,28 @@
+## Session - 2026-02-15 (Agent handling Feature #101)
+
+### Accomplished
+- Feature #101 (MCP search_knowledge and get_context_summary tools work): PASSING
+  - Backend endpoints already existed in server/src/routes/mcp.ts
+  - GET /api/mcp/tools/search?q={query} - searches verified, exportable insights by keyword
+  - GET /api/mcp/tools/context-summary - returns portable markdown summary of verified context
+  - Added MCP Tools test UI in SettingsPage MCP tab:
+    - search_knowledge: text input + search button, displays results with topic/confidence
+    - get_context_summary: generate button, displays markdown preview with insight/topic counts
+  - Full end-to-end verification through proper API flow:
+    - Register user, set profile, create topics, create sessions, send messages
+    - Distill sessions into notes (extracts insights)
+    - Verify insights to make them verified+exportable
+    - search_knowledge returns matching verified insights with correct topic titles
+    - get_context_summary returns coherent markdown grouped by topic
+  - Confirmed search_knowledge correctly excludes never_export and unverified insights
+  - Confirmed get_context_summary only includes verified+exportable data
+  - No mock data patterns in client/src or server/src
+  - TypeScript compiles clean (only pre-existing TopicDetailPage warning)
+
+### Current Status
+- 110/209 features passing (52.6%)
+- MCP tools fully functional with real database queries
+
 ## Session - 2026-02-15 (Agent handling Feature #79)
 
 ### Accomplished
