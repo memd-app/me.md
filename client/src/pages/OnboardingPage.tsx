@@ -2,7 +2,7 @@ import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
-type OnboardingStep = 'welcome' | 'profile';
+type OnboardingStep = 'welcome' | 'profile' | 'context';
 
 interface ProfileFields {
   name: string;
@@ -20,6 +20,15 @@ interface FieldErrors {
   gender?: string;
 }
 
+interface ImportResult {
+  id: string;
+  url: string;
+  status: 'success' | 'error';
+  title?: string;
+  summary?: string;
+  error?: string;
+}
+
 const GENDER_OPTIONS = [
   { value: 'male', label: 'Male' },
   { value: 'female', label: 'Female' },
@@ -31,6 +40,7 @@ const GENDER_OPTIONS = [
 const STEPS: { key: OnboardingStep; label: string }[] = [
   { key: 'welcome', label: 'Welcome' },
   { key: 'profile', label: 'Profile' },
+  { key: 'context', label: 'Context' },
 ];
 
 export default function OnboardingPage() {
@@ -42,6 +52,7 @@ export default function OnboardingPage() {
   const [serverError, setServerError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
+  // Profile fields
   const [profileFields, setProfileFields] = useState<ProfileFields>({
     name: user?.name || '',
     dateOfBirth: user?.dateOfBirth && user.dateOfBirth !== '2000-01-01' ? user.dateOfBirth : '',
@@ -49,6 +60,12 @@ export default function OnboardingPage() {
     occupation: user?.occupation && user.occupation !== 'Unknown' ? user.occupation : '',
     gender: user?.gender && user.gender !== 'unspecified' ? user.gender : '',
   });
+
+  // Context import state
+  const [urlInput, setUrlInput] = useState('');
+  const [isProcessingUrl, setIsProcessingUrl] = useState(false);
+  const [urlError, setUrlError] = useState('');
+  const [importResults, setImportResults] = useState<ImportResult[]>([]);
 
   const currentStepIndex = STEPS.findIndex((s) => s.key === currentStep);
   const progressPercent = ((currentStepIndex + 1) / STEPS.length) * 100;
@@ -139,29 +156,8 @@ export default function OnboardingPage() {
         throw new Error(data.error || 'Failed to save profile');
       }
 
-      // Mark onboarding as complete
-      const completeRes = await fetch('/api/users/onboarding/complete', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': userId,
-        },
-      });
-
-      if (!completeRes.ok) {
-        const data = await completeRes.json();
-        throw new Error(data.error || 'Failed to complete onboarding');
-      }
-
-      const completeData = await completeRes.json();
-
-      // Update user in auth context
-      if (completeData.user) {
-        updateUser(completeData.user);
-      }
-
-      // Navigate to dashboard
-      navigate('/app', { replace: true });
+      // Move to context import step
+      setCurrentStep('context');
     } catch (err) {
       setServerError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -171,9 +167,95 @@ export default function OnboardingPage() {
 
   const handleFieldChange = (field: keyof ProfileFields, value: string) => {
     setProfileFields((prev) => ({ ...prev, [field]: value }));
-    // Clear error for this field when user starts typing
     if (fieldErrors[field]) {
       setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+    }
+  };
+
+  const handleUrlSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setUrlError('');
+
+    const trimmedUrl = urlInput.trim();
+    if (!trimmedUrl) {
+      setUrlError('Please enter a URL');
+      return;
+    }
+
+    // Validate URL format
+    try {
+      const parsed = new URL(trimmedUrl);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        setUrlError('Only http and https URLs are supported');
+        return;
+      }
+    } catch {
+      setUrlError('Please enter a valid URL (e.g., https://example.com)');
+      return;
+    }
+
+    setIsProcessingUrl(true);
+
+    try {
+      const userId = user?.id;
+      if (!userId) {
+        setUrlError('Not authenticated');
+        return;
+      }
+
+      const res = await fetch('/api/import/urls', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': userId,
+        },
+        body: JSON.stringify({ urls: [trimmedUrl] }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to process URL');
+      }
+
+      const data = await res.json();
+
+      if (data.results && data.results.length > 0) {
+        setImportResults((prev) => [...prev, ...data.results]);
+      }
+
+      setUrlInput('');
+    } catch (err) {
+      setUrlError(err instanceof Error ? err.message : 'Failed to process URL');
+    } finally {
+      setIsProcessingUrl(false);
+    }
+  };
+
+  const handleCompleteOnboarding = async () => {
+    setIsSubmitting(true);
+    try {
+      const userId = user?.id;
+      if (!userId) return;
+
+      const res = await fetch('/api/users/onboarding/complete', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': userId,
+        },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.user) {
+          updateUser(data.user);
+        }
+        navigate('/app', { replace: true });
+      }
+    } catch {
+      navigate('/app', { replace: true });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -199,7 +281,6 @@ export default function OnboardingPage() {
         navigate('/app', { replace: true });
       }
     } catch {
-      // Fallback: navigate anyway
       navigate('/app', { replace: true });
     } finally {
       setIsSubmitting(false);
@@ -222,7 +303,7 @@ export default function OnboardingPage() {
       </div>
 
       {/* Step indicators */}
-      <div className="flex justify-center gap-8 pt-6 pb-4">
+      <div className="flex justify-center gap-6 pt-6 pb-4">
         {STEPS.map((step, index) => (
           <div key={step.key} className="flex items-center gap-2">
             <div
@@ -241,7 +322,7 @@ export default function OnboardingPage() {
               )}
             </div>
             <span
-              className={`text-sm font-medium ${
+              className={`text-sm font-medium hidden sm:inline ${
                 index <= currentStepIndex
                   ? 'text-primary-600 dark:text-primary-400'
                   : 'text-gray-400 dark:text-gray-500'
@@ -256,6 +337,8 @@ export default function OnboardingPage() {
       {/* Content */}
       <div className="flex-1 flex items-start justify-center px-4 pt-4 pb-12">
         <div className="w-full max-w-lg">
+
+          {/* STEP 1: Welcome */}
           {currentStep === 'welcome' && (
             <div className="text-center">
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
@@ -269,7 +352,7 @@ export default function OnboardingPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
                 <div className="bg-white dark:bg-dark-card rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
                   <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <span className="text-2xl">💬</span>
+                    <span className="text-2xl" role="img" aria-label="Create">💬</span>
                   </div>
                   <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Create</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -279,7 +362,7 @@ export default function OnboardingPage() {
 
                 <div className="bg-white dark:bg-dark-card rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
                   <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <span className="text-2xl">✅</span>
+                    <span className="text-2xl" role="img" aria-label="Verify">✅</span>
                   </div>
                   <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Verify</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -289,7 +372,7 @@ export default function OnboardingPage() {
 
                 <div className="bg-white dark:bg-dark-card rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
                   <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <span className="text-2xl">🧠</span>
+                    <span className="text-2xl" role="img" aria-label="Manage">🧠</span>
                   </div>
                   <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Manage</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -316,6 +399,7 @@ export default function OnboardingPage() {
             </div>
           )}
 
+          {/* STEP 2: Profile Fields */}
           {currentStep === 'profile' && (
             <div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 text-center">
@@ -443,7 +527,7 @@ export default function OnboardingPage() {
                     disabled={isSubmitting}
                     className="btn-primary flex-[2] py-2.5"
                   >
-                    {isSubmitting ? 'Saving...' : 'Complete Setup'}
+                    {isSubmitting ? 'Saving...' : 'Next'}
                   </button>
                 </div>
 
@@ -456,6 +540,151 @@ export default function OnboardingPage() {
                   Skip for now
                 </button>
               </form>
+            </div>
+          )}
+
+          {/* STEP 3: Context Import */}
+          {currentStep === 'context' && (
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 text-center">
+                Import existing context
+              </h2>
+              <p className="text-gray-600 dark:text-gray-400 mb-6 text-center">
+                Optionally import content from URLs to give the AI more context about you. This step is optional.
+              </p>
+
+              {/* URL Import */}
+              <div className="bg-white dark:bg-dark-card rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">Import from URL</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Add links to your blog, portfolio, LinkedIn, or any page about you
+                    </p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleUrlSubmit} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={urlInput}
+                    onChange={(e) => {
+                      setUrlInput(e.target.value);
+                      setUrlError('');
+                    }}
+                    className="input-field flex-1"
+                    placeholder="https://example.com/about-me"
+                    disabled={isProcessingUrl}
+                  />
+                  <button
+                    type="submit"
+                    disabled={isProcessingUrl || !urlInput.trim()}
+                    className="btn-primary px-4 py-2 whitespace-nowrap"
+                  >
+                    {isProcessingUrl ? (
+                      <span className="flex items-center gap-2">
+                        <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        Processing...
+                      </span>
+                    ) : (
+                      'Add URL'
+                    )}
+                  </button>
+                </form>
+
+                {urlError && (
+                  <p className="mt-2 text-xs text-red-500">{urlError}</p>
+                )}
+              </div>
+
+              {/* Import Results */}
+              {importResults.length > 0 && (
+                <div className="space-y-3 mb-6">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Imported Content ({importResults.length})
+                  </h4>
+                  {importResults.map((result, idx) => (
+                    <div
+                      key={result.id || idx}
+                      className={`rounded-lg p-4 border ${
+                        result.status === 'success'
+                          ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800'
+                          : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800'
+                      }`}
+                    >
+                      {result.status === 'success' ? (
+                        <>
+                          <div className="flex items-center gap-2 mb-1">
+                            <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span className="font-medium text-sm text-gray-900 dark:text-white">
+                              {result.title || 'Untitled Page'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 truncate">
+                            {result.url}
+                          </p>
+                          {result.summary && (
+                            <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-3">
+                              {result.summary}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                          <div>
+                            <span className="text-sm text-red-700 dark:text-red-400">
+                              Failed to process: {result.url}
+                            </span>
+                            {result.error && (
+                              <p className="text-xs text-red-500 mt-0.5">{result.error}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Navigation buttons */}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep('profile')}
+                  className="flex-1 py-2.5 px-4 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={handleCompleteOnboarding}
+                  disabled={isSubmitting}
+                  className="btn-primary flex-[2] py-2.5"
+                >
+                  {isSubmitting ? 'Finishing...' : importResults.length > 0 ? 'Complete Setup' : 'Skip & Complete Setup'}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSkipOnboarding}
+                disabled={isSubmitting}
+                className="w-full text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors mt-4"
+              >
+                Skip for now
+              </button>
             </div>
           )}
         </div>

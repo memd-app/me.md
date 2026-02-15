@@ -7,6 +7,7 @@ import { healthRouter } from './routes/health.js';
 import { authRouter } from './routes/auth.js';
 import { topicsRouter } from './routes/topics.js';
 import { usersRouter } from './routes/users.js';
+import { importRouter } from './routes/import.js';
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ app.use('/api/health', healthRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/topics', topicsRouter);
 app.use('/api/users', usersRouter);
+app.use('/api/import', importRouter);
 
 // TODO: Add remaining routes as they are implemented
 // app.use('/api/sessions', sessionsRouter);
@@ -40,7 +42,6 @@ app.use('/api/users', usersRouter);
 // app.use('/api/bookmarks', bookmarksRouter);
 // app.use('/api/mcp', mcpRouter);
 // app.use('/api/templates', templatesRouter);
-// app.use('/api/import', importRouter);
 // app.use('/api/export', exportRouter);
 
 // Error handling middleware
