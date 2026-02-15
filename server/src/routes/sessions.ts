@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../config/database.js';
-import { sessions, messages, topics } from '../models/schema.js';
+import { sessions, messages, topics, conceptNodes } from '../models/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -94,6 +94,70 @@ sessionsRouter.post('/', async (req, res) => {
   } catch (error) {
     console.error('Create session error:', error);
     res.status(500).json({ error: 'Failed to create session', details: error instanceof Error ? error.message : 'Unknown error' });
+  }
+});
+
+// POST /api/sessions/mini - Create a mini (quick-win) session with auto-created topic
+sessionsRouter.post('/mini', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string || req.body.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    // Auto-create a topic for the mini session
+    const topicId = uuidv4();
+    const newTopic = db.insert(topics).values({
+      id: topicId,
+      userId,
+      title: 'Quick Win: Getting to Know You',
+      description: 'A quick 5-minute session to establish your initial personal profile.',
+      intent: 'explore',
+      status: 'in_progress',
+      tags: JSON.stringify(['quick-win', 'starter-profile', 'onboarding']),
+      priority: 'high',
+    }).returning().get();
+
+    // Create the session with isMiniSession: true
+    const sessionId = uuidv4();
+    const newSession = db.insert(sessions).values({
+      id: sessionId,
+      topicId,
+      userId,
+      status: 'active',
+      isMiniSession: true,
+      timeSpentSeconds: 0,
+      researchData: null,
+    }).returning().get();
+
+    // Create the special opening AI message for mini sessions
+    const openingContent = `Welcome to your **Quick Win session**! In the next few minutes, I'll ask you 5-7 high-impact questions to build your starter profile. Let's dive right in!\n\n**What do you do for work, and what's the most interesting aspect of it?**`;
+
+    const openingMessageId = uuidv4();
+    const openingMessage = db.insert(messages).values({
+      id: openingMessageId,
+      sessionId,
+      role: 'assistant',
+      content: openingContent,
+      quickReplies: JSON.stringify([
+        "I'll share my work story",
+        "I'd rather talk about my passions first",
+        "Ask me about what drives me"
+      ]),
+      suggestsCompletion: false,
+      isBookmarked: false,
+      isVoiceInput: false,
+    }).returning().get();
+
+    res.status(201).json({
+      session: newSession,
+      topic: newTopic,
+      messages: [openingMessage],
+    });
+  } catch (error) {
+    console.error('Create mini session error:', error);
+    res.status(500).json({ error: 'Failed to create mini session', details: error instanceof Error ? error.message : 'Unknown error' });
   }
 });
 
@@ -212,27 +276,49 @@ sessionsRouter.post('/:id/messages', async (req, res) => {
     const hasResearchContext = !!session.researchData;
 
     const historyForAI = conversationHistory.map(m => ({ role: m.role, content: m.content }));
-    const aiResponseContent = generateAIResponse(
-      topic?.title || 'Unknown Topic',
-      topic?.description || '',
-      topic?.intent || '',
-      historyForAI,
-      hasResearchContext
-    );
-
-    // Generate context-aware quick replies using the AI response and conversation history
     const userMessageCount = conversationHistory.filter(m => m.role === 'user').length;
-    const quickRepliesArr = generateQuickReplies(userMessageCount, aiResponseContent, historyForAI);
 
-    // AI suggests completion after 10+ user message exchanges (thorough conversation)
-    const shouldSuggestCompletion = userMessageCount >= 10;
+    let aiResponseContent: string;
+    let quickRepliesArr: string[];
+    let shouldSuggestCompletion: boolean;
+
+    if (session.isMiniSession) {
+      // Mini session: use focused quick-win questions
+      const miniResponse = generateMiniSessionAIResponse(userMessageCount, content, historyForAI);
+      aiResponseContent = miniResponse.content;
+      quickRepliesArr = miniResponse.quickReplies;
+
+      // Mini sessions suggest completion after 5 messages, wrap up after 7
+      shouldSuggestCompletion = userMessageCount >= 5;
+
+      if (userMessageCount >= 7) {
+        aiResponseContent += '\n\n---\n\n*Great work! We\'ve gathered enough for your **starter profile**. Click **Finish & Distill** to generate your initial insights and knowledge graph.*';
+      }
+    } else {
+      // Standard session: use methodology-based questioning
+      aiResponseContent = generateAIResponse(
+        topic?.title || 'Unknown Topic',
+        topic?.description || '',
+        topic?.intent || '',
+        historyForAI,
+        hasResearchContext
+      );
+      quickRepliesArr = generateQuickReplies(userMessageCount, aiResponseContent, historyForAI);
+
+      // AI suggests completion after 10+ user message exchanges (thorough conversation)
+      shouldSuggestCompletion = userMessageCount >= 10;
+    }
 
     const aiMessageId = uuidv4();
+    const finalContent = (!session.isMiniSession && shouldSuggestCompletion)
+      ? aiResponseContent + '\n\n---\n\n*We\'ve explored many angles together. Feel free to **continue exploring** if there\'s more to uncover, or **finish and distill** to capture your insights.*'
+      : aiResponseContent;
+
     const aiMessage = db.insert(messages).values({
       id: aiMessageId,
       sessionId,
       role: 'assistant',
-      content: shouldSuggestCompletion ? aiResponseContent + '\n\n---\n\n*We\'ve explored many angles together. Feel free to **continue exploring** if there\'s more to uncover, or **finish and distill** to capture your insights.*' : aiResponseContent,
+      content: finalContent,
       quickReplies: JSON.stringify(quickRepliesArr),
       suggestsCompletion: shouldSuggestCompletion,
       isBookmarked: false,
@@ -378,19 +464,40 @@ sessionsRouter.post('/:id/messages/stream', async (req, res) => {
 
     const hasResearchContext = !!session.researchData;
     const historyForAI = conversationHistory.map(m => ({ role: m.role, content: m.content }));
-    const aiResponseContent = generateAIResponse(
-      topic?.title || 'Unknown Topic',
-      topic?.description || '',
-      topic?.intent || '',
-      historyForAI,
-      hasResearchContext
-    );
-
     const userMessageCount = conversationHistory.filter(m => m.role === 'user').length;
-    const quickRepliesArr = generateQuickReplies(userMessageCount, aiResponseContent, historyForAI);
-    const shouldSuggestCompletion = userMessageCount >= 10;
 
-    const finalContent = shouldSuggestCompletion
+    let aiResponseContent: string;
+    let quickRepliesArr: string[];
+    let shouldSuggestCompletion: boolean;
+
+    if (session.isMiniSession) {
+      // Mini session: use focused quick-win questions
+      const miniResponse = generateMiniSessionAIResponse(userMessageCount, content, historyForAI);
+      aiResponseContent = miniResponse.content;
+      quickRepliesArr = miniResponse.quickReplies;
+
+      // Mini sessions suggest completion after 5 messages, wrap up after 7
+      shouldSuggestCompletion = userMessageCount >= 5;
+
+      if (userMessageCount >= 7) {
+        aiResponseContent += '\n\n---\n\n*Great work! We\'ve gathered enough for your **starter profile**. Click **Finish & Distill** to generate your initial insights and knowledge graph.*';
+      }
+    } else {
+      // Standard session: use methodology-based questioning
+      aiResponseContent = generateAIResponse(
+        topic?.title || 'Unknown Topic',
+        topic?.description || '',
+        topic?.intent || '',
+        historyForAI,
+        hasResearchContext
+      );
+      quickRepliesArr = generateQuickReplies(userMessageCount, aiResponseContent, historyForAI);
+
+      // AI suggests completion after 10+ user message exchanges (thorough conversation)
+      shouldSuggestCompletion = userMessageCount >= 10;
+    }
+
+    const finalContent = (!session.isMiniSession && shouldSuggestCompletion)
       ? aiResponseContent + '\n\n---\n\n*We\'ve explored many angles together. Feel free to **continue exploring** if there\'s more to uncover, or **finish and distill** to capture your insights.*'
       : aiResponseContent;
 
@@ -1060,4 +1167,88 @@ function generateQuickReplies(
   ];
 
   return contextualSets[(messageCount - 2) % contextualSets.length];
+}
+
+// ============================================
+// Mini Session AI Response Generator
+// ============================================
+
+// High-impact question areas for quick-win mini sessions
+const MINI_SESSION_QUESTIONS: Array<{ area: string; question: string; quickReplies: string[] }> = [
+  {
+    area: 'Career/Work Identity',
+    question: '**What do you do for work, and what\'s the most interesting aspect of it?**',
+    quickReplies: ["I'll share my work story", "I'd rather talk about my passions first", "Ask me about what drives me"],
+  },
+  {
+    area: 'Core Values',
+    question: '**What matters most to you in life right now, and why?**',
+    quickReplies: ["Family and relationships come first", "Growth and learning drive me", "Making an impact is what counts"],
+  },
+  {
+    area: 'Communication Style',
+    question: '**How do you prefer to communicate with others -- are you more direct, collaborative, or reflective?**',
+    quickReplies: ["I'm pretty direct and to the point", "I like to collaborate and brainstorm", "I tend to listen first, then respond"],
+  },
+  {
+    area: 'Decision-Making',
+    question: '**When you face a tough decision, what\'s your go-to approach?**',
+    quickReplies: ["I go with my gut instinct", "I research and analyze thoroughly", "I talk it through with people I trust"],
+  },
+  {
+    area: 'Strengths & Uniqueness',
+    question: '**What do people most often come to you for -- what\'s your superpower?**',
+    quickReplies: ["I'm great at solving problems", "People come to me for advice", "I bring energy and ideas to the table"],
+  },
+  {
+    area: 'Goals & Aspirations',
+    question: '**What\'s one goal or aspiration that excites you right now?**',
+    quickReplies: ["I want to grow in my career", "I'm focused on personal development", "I have a creative project in mind"],
+  },
+  {
+    area: 'Relationships & Community',
+    question: '**Who are the most important people in your life, and what role do they play?**',
+    quickReplies: ["My family is everything", "I have a tight circle of close friends", "My professional network shapes me a lot"],
+  },
+];
+
+// Generate a concise mini-session AI response (2-3 sentences reflection + 1 bold question)
+function generateMiniSessionAIResponse(
+  userMessageCount: number,
+  lastUserMessage: string,
+  conversationHistory: Array<{ role: string; content: string }>
+): { content: string; quickReplies: string[] } {
+  // Pick the next question area based on how many user messages we've received
+  const questionIndex = Math.min(userMessageCount, MINI_SESSION_QUESTIONS.length - 1);
+  const nextQ = MINI_SESSION_QUESTIONS[questionIndex];
+
+  // Build a short reflection on what the user just said
+  const keyPhrases = extractKeyPhrases(lastUserMessage);
+  const keyPhrase = keyPhrases.length > 0 ? keyPhrases[0] : '';
+
+  let reflection: string;
+  if (userMessageCount === 0) {
+    reflection = `Thanks for sharing that!`;
+  } else if (keyPhrase) {
+    const reflections = [
+      `That's a great insight about **${keyPhrase}** -- it says a lot about what drives you.`,
+      `I can see **${keyPhrase}** is meaningful to you. That's really helpful context.`,
+      `Interesting -- **${keyPhrase}** clearly shapes how you see things. Noted!`,
+      `Love that perspective on **${keyPhrase}**. It paints a clear picture.`,
+      `**${keyPhrase}** stands out as significant for you. That's valuable.`,
+    ];
+    reflection = reflections[userMessageCount % reflections.length];
+  } else {
+    const genericReflections = [
+      `Thanks for sharing that -- it gives me a clearer picture of who you are.`,
+      `That's really insightful. I can see how that shapes your perspective.`,
+      `Great answer! That tells me a lot about how you think.`,
+      `I appreciate the honesty there. It's really helpful for your profile.`,
+      `That's a strong perspective. Let me keep building on this.`,
+    ];
+    reflection = genericReflections[userMessageCount % genericReflections.length];
+  }
+
+  const content = `${reflection}\n\n${nextQ.question}`;
+  return { content, quickReplies: nextQ.quickReplies };
 }

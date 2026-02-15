@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../config/database.js';
-import { notes, sessions, topics, messages, insights } from '../models/schema.js';
+import { notes, sessions, topics, messages, insights, conceptNodes } from '../models/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -107,6 +107,21 @@ notesRouter.post('/sessions/:sessionId/distill', async (req, res) => {
         sourceSessionId: sessionId,
       }).returning().get();
       savedInsights.push(saved);
+    }
+
+    // For mini sessions, also create concept nodes in the knowledge graph for each insight
+    if (session.isMiniSession) {
+      for (const saved of savedInsights) {
+        const nodeId = uuidv4();
+        db.insert(conceptNodes).values({
+          id: nodeId,
+          userId,
+          topicId: session.topicId,
+          insightId: saved.id,
+          label: saved.content.substring(0, 60),
+          weight: (saved.confidenceScore ?? 50) / 100,
+        }).run();
+      }
     }
 
     // Return the updated session too
