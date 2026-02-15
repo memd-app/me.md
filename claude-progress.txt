@@ -1,3 +1,30 @@
+## Session - 2026-02-15 (Agent handling Features #30 and #182)
+
+### Accomplished
+- Feature #30 (Delete topic cascades to related data): PASSING
+  - Enhanced DELETE /api/topics/:id to count related data before cascade deletion
+  - Returns cascaded counts: sessions, messages, notes, insights, connections, conceptNodes, bookmarks
+  - Added delete button (trash icon) and confirmation dialog to TopicDetailPage
+  - Confirmation dialog shows what will be cascade-deleted
+  - On successful deletion, navigates back to /app/topics
+  - Verified via API: create topic+session → delete topic → all related data gone (404s)
+
+- Feature #182 (Deleting an item makes it disappear from all views): PASSING
+  - Created server/src/routes/dashboard.ts with real API endpoints:
+    - GET /api/dashboard/stats: returns counts for topics, sessions, completedSessions, insights, verifiedInsights, notes
+    - GET /api/dashboard/activity: returns recent sessions with topic titles (limit 10)
+  - Registered dashboard router in server/src/index.ts
+  - Updated client/src/pages/DashboardPage.tsx to fetch real stats from API (replaced static UI)
+  - Fixed route mounting order: moved search and dashboard routes ABOVE the catch-all notesRouter at /api
+  - Verified end-to-end: create topic+session → stats show 1/1 → delete topic → all views show 0/empty
+  - All views confirmed: Topics list, Dashboard stats, Dashboard activity, Insights list, Insights stats
+
+### Verification
+- TypeScript: client compiles clean, server has only pre-existing database.ts type export issue
+- No mock data patterns in new files (dashboard.ts, DashboardPage.tsx)
+- All API endpoints tested with curl
+- Cascade deletion verified with proper data cleanup
+
 ## Session - 2026-02-15 (Agent handling Features #33 and #208)
 
 ### Accomplished
