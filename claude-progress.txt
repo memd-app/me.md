@@ -1,3 +1,61 @@
+## Session 14 - 2026-02-15 (Agent handling Features #41 and #51)
+
+### Accomplished
+- Feature #41 (Finish and Distill button for early session completion): PASSING
+  - Added "Finish & Distill" button to SessionPage header (visible when session is active and has 1+ user messages)
+  - Created server/src/routes/notes.ts with full distillation and notes API:
+    - POST /api/sessions/:id/distill - complete session and generate distilled note in all 4 formats
+    - POST /api/sessions/:id/distill/regenerate - switch selected format
+    - GET /api/notes - list all notes for user
+    - GET /api/notes/:id - get specific note with insights
+    - GET /api/notes/session/:sessionId - get note by session ID
+    - PUT /api/notes/:id - edit note content
+  - Registered notesRouter in server/src/index.ts
+  - Session status changes to 'completed' with completedAt timestamp
+  - Topic status changes to 'extracted' after distillation
+  - Input area hidden when session is completed (isSessionActive check)
+  - Completion suggestion banner when AI suggests finishing (10+ exchanges)
+  - "View Notes" button appears for completed sessions with notes
+  - Session completed banner with timestamp shown for completed sessions
+  - Distilling indicator animation while processing
+  - Data persists across server restart
+
+- Feature #51 (Session distillation generates Full Analysis format): PASSING
+  - Full Analysis format includes all 5 required sections:
+    1. Context: topic description, message count, exchange count
+    2. Core Principles: extracted user quotes as blockquotes
+    3. Mental Models & Frameworks: key concepts + decision-making patterns with quotes
+    4. Key Examples: user examples and experiences as blockquotes
+    5. Open Questions & Tensions: uncertainty areas + further exploration questions
+  - Uses user's exact language and direct quotes throughout
+  - Note saved in database with content_full_analysis populated
+  - Also generates Brief Summary, Decision Framework, and JSON formats simultaneously
+  - Format selector UI allows switching between all 4 formats
+  - Extracts insights from user messages with confidence scoring (50-95 range)
+  - Insights saved to insights table with unverified status
+  - Tested with 11-message session (5 user + 6 AI), produced rich analysis
+
+### Verification
+- TypeScript type check passes (client: zero errors, server: only pre-existing database.ts error)
+- Server starts and health check returns OK
+- POST /api/sessions/:id/distill creates note with all 4 formats, extracts insights, completes session
+- GET /api/notes/session/:id returns note and insights after distillation
+- Data persists across server restart (note and insights intact)
+- No mock data patterns in server/src or client/src
+- Test data created, verified, and cleaned up
+
+### Current Status
+- 21/209 features passing (Features #1-6, #7-11, #13-14, #20, #35, #36, #41, #51, #185, + others by other agents)
+- Notes/distillation API fully operational
+- Session completion flow: Finish & Distill -> note generation -> insights extraction -> view notes
+- 4 distillation formats: Full Analysis, Brief Summary, Decision Framework, JSON
+
+### What to Work on Next
+- Continue with next assigned features from orchestrator
+- Key areas: verification system, knowledge graph, profile summary
+- Brief Summary and Decision Framework format verification features
+- Note editing and export functionality
+
 ## Session 13 - 2026-02-15 (Agent handling Features #12 and #179)
 
 ### Accomplished
