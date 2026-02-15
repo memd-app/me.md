@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react';
+import { useState, useMemo, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -9,6 +9,7 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [validationError, setValidationError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
   const { register, error, clearError } = useAuth();
   const navigate = useNavigate();
 
@@ -18,6 +19,16 @@ export default function RegisterPage() {
     if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pw)) return 'Password must contain at least 1 special character';
     return null;
   };
+
+  // Real-time password requirement checks
+  const passwordChecks = useMemo(() => {
+    if (!password) return { length: false, number: false, special: false };
+    return {
+      length: password.length >= 8,
+      number: /\d/.test(password),
+      special: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password),
+    };
+  }, [password]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -113,14 +124,57 @@ export default function RegisterPage() {
                 type="password"
                 required
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => { setPassword(e.target.value); setPasswordTouched(true); }}
+                onBlur={() => setPasswordTouched(true)}
                 className="input-field"
                 placeholder="Min 8 chars, 1 number, 1 special char"
                 autoComplete="new-password"
               />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                At least 8 characters, 1 number, and 1 special character
-              </p>
+              {/* Real-time password requirement indicators */}
+              <div className="mt-2 space-y-1">
+                <div className="flex items-center gap-1.5 text-xs" data-testid="pw-check-length">
+                  {password.length > 0 || passwordTouched ? (
+                    passwordChecks.length ? (
+                      <svg className="w-3.5 h-3.5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    ) : (
+                      <svg className="w-3.5 h-3.5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    )
+                  ) : (
+                    <span className="w-3.5 h-3.5 flex items-center justify-center text-gray-400">•</span>
+                  )}
+                  <span className={password.length > 0 || passwordTouched ? (passwordChecks.length ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400') : 'text-gray-500 dark:text-gray-400'}>
+                    At least 8 characters
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs" data-testid="pw-check-number">
+                  {password.length > 0 || passwordTouched ? (
+                    passwordChecks.number ? (
+                      <svg className="w-3.5 h-3.5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    ) : (
+                      <svg className="w-3.5 h-3.5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    )
+                  ) : (
+                    <span className="w-3.5 h-3.5 flex items-center justify-center text-gray-400">•</span>
+                  )}
+                  <span className={password.length > 0 || passwordTouched ? (passwordChecks.number ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400') : 'text-gray-500 dark:text-gray-400'}>
+                    At least 1 number
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs" data-testid="pw-check-special">
+                  {password.length > 0 || passwordTouched ? (
+                    passwordChecks.special ? (
+                      <svg className="w-3.5 h-3.5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    ) : (
+                      <svg className="w-3.5 h-3.5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    )
+                  ) : (
+                    <span className="w-3.5 h-3.5 flex items-center justify-center text-gray-400">•</span>
+                  )}
+                  <span className={password.length > 0 || passwordTouched ? (passwordChecks.special ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400') : 'text-gray-500 dark:text-gray-400'}>
+                    At least 1 special character
+                  </span>
+                </div>
+              </div>
             </div>
 
             <div>
