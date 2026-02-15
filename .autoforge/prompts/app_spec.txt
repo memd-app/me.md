@@ -1,0 +1,849 @@
+<project_specification>
+  <project_name>me.md</project_name>
+
+  <overview>
+    me.md is a personal knowledge system that helps users build, verify, and manage a comprehensive understanding of themselves through AI-guided conversations — designed to be consumed by AI agents as portable, verified personal context. The platform uses structured interviews with proven questioning methodologies (Socratic, Clean Language, Appreciative Inquiry) to actively extract personal knowledge, then puts users in full control through human-in-the-loop verification of every insight. The result is a living knowledge graph and exportable personal context that makes any AI tool write, decide, and act like the user — with 95%+ accuracy instead of the 53-67% offered by passive memory systems.
+  </overview>
+
+  <technology_stack>
+    <frontend>
+      <framework>React</framework>
+      <styling>Tailwind CSS with dark/light mode support</styling>
+      <state_management>React Context + useReducer for global state</state_management>
+      <routing>React Router v6</routing>
+      <graph_visualization>D3.js force-directed graph for knowledge graph</graph_visualization>
+      <voice_input>Web Speech API (SpeechRecognition) for voice-to-text</voice_input>
+      <markdown>react-markdown for rendering distilled notes</markdown>
+    </frontend>
+    <backend>
+      <runtime>Node.js with Express</runtime>
+      <database>SQLite with better-sqlite3</database>
+      <orm>Drizzle ORM</orm>
+      <ai_provider>Anthropic Claude Sonnet 4.5 via API</ai_provider>
+      <authentication>Firebase Auth (Google Sign-In + email/password)</authentication>
+      <file_upload>Multer for file handling</file_upload>
+      <mcp>@modelcontextprotocol/sdk for MCP server</mcp>
+    </backend>
+    <communication>
+      <api>REST API with JSON</api>
+      <realtime>Server-Sent Events (SSE) for streaming AI responses</realtime>
+    </communication>
+  </technology_stack>
+
+  <prerequisites>
+    <environment_setup>
+      - Node.js 20+ and npm
+      - Firebase project with Auth configured (Google provider + email/password)
+      - Anthropic API key for Claude Sonnet 4.5
+      - SQLite3 available on system
+    </environment_setup>
+  </prerequisites>
+
+  <feature_count>185</feature_count>
+
+  <security_and_access_control>
+    <user_roles>
+      <role name="user">
+        <permissions>
+          - Full access to own profile, topics, sessions, notes, insights
+          - Can create, edit, delete own content
+          - Can export own verified context
+          - Can manage privacy tiers on own knowledge
+          - Can control MCP access permissions
+          - Cannot access other users' data
+        </permissions>
+        <protected_routes>
+          - /app/* (authenticated users only)
+          - /settings (authenticated users only)
+          - /profile (authenticated users only)
+          - /graph (authenticated users only)
+          - /verify (authenticated users only)
+          - /sandbox (authenticated users only)
+          - /export (authenticated users only)
+        </protected_routes>
+      </role>
+    </user_roles>
+    <authentication>
+      <method>Google Sign-In via Firebase + email/password</method>
+      <session_timeout>Persistent session with Firebase token refresh</session_timeout>
+      <password_requirements>Minimum 8 characters, at least 1 number and 1 special character</password_requirements>
+    </authentication>
+    <sensitive_operations>
+      - Delete account requires password confirmation
+      - Export all data requires authentication verification
+      - MCP access permission changes require confirmation
+    </sensitive_operations>
+  </security_and_access_control>
+
+  <core_features>
+    <infrastructure>
+      - Database connection established
+      - Database schema applied correctly
+      - Data persists across server restart
+      - No mock data patterns in codebase
+      - Backend API queries real database
+    </infrastructure>
+
+    <landing_page>
+      - Landing page with product description, value proposition, and three pillars (Create, Verify, Manage)
+      - Closed beta CTA with waitlist signup (email collection)
+      - Responsive layout for mobile and desktop
+      - Dark/light mode support on landing page
+      - Social proof and feature highlights sections
+      - Smooth scroll navigation between sections
+    </landing_page>
+
+    <authentication_and_account>
+      - Google Sign-In via Firebase
+      - Email/password registration with validation
+      - Email/password login
+      - Password reset flow via email
+      - Protected route redirects to sign-in
+      - Session persistence across tabs and browser close
+      - Account settings page
+      - Change email address
+      - Change password
+      - Delete account and all associated data with confirmation
+      - Logout functionality
+      - Auth error handling (invalid credentials, network failure, duplicate email)
+    </authentication_and_account>
+
+    <onboarding>
+      - Welcome screen with guided introduction explaining Create/Verify/Manage
+      - Required profile fields: name, date of birth, location, occupation, gender
+      - Profile field validation (required fields, date format, etc.)
+      - Context import via links/URLs (user pastes URLs for AI to reference)
+      - Context import via file upload (documents, PDFs, text files)
+      - Context import via paste text (free-form text input)
+      - Context import via ChatGPT memory extraction (provide prompt user can copy to ChatGPT)
+      - AI processing and summarization of imported context
+      - Preset topic selection (choose 3-5 starter topics from 16 presets)
+      - Topic category browsing across 5 categories (Identity, Skills, Experiences, Perspectives, Goals)
+      - Onboarding progress indicator
+      - Skip/complete onboarding flow option
+      - Empty state with guided prompts for first session
+      - Onboarding data saved persistently to database
+    </onboarding>
+
+    <quick_win_mini_session>
+      - 5-minute mini interview with 5-7 high-impact questions
+      - Generates starter profile with first verified insights
+      - Creates first knowledge graph node immediately after completion
+    </quick_win_mini_session>
+
+    <topic_management>
+      - View all topics with status indicators on dashboard
+      - Create custom topic with title, description, tags, intent (articulate/explore/decide/document), and trigger
+      - 16 preset topics across 5 categories with suggested opening questions
+      - Topic status lifecycle: backlog → scheduled → in_progress → extracted → refined
+      - Topic priority setting (low/medium/high)
+      - Edit topic details
+      - Delete topic with cascade to connected insights, notes, and sessions
+      - Topic tags for knowledge graph connections
+      - Add reference URLs to topics as context
+      - Add context items (URLs or text) to topics
+      - Filter and sort topics by status, category, priority
+      - Topic detail view with session history and related insights
+    </topic_management>
+
+    <use_case_templates>
+      - Goal-oriented interview templates for specific AI use cases (e.g., "Teach AI to write emails like me," "Teach AI my management style," "Teach AI how I give feedback")
+      - Templates include pre-configured prompts designed to extract knowledge mapping to common AI tasks
+      - Template browsing and selection interface
+      - Template-based sessions produce insights tagged with their AI use case
+    </use_case_templates>
+
+    <interview_sessions>
+      - Start new session from any topic
+      - Chat-style message interface (ChatGPT-like)
+      - AI interviewer using methodology-based questioning (Clean Language, Socratic Method, 5 Whys, Appreciative Inquiry, Micro-phenomenology)
+      - AI reflection (2-4 sentences acknowledging what user said) + single focused question per response
+      - Quick reply suggestions: 3 per response, personalized, first-person voice, under 15 words
+      - Quick replies auto-send on tap/click (no confirmation step)
+      - Quick replies personalized using knowledge graph data and previous session answers
+      - Breadth-first navigation across interview map angles (touch multiple topics, go deep when interest sparks)
+      - Profile context injection: AI knows what has been explored before and references it
+      - Cross-topic referencing: AI connects threads across different topics during interview
+      - Bold key concepts in each question
+      - Pause and resume sessions with gap-aware greetings
+      - Session auto-save: messages saved to database as they go (no data loss on browser close)
+      - AI completion signal when conversation reaches natural end (most angles explored, 10+ exchanges)
+      - "Finish & Distill" button for early completion
+      - Option to continue past AI completion suggestion
+      - Pre-interview context processing when user provides URLs/text context on the topic
+      - Default interview map when no research provided (journey, principles, frameworks, examples, tensions)
+      - Voice input for answers via Web Speech API (speech-to-text)
+      - Fullscreen session view (distraction-free)
+      - AI retry button on failure with session preservation
+      - Error handling: auto-save on AI call failure, clear error message, retry option
+      - Loading/thinking states during AI response generation
+      - Streaming AI responses via SSE for real-time feel
+    </interview_sessions>
+
+    <session_bookmarks>
+      - Bookmark/star any message during an interview to mark "aha moments"
+      - Bookmarked moments weighted higher during distillation
+      - Browsable collection of bookmarked moments across all sessions
+    </session_bookmarks>
+
+    <distillation_and_notes>
+      - Session summary generation after completion
+      - Full Analysis format: Context, Core Principles, Mental Models & Frameworks, Key Examples, Open Questions & Tensions
+      - Brief Summary format: TL;DR, Key Takeaways, One Thing to Remember
+      - Decision Framework format: Decision Context, Guiding Principles, Decision Criteria, Red Flags, Green Lights
+      - JSON structured data format with principles, frameworks, examples, decisions, tags
+      - User selects visible format; all formats generated and saved as data
+      - Note editing in markdown
+      - Regenerate note in a different format
+      - Faithful extraction using user's exact language and direct quotes
+      - Multi-bucket extraction: AI scores relevance (0-100) to other existing topics
+      - User reviews and selects cross-topic links from multi-bucket suggestions
+      - Save note to cloud (primary storage)
+      - Export individual note as markdown file
+      - Copy note content to clipboard
+    </distillation_and_notes>
+
+    <verification_system>
+      - Dedicated verification tab/page in main navigation
+      - Per-note review: view full distilled note with approve/edit options
+      - Per-insight swipe cards: individual insight cards with approve/reject/edit actions
+      - Confidence score displayed per insight
+      - Source session reference shown for each insight (which session, which date)
+      - 1-10 agreement scale option for nuanced verification
+      - Approve action (marks insight as verified)
+      - Reject action (removes insight from profile)
+      - Edit insight inline with immediate save
+      - Verified status badge on approved insights throughout the app
+      - Time-based re-verification triggers (1-4 weeks for situational, 3-6 months for preferences, 6-12 months for core traits)
+      - Re-verification badge distinguishing re-checks from new insights in the verification queue
+      - Re-verification items integrated into the standard verification flow
+      - Batch verification: review multiple insights in a continuous flow
+      - Verification history/audit trail (when verified, when re-verified, edits made)
+      - Unverified vs verified state management across the app
+    </verification_system>
+
+    <insight_conflict_detection>
+      - Automatic detection of contradictory insights across different sessions/topics
+      - Conflict surfaced to user with both contradicting statements shown side by side
+      - Resolution options: "Both true in different contexts" / "This one is outdated" / "Let me clarify"
+      - Resolved conflicts update the knowledge graph accordingly
+    </insight_conflict_detection>
+
+    <knowledge_graph>
+      - Dedicated knowledge graph tab/page in main navigation
+      - Visual interactive force-directed graph using D3.js
+      - Dual-level nodes: topic-level nodes containing concept-level sub-nodes
+      - Node size reflects depth of knowledge (more sessions and verified insights = larger node)
+      - Edges from shared tags, multi-bucket links, and concept relationships
+      - Click node to navigate to topic detail or insight
+      - Hover node for preview tooltip (topic title, insight count, last updated)
+      - Gap visualization: unexplored categories visible as dim/empty placeholder nodes
+      - Real-time graph update when new insights are verified
+      - Graph recalibration when insights are edited or deleted
+      - Responsive graph rendering on mobile (touch-friendly)
+    </knowledge_graph>
+
+    <profile_summary>
+      - Auto-generated comprehensive profile summary page
+      - Personal portrait section: values, beliefs, core traits
+      - Communication style summary with specific patterns and preferences
+      - Decision-making patterns and frameworks
+      - Strengths and expertise overview
+      - Tone of voice analysis with examples
+      - Key themes and connections visualized across topics
+      - Profile auto-updates as new insights are verified
+      - Profile recalibrates when insights are edited or deleted
+      - Export full profile as me.md markdown file
+    </profile_summary>
+
+    <context_testing_sandbox>
+      - Dedicated sandbox page to test verified context effectiveness
+      - User inputs a prompt (e.g., "Write an email declining a meeting")
+      - System runs the prompt twice: once with verified context, once without
+      - Side-by-side comparison of outputs showing the difference
+      - Clear labeling: "Without your context" vs "With your me.md context"
+      - Ability to try multiple prompts to see context impact
+    </context_testing_sandbox>
+
+    <search_and_discovery>
+      - Global search across topics, insights, session transcripts, and notes
+      - Search result snippets with surrounding context highlighted
+      - Filter by topic category
+      - Filter by verification status (verified/unverified/re-verification pending)
+      - Filter by date range
+      - Filter by confidence score
+      - Search result keyword highlighting
+      - Responsive search interface on mobile
+    </search_and_discovery>
+
+    <settings_and_preferences>
+      - Dark/light mode toggle with preference persisted
+      - Notification preferences (re-verification reminders)
+      - Session length defaults (suggested interview duration)
+      - Privacy tiers: mark specific knowledge items as "never export"
+      - Data export settings and preferences
+      - Account information display and edit
+      - Settings persistence across sessions and devices
+    </settings_and_preferences>
+
+    <export_and_sharing>
+      - Export full verified profile as markdown file (me.md format)
+      - Export profile as JSON structured data
+      - Copy profile to clipboard
+      - Download profile as file (markdown or JSON)
+      - Privacy tier filtering on export: automatically excludes "never export" items
+      - Export format selection (markdown, JSON, or both)
+    </export_and_sharing>
+
+    <mcp_server>
+      - MCP server setup using official @modelcontextprotocol/sdk
+      - user://profile resource serving verified profile context as structured data
+      - user://knowledge/{topic} resource serving topic-level knowledge and insights
+      - search_knowledge tool for semantic search across verified insights
+      - get_context_summary tool returning portable me.md context as markdown
+      - User-controlled access permissions for MCP connections (enable/disable, view connected agents)
+    </mcp_server>
+
+    <dashboard_and_analytics>
+      - Knowledge completeness by category with visual progress bars
+      - Number of topics explored vs total available (preset + custom)
+      - Total verified insights count
+      - Session history timeline
+      - Insights per topic breakdown
+      - Verification rate (approved vs rejected percentage)
+      - Recent activity feed (latest sessions, verifications, exports)
+      - Dashboard responsive on mobile
+    </dashboard_and_analytics>
+
+    <responsive_and_mobile>
+      - Fully responsive layout across desktop (1920px), tablet (768px), and mobile (375px)
+      - Mobile-optimized chat/interview interface with bottom input
+      - Touch-friendly quick reply buttons sized for mobile
+      - Mobile navigation (hamburger menu or bottom navigation bar)
+      - Mobile-optimized knowledge graph with touch pan/zoom
+      - Mobile-optimized verification swipe cards with touch gestures
+    </responsive_and_mobile>
+  </core_features>
+
+  <database_schema>
+    <tables>
+      <users>
+        - id (primary key, UUID)
+        - firebase_uid (unique, from Firebase Auth)
+        - email (unique)
+        - name (required)
+        - date_of_birth (required)
+        - location (required)
+        - occupation (required)
+        - gender (required)
+        - onboarding_completed (boolean, default false)
+        - imported_context (text, JSON - stores processed imports)
+        - theme_preference (enum: light/dark, default light)
+        - notification_preferences (text, JSON)
+        - session_length_default (integer, minutes)
+        - created_at (timestamp)
+        - updated_at (timestamp)
+      </users>
+
+      <topics>
+        - id (primary key, UUID)
+        - user_id (foreign key → users.id)
+        - title (required)
+        - description (text)
+        - tags (text, JSON array)
+        - status (enum: backlog/scheduled/in_progress/extracted/refined)
+        - priority (enum: low/medium/high)
+        - intent (enum: articulate/explore/decide/document)
+        - trigger (text)
+        - reference_urls (text, JSON array)
+        - context_items (text, JSON array)
+        - is_preset (boolean)
+        - preset_category (enum: identity/skills/experiences/perspectives/goals, nullable)
+        - use_case_template_id (foreign key → use_case_templates.id, nullable)
+        - created_at (timestamp)
+        - updated_at (timestamp)
+      </topics>
+
+      <use_case_templates>
+        - id (primary key, UUID)
+        - title (required, e.g., "Teach AI to write emails like me")
+        - description (text)
+        - ai_use_case_tag (text, e.g., "email_writing", "management_style")
+        - interview_prompts (text, JSON - pre-configured prompts)
+        - created_at (timestamp)
+      </use_case_templates>
+
+      <sessions>
+        - id (primary key, UUID)
+        - topic_id (foreign key → topics.id)
+        - user_id (foreign key → users.id)
+        - status (enum: active/paused/completed/abandoned)
+        - is_mini_session (boolean, default false)
+        - time_spent_seconds (integer, default 0)
+        - research_data (text, JSON - pre-interview research if any)
+        - interview_map (text, JSON - angles to explore)
+        - created_at (timestamp)
+        - updated_at (timestamp)
+        - completed_at (timestamp, nullable)
+      </sessions>
+
+      <messages>
+        - id (primary key, UUID)
+        - session_id (foreign key → sessions.id)
+        - role (enum: user/assistant)
+        - content (text, required)
+        - quick_replies (text, JSON array of 3 suggestions, nullable)
+        - suggests_completion (boolean, default false)
+        - is_bookmarked (boolean, default false)
+        - is_voice_input (boolean, default false)
+        - created_at (timestamp)
+      </messages>
+
+      <notes>
+        - id (primary key, UUID)
+        - session_id (foreign key → sessions.id)
+        - topic_id (foreign key → topics.id)
+        - user_id (foreign key → users.id)
+        - title (text)
+        - content_full_analysis (text, markdown)
+        - content_brief_summary (text, markdown)
+        - content_decision_framework (text, markdown)
+        - content_json (text, structured JSON)
+        - selected_format (enum: full_analysis/brief_summary/decision_framework/json)
+        - created_at (timestamp)
+        - updated_at (timestamp)
+      </notes>
+
+      <insights>
+        - id (primary key, UUID)
+        - note_id (foreign key → notes.id)
+        - topic_id (foreign key → topics.id)
+        - user_id (foreign key → users.id)
+        - content (text, the insight statement)
+        - confidence_score (integer, 0-100)
+        - verification_status (enum: unverified/verified/rejected/re_verification_pending)
+        - agreement_score (integer, 1-10, nullable)
+        - privacy_tier (enum: exportable/never_export, default exportable)
+        - source_session_id (foreign key → sessions.id)
+        - verified_at (timestamp, nullable)
+        - re_verify_at (timestamp, nullable - next scheduled re-verification)
+        - re_verify_interval (enum: weekly/monthly/quarterly/biannual/annual)
+        - created_at (timestamp)
+        - updated_at (timestamp)
+      </insights>
+
+      <insight_conflicts>
+        - id (primary key, UUID)
+        - user_id (foreign key → users.id)
+        - insight_a_id (foreign key → insights.id)
+        - insight_b_id (foreign key → insights.id)
+        - resolution_status (enum: unresolved/both_true_different_contexts/a_outdated/b_outdated/clarified)
+        - resolution_note (text, nullable)
+        - created_at (timestamp)
+        - resolved_at (timestamp, nullable)
+      </insight_conflicts>
+
+      <topic_connections>
+        - id (primary key, UUID)
+        - source_topic_id (foreign key → topics.id)
+        - target_topic_id (foreign key → topics.id)
+        - connection_type (enum: multi_bucket/tag_shared/ai_detected)
+        - relevance_score (integer, 0-100)
+        - created_at (timestamp)
+      </topic_connections>
+
+      <concept_nodes>
+        - id (primary key, UUID)
+        - user_id (foreign key → users.id)
+        - topic_id (foreign key → topics.id)
+        - insight_id (foreign key → insights.id, nullable)
+        - label (text, the concept name)
+        - weight (real, node importance/depth)
+        - created_at (timestamp)
+        - updated_at (timestamp)
+      </concept_nodes>
+
+      <concept_edges>
+        - id (primary key, UUID)
+        - source_node_id (foreign key → concept_nodes.id)
+        - target_node_id (foreign key → concept_nodes.id)
+        - relationship (text, description of the connection)
+        - weight (real, edge strength)
+        - created_at (timestamp)
+      </concept_edges>
+
+      <verification_history>
+        - id (primary key, UUID)
+        - insight_id (foreign key → insights.id)
+        - action (enum: verified/rejected/edited/re_verified/re_rejected)
+        - previous_content (text, nullable - for edits)
+        - new_content (text, nullable - for edits)
+        - created_at (timestamp)
+      </verification_history>
+
+      <bookmarks>
+        - id (primary key, UUID)
+        - user_id (foreign key → users.id)
+        - message_id (foreign key → messages.id)
+        - session_id (foreign key → sessions.id)
+        - created_at (timestamp)
+      </bookmarks>
+
+      <mcp_access_permissions>
+        - id (primary key, UUID)
+        - user_id (foreign key → users.id)
+        - agent_name (text)
+        - is_enabled (boolean, default true)
+        - last_accessed_at (timestamp, nullable)
+        - created_at (timestamp)
+        - updated_at (timestamp)
+      </mcp_access_permissions>
+
+      <imported_files>
+        - id (primary key, UUID)
+        - user_id (foreign key → users.id)
+        - filename (text)
+        - file_type (text)
+        - processed_content (text, AI-extracted summary)
+        - created_at (timestamp)
+      </imported_files>
+    </tables>
+  </database_schema>
+
+  <api_endpoints_summary>
+    <auth>
+      - POST /api/auth/register (email/password registration)
+      - POST /api/auth/login (email/password login)
+      - POST /api/auth/google (Google Sign-In token verification)
+      - POST /api/auth/logout
+      - POST /api/auth/reset-password
+      - GET /api/auth/me (current user)
+      - DELETE /api/auth/account (delete account with confirmation)
+    </auth>
+
+    <users>
+      - GET /api/users/profile
+      - PUT /api/users/profile (update profile fields)
+      - PUT /api/users/preferences (update settings/theme/notifications)
+      - POST /api/users/onboarding (save onboarding data)
+      - PUT /api/users/onboarding/complete
+    </users>
+
+    <context_import>
+      - POST /api/import/text (paste text context)
+      - POST /api/import/urls (submit URLs for processing)
+      - POST /api/import/files (upload files)
+      - GET /api/import/status (processing status)
+    </context_import>
+
+    <topics>
+      - GET /api/topics (list all user topics with filters)
+      - POST /api/topics (create custom topic)
+      - GET /api/topics/presets (list preset topics)
+      - GET /api/topics/:id (topic detail with sessions and insights)
+      - PUT /api/topics/:id (update topic)
+      - DELETE /api/topics/:id (delete topic with cascade)
+    </topics>
+
+    <use_case_templates>
+      - GET /api/templates (list available use-case templates)
+      - GET /api/templates/:id (template detail)
+      - POST /api/topics/from-template/:templateId (create topic from template)
+    </use_case_templates>
+
+    <sessions>
+      - POST /api/sessions (start new session for a topic)
+      - GET /api/sessions/:id (get session with messages)
+      - PUT /api/sessions/:id/pause
+      - PUT /api/sessions/:id/resume
+      - PUT /api/sessions/:id/complete
+      - PUT /api/sessions/:id/abandon
+      - POST /api/sessions/mini (start quick-win mini session)
+    </sessions>
+
+    <messages>
+      - POST /api/sessions/:id/messages (send user message, get AI response via SSE)
+      - GET /api/sessions/:id/messages (get all messages)
+      - PUT /api/messages/:id/bookmark (toggle bookmark)
+    </messages>
+
+    <distillation>
+      - POST /api/sessions/:id/distill (generate distilled note)
+      - POST /api/sessions/:id/distill/regenerate (regenerate in different format)
+      - GET /api/sessions/:id/multi-bucket (get cross-topic relevance scores)
+      - POST /api/sessions/:id/multi-bucket (save selected cross-topic links)
+    </distillation>
+
+    <notes>
+      - GET /api/notes (list all notes with filters)
+      - GET /api/notes/:id (note detail)
+      - PUT /api/notes/:id (edit note content)
+      - DELETE /api/notes/:id
+      - GET /api/notes/:id/export (export single note as markdown)
+    </notes>
+
+    <insights>
+      - GET /api/insights (list insights with filters: status, topic, confidence)
+      - GET /api/insights/pending (get unverified and re-verification-pending insights)
+      - PUT /api/insights/:id/verify (approve insight)
+      - PUT /api/insights/:id/reject (reject insight)
+      - PUT /api/insights/:id/edit (edit and re-verify)
+      - PUT /api/insights/:id/agreement (set 1-10 agreement score)
+      - PUT /api/insights/:id/privacy (set privacy tier)
+      - GET /api/insights/conflicts (get detected conflicts)
+      - PUT /api/insights/conflicts/:id/resolve (resolve a conflict)
+    </insights>
+
+    <knowledge_graph>
+      - GET /api/graph (get full graph data: nodes, edges, topics, concepts)
+      - GET /api/graph/topic/:id (get sub-graph for specific topic)
+    </knowledge_graph>
+
+    <profile>
+      - GET /api/profile/summary (get auto-generated profile summary)
+      - POST /api/profile/regenerate (regenerate profile summary from latest insights)
+      - GET /api/profile/export/markdown (export as me.md file)
+      - GET /api/profile/export/json (export as JSON)
+    </profile>
+
+    <sandbox>
+      - POST /api/sandbox/test (run prompt with and without context, return comparison)
+    </sandbox>
+
+    <search>
+      - GET /api/search?q=&filters= (global search across all content)
+    </search>
+
+    <dashboard>
+      - GET /api/dashboard/stats (completeness, counts, verification rates)
+      - GET /api/dashboard/activity (recent activity feed)
+    </dashboard>
+
+    <bookmarks>
+      - GET /api/bookmarks (list all bookmarked messages)
+    </bookmarks>
+
+    <mcp>
+      - GET /api/mcp/permissions (list MCP access permissions)
+      - PUT /api/mcp/permissions/:id (update permission)
+      - DELETE /api/mcp/permissions/:id (revoke access)
+    </mcp>
+
+    <health>
+      - GET /api/health (server and database health check)
+    </health>
+  </api_endpoints_summary>
+
+  <ui_layout>
+    <main_structure>
+      Sidebar navigation (collapsible on mobile to hamburger/bottom nav) with main content area.
+      The interface should feel like a modern chat application (similar to ChatGPT) with additional knowledge management views.
+
+      Sidebar navigation items:
+      - Dashboard (home/overview with stats and activity)
+      - Topics (browse, create, manage topics)
+      - New Session (quick access to start an interview)
+      - Knowledge Graph (visual interactive graph)
+      - Profile (auto-generated profile summary)
+      - Verification (pending insights queue)
+      - Sandbox (test your context)
+      - Bookmarks (saved aha moments)
+      - Search (global search)
+      - Export (export options)
+      - Settings (preferences, account, MCP permissions)
+    </sidebar>
+
+    <key_screens>
+      - Landing Page: Marketing page with CTA for closed beta signup
+      - Sign In / Register: Firebase auth forms
+      - Onboarding Flow: Multi-step wizard (profile fields → context import → topic selection)
+      - Dashboard: Stats cards, progress bars, activity feed, quick-start buttons
+      - Topics List: Card grid with status badges, filters, sort controls
+      - Topic Detail: Topic info, session history, related insights, connected topics
+      - Interview Session: Fullscreen chat interface with quick replies, voice input button, bookmark star, finish button
+      - Distillation View: Formatted note with format selector, cross-topic linking, save/export actions
+      - Verification Queue: Card-based swipe interface with approve/reject/edit, confidence score, source reference
+      - Knowledge Graph: Full-page interactive D3.js graph with controls
+      - Profile Summary: Organized sections (portrait, communication, decisions, strengths, tone)
+      - Context Sandbox: Split-pane comparison with prompt input
+      - Search Results: List with snippets, filters panel, highlighting
+      - Settings: Tabbed settings (Account, Preferences, Privacy, MCP)
+    </key_screens>
+    </main_structure>
+  </ui_layout>
+
+  <design_system>
+    <color_palette>
+      Light mode: Clean white/gray backgrounds, deep navy/charcoal text, accent color (indigo/blue family) for interactive elements, green for verified/approved states, amber for pending, red for rejected/errors.
+      Dark mode: Deep charcoal/navy backgrounds, light gray/white text, same accent colors adapted for dark backgrounds.
+      Professional, trust-building aesthetic - not a wellness app. Clean and modern.
+    </color_palette>
+    <typography>
+      Sans-serif font family (Inter or similar) for UI.
+      Monospace for JSON/code exports.
+      Clear hierarchy: large headings for sections, medium for cards, readable body text.
+      Generous line-height for readability in interview messages.
+    </typography>
+    <design_principles>
+      - Conversational, not form-like: chat-style interactions feel natural
+      - Professional tool feel: competence builds trust, not excessive warmth
+      - Breathing room: generous whitespace, paragraph breaks, no walls of text
+      - Information hierarchy: most important content (questions, insights) prominent; supporting info (AI reasoning) secondary or hidden
+      - Verified = trusted: clear visual distinction between verified and unverified content throughout
+      - Mobile-first interactions: touch-friendly targets, swipe gestures, voice input
+    </design_principles>
+  </design_system>
+
+  <implementation_steps>
+    <step number="1">
+      <title>Foundation & Infrastructure</title>
+      <tasks>
+        - Set up Node.js/Express backend with SQLite database
+        - Configure Drizzle ORM with full schema
+        - Set up React frontend with Tailwind CSS
+        - Configure Firebase Auth integration
+        - Implement health endpoint and database connection verification
+        - Set up SSE for streaming AI responses
+        - Create project structure (frontend/backend separation)
+      </tasks>
+    </step>
+
+    <step number="2">
+      <title>Authentication & Onboarding</title>
+      <tasks>
+        - Implement Google Sign-In and email/password auth flows
+        - Build protected route system
+        - Create onboarding wizard (profile fields, context import, topic selection)
+        - Build landing page with closed beta signup
+        - Implement file upload and text import processing
+        - Create preset topics with categories
+      </tasks>
+    </step>
+
+    <step number="3">
+      <title>Core Interview System</title>
+      <tasks>
+        - Build chat-style session interface
+        - Implement AI interviewer with Claude Sonnet 4.5 integration
+        - Build quick reply generation and auto-send
+        - Implement interview methodology prompts (Clean Language, Socratic, etc.)
+        - Add profile context injection for cross-topic intelligence
+        - Build session lifecycle (start, pause, resume, complete)
+        - Implement auto-save and error recovery
+        - Add voice input via Web Speech API
+        - Build quick-win mini session flow
+        - Implement session bookmarks
+      </tasks>
+    </step>
+
+    <step number="4">
+      <title>Distillation & Knowledge Extraction</title>
+      <tasks>
+        - Build distillation pipeline (all 4 formats)
+        - Implement multi-bucket cross-topic extraction
+        - Create note management (view, edit, export)
+        - Build insight extraction from notes
+        - Implement concept and relationship extraction for knowledge graph
+        - Create use-case template system
+      </tasks>
+    </step>
+
+    <step number="5">
+      <title>Verification System</title>
+      <tasks>
+        - Build verification queue page
+        - Implement per-note review flow
+        - Build per-insight swipe card interface
+        - Add confidence scores and source references
+        - Implement 1-10 agreement scale
+        - Build time-based re-verification scheduling
+        - Create re-verification badge and queue integration
+        - Build verification history tracking
+        - Implement insight conflict detection and resolution
+      </tasks>
+    </step>
+
+    <step number="6">
+      <title>Knowledge Graph & Profile</title>
+      <tasks>
+        - Build D3.js force-directed knowledge graph
+        - Implement dual-level nodes (topic + concept)
+        - Add interactive features (click, hover, gap visualization)
+        - Build auto-generated profile summary page
+        - Implement profile recalibration on insight changes
+        - Add profile export as me.md markdown
+      </tasks>
+    </step>
+
+    <step number="7">
+      <title>Search, Dashboard & Sandbox</title>
+      <tasks>
+        - Build global search with filters and highlighting
+        - Create dashboard with analytics and progress
+        - Build context testing sandbox with side-by-side comparison
+        - Implement activity feed
+      </tasks>
+    </step>
+
+    <step number="8">
+      <title>Export, MCP & Settings</title>
+      <tasks>
+        - Build export system (markdown, JSON, clipboard)
+        - Implement privacy tier filtering on export
+        - Set up MCP server with resources and tools
+        - Build MCP access permission management
+        - Create settings pages (account, preferences, privacy, MCP)
+        - Implement dark/light mode
+      </tasks>
+    </step>
+
+    <step number="9">
+      <title>Mobile Optimization & Polish</title>
+      <tasks>
+        - Responsive layout optimization across all breakpoints
+        - Mobile navigation (hamburger/bottom nav)
+        - Touch-optimized interview interface
+        - Mobile knowledge graph with touch gestures
+        - Mobile verification swipe cards
+        - Performance optimization and loading states
+        - Error states and empty states throughout
+      </tasks>
+    </step>
+  </implementation_steps>
+
+  <success_criteria>
+    <functionality>
+      - Users can complete a full Create → Verify → Manage cycle end-to-end
+      - AI interviewer asks genuinely insightful, personalized questions (not generic)
+      - Quick replies feel accurate and personalized based on accumulated knowledge
+      - Knowledge graph accurately reflects relationships between topics and concepts
+      - Exported me.md context measurably improves AI output quality (sandbox proves it)
+      - MCP server successfully serves verified context to compatible AI agents
+      - All data persists reliably across sessions and server restarts
+    </functionality>
+    <user_experience>
+      - Interview experience feels like talking to a thoughtful, curious friend
+      - Verification is frictionless: swipe/tap decisions, not essay writing
+      - Onboarding gets users to their first "aha moment" within 10 minutes
+      - Quick-win mini session produces visible results (first graph node, first insights)
+      - The app works smoothly on mobile with voice input and touch gestures
+    </user_experience>
+    <technical_quality>
+      - No mock data patterns anywhere in the codebase
+      - Real database with proper schema and relationships
+      - Streaming AI responses for real-time interview feel
+      - Auto-save prevents any data loss
+      - Rate limiting prevents API abuse (100 calls/hour per user)
+      - Firebase Auth properly secures all endpoints
+      - Data isolation between users (no cross-user data access)
+    </technical_quality>
+    <design_polish>
+      - Professional, trust-building aesthetic throughout
+      - Clean dark and light modes
+      - Responsive across desktop, tablet, and mobile
+      - Consistent design language (verified badges, confidence indicators, status colors)
+      - Smooth transitions and loading states
+      - Clear empty states with actionable guidance
+    </design_polish>
+  </success_criteria>
+</project_specification>
