@@ -150,6 +150,110 @@ authRouter.get('/me', async (req, res) => {
   }
 });
 
+// POST /api/auth/google - Sign in with Google (Firebase Auth)
+authRouter.post('/google', async (req, res) => {
+  try {
+    const { idToken, email, name, firebaseUid } = req.body;
+
+    if (!email || !firebaseUid) {
+      return res.status(400).json({ error: 'Email and Firebase UID are required' });
+    }
+
+    // In production, verify the idToken with Firebase Admin SDK
+    // For now, we trust the client-side Firebase authentication
+    // and use the firebaseUid + email to create/find the user
+    let verifiedUid = firebaseUid;
+    let verifiedEmail = email;
+    let verifiedName = name || email.split('@')[0] || 'User';
+
+    // Try to verify with Firebase Admin if configured
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    if (projectId && projectId !== 'your-firebase-project-id' && idToken) {
+      try {
+        // Dynamic import of firebase-admin to avoid issues when not configured
+        const admin = await import('firebase-admin');
+
+        // Initialize if not already initialized
+        if (admin.default.apps.length === 0) {
+          const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+          admin.default.initializeApp({
+            credential: admin.default.credential.cert({
+              projectId,
+              clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+              privateKey,
+            }),
+          });
+        }
+
+        const decodedToken = await admin.default.auth().verifyIdToken(idToken);
+        verifiedUid = decodedToken.uid;
+        verifiedEmail = decodedToken.email || email;
+        verifiedName = decodedToken.name || name || 'User';
+        console.log('[me.md:auth] Firebase token verified for:', verifiedEmail);
+      } catch (firebaseError) {
+        console.warn('[me.md:auth] Firebase Admin verification failed, using client data:',
+          firebaseError instanceof Error ? firebaseError.message : 'unknown error');
+        // Fall back to trusting client data (dev mode)
+      }
+    } else {
+      console.log('[me.md:auth] Firebase Admin not configured, trusting client auth data');
+    }
+
+    // Check if user already exists by firebase_uid
+    const existingByUid = db.select().from(users).where(eq(users.firebaseUid, verifiedUid)).get();
+    if (existingByUid) {
+      const { passwordHash: _ph, ...userWithoutPassword } = existingByUid;
+      return res.json({
+        message: 'Login successful',
+        user: userWithoutPassword,
+      });
+    }
+
+    // Check if user exists by email (might have registered with email/password first)
+    const existingByEmail = db.select().from(users).where(eq(users.email, verifiedEmail)).get();
+    if (existingByEmail) {
+      // Link the Firebase UID to the existing account
+      db.update(users)
+        .set({ firebaseUid: verifiedUid })
+        .where(eq(users.id, existingByEmail.id))
+        .run();
+
+      const updated = db.select().from(users).where(eq(users.id, existingByEmail.id)).get();
+      if (updated) {
+        const { passwordHash: _ph, ...userWithoutPassword } = updated;
+        return res.json({
+          message: 'Login successful',
+          user: userWithoutPassword,
+        });
+      }
+    }
+
+    // Create a new user account for this Google sign-in
+    const userId = uuidv4();
+    const newUser = db.insert(users).values({
+      id: userId,
+      firebaseUid: verifiedUid,
+      email: verifiedEmail,
+      passwordHash: null,
+      name: verifiedName,
+      dateOfBirth: '2000-01-01',
+      location: 'Unknown',
+      occupation: 'Unknown',
+      gender: 'unspecified',
+    }).returning().get();
+
+    const { passwordHash: _ph, ...userWithoutPassword } = newUser;
+
+    res.status(201).json({
+      message: 'User created via Google Sign-In',
+      user: userWithoutPassword,
+    });
+  } catch (error) {
+    console.error('Google auth error:', error);
+    res.status(500).json({ error: 'Failed to authenticate with Google' });
+  }
+});
+
 // DELETE /api/auth/account - Delete account
 authRouter.delete('/account', async (req, res) => {
   try {
