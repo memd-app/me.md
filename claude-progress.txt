@@ -1,3 +1,33 @@
+## Session - 2026-02-15 (Agent handling Features #56 and #57)
+
+### Accomplished
+- Feature #56 (Regenerate note in different format): PASSING
+  - Server endpoint POST /api/sessions/:sessionId/distill/regenerate enhanced with regenerateContent flag
+  - When regenerateContent=true, re-reads session messages and regenerates the selected format content
+  - Old format content (other formats) is preserved in the database
+  - Client has Regenerate button in distillation toolbar with loading spinner and success message
+  - Format selector pills allow switching between 4 formats
+  - Tested end-to-end: distill, regenerate brief_summary, verify content updated and other formats preserved
+
+- Feature #57 (Edit note content in markdown): PASSING
+  - Client has Edit button in distillation toolbar that enters edit mode
+  - Edit mode shows monospace textarea pre-loaded with current format content
+  - Save button persists changes via PUT /api/notes/:id API
+  - Cancel button exits edit mode without saving
+  - Character count and help text shown below editor
+  - Success confirmation message after save
+  - Tested end-to-end: edit briefSummary, verify via GET, content persisted in database
+
+### Verification
+- TypeScript compiles clean (client: zero errors)
+- Server health check passing
+- Both features tested end-to-end via API
+- No mock data patterns found in client/src or server/src
+- Test data cleaned up after verification
+
+### Current Status
+- Features #56 and #57 both passing
+
 ## Session - 2026-02-15 (Agent handling Features #54 and #55)
 
 ### Accomplished
