@@ -37,3 +37,34 @@
 - Feature #1 (Database connection established) and #2 (Database schema applied correctly) should also be passing now
 - Continue with next assigned features
 - Remaining routes to implement: users, sessions, messages, notes, insights, graph, profile, sandbox, search, dashboard, bookmarks, mcp, templates, import, export
+
+## Session 2 - 2026-02-15 (Agent handling Features #1 and #2)
+
+### Accomplished
+- Feature #1 (Database connection established): PASSING ✅
+  - Verified server starts successfully with SQLite database
+  - GET /api/health returns 200 with status: ok, database.connected: true
+  - All 15 tables listed in health response, tableCount: 15
+  - No mock data patterns found in server/src
+
+- Feature #2 (Database schema applied correctly): PASSING ✅
+  - All 15 tables verified: users, topics, use_case_templates, sessions, messages, notes, insights, insight_conflicts, topic_connections, concept_nodes, concept_edges, verification_history, bookmarks, mcp_access_permissions, imported_files
+  - All required columns verified for key tables (users, topics, sessions, messages, insights)
+  - Foreign key relationships properly defined with ON DELETE CASCADE
+  - Schema applied on server startup via initializeSchema() in database.ts
+
+### Issues Fixed
+- better-sqlite3 ^11.3.0 failed to compile on Node 24 (arm64 macOS) due to apostrophe in project path
+- Upgraded to better-sqlite3 ^12.6.2 which has prebuilt binaries for Node 24 - no compilation needed
+- Alternative for drizzle-kit: migrations don't work due to ESM compat issues with drizzle-kit 0.25.0; using direct SQL in database.ts instead
+
+### Current Status
+- 4/209 features passing (Features #1, #2, #3, #4)
+- Server running on port 3000
+- Database fully operational with all 15 tables
+
+### Architecture Notes
+- Server: Express + tsx on port 3000
+- Database: SQLite at server/data/memd.db via better-sqlite3 v12 + Drizzle ORM
+- Schema init: SQL CREATE TABLE IF NOT EXISTS in server/src/config/database.ts
+- Client: Vite + React on port 5173
