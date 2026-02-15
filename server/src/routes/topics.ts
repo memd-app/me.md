@@ -362,6 +362,79 @@ topicsRouter.get('/:id', async (req, res) => {
   }
 });
 
+// POST /api/topics/:id/connections - Create cross-topic connections (multi-bucket)
+topicsRouter.post('/:id/connections', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const sourceTopicId = req.params.id;
+    const { connections } = req.body; // Array of { targetTopicId, relevanceScore }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    // Verify source topic belongs to user
+    const sourceTopic = db.select().from(topics).where(
+      and(eq(topics.id, sourceTopicId), eq(topics.userId, userId))
+    ).get();
+
+    if (!sourceTopic) {
+      return res.status(404).json({ error: 'Source topic not found' });
+    }
+
+    if (!connections || !Array.isArray(connections) || connections.length === 0) {
+      return res.status(400).json({ error: 'connections array is required' });
+    }
+
+    const created = [];
+    for (const conn of connections) {
+      const { targetTopicId, relevanceScore } = conn;
+
+      // Verify target topic belongs to user
+      const targetTopic = db.select().from(topics).where(
+        and(eq(topics.id, targetTopicId), eq(topics.userId, userId))
+      ).get();
+
+      if (!targetTopic) continue;
+
+      // Check for existing connection (avoid duplicates)
+      const existing = db.select().from(topicConnections).where(
+        or(
+          and(
+            eq(topicConnections.sourceTopicId, sourceTopicId),
+            eq(topicConnections.targetTopicId, targetTopicId)
+          ),
+          and(
+            eq(topicConnections.sourceTopicId, targetTopicId),
+            eq(topicConnections.targetTopicId, sourceTopicId)
+          )
+        )
+      ).get();
+
+      if (existing) continue; // Skip duplicates
+
+      const connectionId = uuidv4();
+      const saved = db.insert(topicConnections).values({
+        id: connectionId,
+        sourceTopicId,
+        targetTopicId,
+        connectionType: 'multi_bucket',
+        relevanceScore: Math.min(Math.max(relevanceScore || 0, 0), 100),
+      }).returning().get();
+
+      created.push({
+        ...saved,
+        targetTopicTitle: targetTopic.title,
+      });
+    }
+
+    res.status(201).json({ connections: created, count: created.length });
+  } catch (error) {
+    console.error('Create topic connections error:', error);
+    res.status(500).json({ error: 'Failed to create topic connections' });
+  }
+});
+
 // PUT /api/topics/:id - Update a topic
 topicsRouter.put('/:id', async (req, res) => {
   try {

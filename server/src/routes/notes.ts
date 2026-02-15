@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../config/database.js';
-import { notes, sessions, topics, messages, insights, conceptNodes } from '../models/schema.js';
-import { eq, and, desc } from 'drizzle-orm';
+import { notes, sessions, topics, messages, insights, conceptNodes, topicConnections } from '../models/schema.js';
+import { eq, and, desc, ne, or } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export const notesRouter = Router();
@@ -124,6 +124,100 @@ notesRouter.post('/sessions/:sessionId/distill', async (req, res) => {
       }
     }
 
+    // Multi-bucket cross-topic extraction: score relevance to other topics
+    const otherTopics = db.select().from(topics).where(
+      and(eq(topics.userId, userId), ne(topics.id, session.topicId))
+    ).all();
+
+    const suggestedConnections: Array<{ targetTopicId: string; topicTitle: string; relevanceScore: number }> = [];
+
+    if (otherTopics.length > 0) {
+      // Build a content summary from user messages for scoring
+      const contentSummary = userMessages
+        .map(m => m.content)
+        .join(' ')
+        .toLowerCase();
+
+      // Extract key terms from the session content
+      const contentWords = contentSummary
+        .replace(/[^a-z0-9\s]/g, '')
+        .split(/\s+/)
+        .filter(w => w.length > 3);
+
+      // Common stop words to exclude from matching
+      const stopWords = new Set(['that', 'this', 'with', 'from', 'have', 'been', 'they', 'will', 'would', 'could', 'should', 'what', 'when', 'where', 'which', 'their', 'about', 'more', 'some', 'very', 'just', 'also', 'than', 'them', 'into', 'most', 'only', 'your', 'like', 'then', 'make', 'over', 'such', 'much', 'know', 'think', 'really', 'things', 'because', 'something']);
+      const meaningfulWords = contentWords.filter(w => !stopWords.has(w));
+
+      // Build frequency map
+      const wordFreq = new Map<string, number>();
+      for (const w of meaningfulWords) {
+        wordFreq.set(w, (wordFreq.get(w) || 0) + 1);
+      }
+
+      // Get top keywords (most frequent meaningful words)
+      const topKeywords = [...wordFreq.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 20)
+        .map(([word]) => word);
+
+      for (const otherTopic of otherTopics) {
+        const topicText = `${otherTopic.title} ${otherTopic.description || ''}`.toLowerCase();
+        let topicTags: string[] = [];
+        if (otherTopic.tags) {
+          try {
+            let parsed = JSON.parse(otherTopic.tags as string);
+            if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+            topicTags = Array.isArray(parsed) ? parsed : [];
+          } catch { topicTags = []; }
+        }
+        const topicTagsLower = topicTags.map((t: string) => t.toLowerCase());
+
+        let score = 0;
+
+        // Title/description keyword overlap
+        for (const keyword of topKeywords) {
+          if (topicText.includes(keyword)) {
+            score += 5;
+          }
+        }
+
+        // Tag overlap with content keywords
+        for (const tag of topicTagsLower) {
+          if (contentSummary.includes(tag)) {
+            score += 10;
+          }
+          for (const keyword of topKeywords) {
+            if (tag.includes(keyword) || keyword.includes(tag)) {
+              score += 8;
+            }
+          }
+        }
+
+        // Topic title words appearing in session content
+        const titleWords = topicText.split(/\s+/).filter((w: string) => w.length > 3 && !stopWords.has(w));
+        for (const tw of titleWords) {
+          if (contentSummary.includes(tw)) {
+            score += 7;
+          }
+        }
+
+        // Cap at 100
+        score = Math.min(score, 100);
+
+        // Only suggest connections above threshold
+        if (score >= 15) {
+          suggestedConnections.push({
+            targetTopicId: otherTopic.id,
+            topicTitle: otherTopic.title,
+            relevanceScore: score,
+          });
+        }
+      }
+
+      // Sort by relevance score descending
+      suggestedConnections.sort((a, b) => b.relevanceScore - a.relevanceScore);
+    }
+
     // Return the updated session too
     const updatedSession = db.select().from(sessions).where(eq(sessions.id, sessionId)).get();
 
@@ -131,12 +225,15 @@ notesRouter.post('/sessions/:sessionId/distill', async (req, res) => {
       note: newNote,
       insights: savedInsights,
       session: updatedSession,
+      suggestedConnections,
     });
   } catch (error) {
     console.error('Distill session error:', error);
     res.status(500).json({ error: 'Failed to distill session', details: error instanceof Error ? error.message : 'Unknown error' });
   }
 });
+
+// NOTE: Multi-bucket GET/POST endpoints are in sessions.ts (/api/sessions/:id/multi-bucket)
 
 // POST /api/sessions/:sessionId/distill/regenerate - Regenerate note in different format
 notesRouter.post('/sessions/:sessionId/distill/regenerate', async (req, res) => {

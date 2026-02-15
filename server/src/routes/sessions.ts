@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../config/database.js';
-import { sessions, messages, topics, conceptNodes } from '../models/schema.js';
-import { eq, and, desc } from 'drizzle-orm';
+import { sessions, messages, topics, conceptNodes, topicConnections } from '../models/schema.js';
+import { eq, and, desc, ne, or } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export const sessionsRouter = Router();
@@ -756,6 +756,181 @@ sessionsRouter.post('/:id/resume', async (req, res) => {
   } catch (error) {
     console.error('Resume session error:', error);
     res.status(500).json({ error: 'Failed to resume session' });
+  }
+});
+
+// GET /api/sessions/:id/multi-bucket - Get cross-topic relevance suggestions for a session
+sessionsRouter.get('/:id/multi-bucket', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const sessionId = req.params.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const session = db.select().from(sessions).where(
+      and(eq(sessions.id, sessionId), eq(sessions.userId, userId))
+    ).get();
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Get user messages from this session
+    const sessionMessages = db.select().from(messages)
+      .where(and(eq(messages.sessionId, sessionId), eq(messages.role, 'user')))
+      .orderBy(messages.createdAt)
+      .all();
+
+    if (sessionMessages.length === 0) {
+      return res.json({ suggestedConnections: [], savedTargetIds: [] });
+    }
+
+    // Get all other topics for this user
+    const otherTopics = db.select().from(topics).where(
+      and(eq(topics.userId, userId), ne(topics.id, session.topicId))
+    ).all();
+
+    if (otherTopics.length === 0) {
+      return res.json({ suggestedConnections: [], savedTargetIds: [] });
+    }
+
+    // Build content summary from user messages
+    const contentSummary = sessionMessages.map(m => m.content).join(' ').toLowerCase();
+    const contentWords = contentSummary.replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 3);
+
+    const stopWords = new Set(['that', 'this', 'with', 'from', 'have', 'been', 'they', 'will', 'would', 'could', 'should', 'what', 'when', 'where', 'which', 'their', 'about', 'more', 'some', 'very', 'just', 'also', 'than', 'them', 'into', 'most', 'only', 'your', 'like', 'then', 'make', 'over', 'such', 'much', 'know', 'think', 'really', 'things', 'because', 'something']);
+    const meaningfulWords = contentWords.filter(w => !stopWords.has(w));
+
+    const wordFreq = new Map<string, number>();
+    for (const w of meaningfulWords) {
+      wordFreq.set(w, (wordFreq.get(w) || 0) + 1);
+    }
+    const topKeywords = [...wordFreq.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 20)
+      .map(([word]) => word);
+
+    const suggestedConnections: Array<{ targetTopicId: string; topicTitle: string; relevanceScore: number }> = [];
+
+    for (const otherTopic of otherTopics) {
+      const topicText = `${otherTopic.title} ${otherTopic.description || ''}`.toLowerCase();
+      let topicTagsParsed: string[] = [];
+      if (otherTopic.tags) {
+        try {
+          let parsed = JSON.parse(otherTopic.tags as string);
+          if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+          topicTagsParsed = Array.isArray(parsed) ? parsed : [];
+        } catch { topicTagsParsed = []; }
+      }
+      const topicTagsLower = topicTagsParsed.map((t: string) => t.toLowerCase());
+
+      let score = 0;
+
+      for (const keyword of topKeywords) {
+        if (topicText.includes(keyword)) score += 5;
+      }
+      for (const tag of topicTagsLower) {
+        if (contentSummary.includes(tag)) score += 10;
+        for (const keyword of topKeywords) {
+          if (tag.includes(keyword) || keyword.includes(tag)) score += 8;
+        }
+      }
+      const titleWords = topicText.split(/\s+/).filter((w: string) => w.length > 3 && !stopWords.has(w));
+      for (const tw of titleWords) {
+        if (contentSummary.includes(tw)) score += 7;
+      }
+
+      score = Math.min(score, 100);
+      if (score >= 15) {
+        suggestedConnections.push({
+          targetTopicId: otherTopic.id,
+          topicTitle: otherTopic.title,
+          relevanceScore: score,
+        });
+      }
+    }
+
+    suggestedConnections.sort((a, b) => b.relevanceScore - a.relevanceScore);
+
+    // Check which connections are already saved
+    const existingConnections = db.select().from(topicConnections).where(
+      or(
+        eq(topicConnections.sourceTopicId, session.topicId),
+        eq(topicConnections.targetTopicId, session.topicId)
+      )
+    ).all();
+
+    const savedTargetIds = existingConnections.map(c =>
+      c.sourceTopicId === session.topicId ? c.targetTopicId : c.sourceTopicId
+    );
+
+    res.json({ suggestedConnections, savedTargetIds });
+  } catch (error) {
+    console.error('Get multi-bucket suggestions error:', error);
+    res.status(500).json({ error: 'Failed to get cross-topic suggestions' });
+  }
+});
+
+// POST /api/sessions/:id/multi-bucket - Save selected cross-topic connections
+sessionsRouter.post('/:id/multi-bucket', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const sessionId = req.params.id;
+    const { selectedConnections } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const session = db.select().from(sessions).where(
+      and(eq(sessions.id, sessionId), eq(sessions.userId, userId))
+    ).get();
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    if (!selectedConnections || !Array.isArray(selectedConnections) || selectedConnections.length === 0) {
+      return res.status(400).json({ error: 'selectedConnections array is required' });
+    }
+
+    const created = [];
+    for (const conn of selectedConnections) {
+      const { targetTopicId, relevanceScore } = conn;
+
+      // Verify target topic belongs to user
+      const targetTopic = db.select().from(topics).where(
+        and(eq(topics.id, targetTopicId), eq(topics.userId, userId))
+      ).get();
+      if (!targetTopic) continue;
+
+      // Check for existing connection (avoid duplicates)
+      const existing = db.select().from(topicConnections).where(
+        or(
+          and(eq(topicConnections.sourceTopicId, session.topicId), eq(topicConnections.targetTopicId, targetTopicId)),
+          and(eq(topicConnections.sourceTopicId, targetTopicId), eq(topicConnections.targetTopicId, session.topicId))
+        )
+      ).get();
+      if (existing) continue;
+
+      const connectionId = uuidv4();
+      const saved = db.insert(topicConnections).values({
+        id: connectionId,
+        sourceTopicId: session.topicId,
+        targetTopicId,
+        connectionType: 'multi_bucket',
+        relevanceScore: Math.min(Math.max(relevanceScore || 0, 0), 100),
+      }).returning().get();
+
+      created.push({ ...saved, targetTopicTitle: targetTopic.title });
+    }
+
+    res.status(201).json({ connections: created, count: created.length });
+  } catch (error) {
+    console.error('Save multi-bucket connections error:', error);
+    res.status(500).json({ error: 'Failed to save cross-topic connections' });
   }
 });
 

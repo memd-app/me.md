@@ -92,6 +92,10 @@ export default function SessionPage() {
   const [editContent, setEditContent] = useState('');
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [noteSaveSuccess, setNoteSaveSuccess] = useState(false);
+  const [suggestedConnections, setSuggestedConnections] = useState<Array<{ targetTopicId: string; topicTitle: string; relevanceScore: number }>>([]);
+  const [selectedConnectionIds, setSelectedConnectionIds] = useState<Set<string>>(new Set());
+  const [isSavingConnections, setIsSavingConnections] = useState(false);
+  const [connectionsSaved, setConnectionsSaved] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -154,9 +158,38 @@ export default function SessionPage() {
         setNoteInsights(data.insights || []);
         setSelectedFormat((data.note.selectedFormat || 'full_analysis') as NoteFormat);
         setShowDistillation(true);
+
+        // Also fetch multi-bucket cross-topic suggestions
+        fetchMultiBucketSuggestions(sessionId);
       }
     } catch {
       // No note found, that's OK
+    }
+  };
+
+  // Fetch multi-bucket cross-topic suggestions for a session
+  const fetchMultiBucketSuggestions = async (sessionId: string) => {
+    if (!user) return;
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/multi-bucket`, {
+        headers: { 'x-user-id': user.id },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.suggestedConnections && data.suggestedConnections.length > 0) {
+          setSuggestedConnections(data.suggestedConnections);
+          // Pre-select already-saved connections
+          if (data.savedTargetIds && data.savedTargetIds.length > 0) {
+            setSelectedConnectionIds(new Set(data.savedTargetIds));
+            setConnectionsSaved(true);
+          } else {
+            setSelectedConnectionIds(new Set());
+            setConnectionsSaved(false);
+          }
+        }
+      }
+    } catch {
+      // Silently fail - multi-bucket is optional
     }
   };
 
@@ -188,6 +221,13 @@ export default function SessionPage() {
       setSelectedFormat((data.note.selectedFormat || 'full_analysis') as NoteFormat);
       setShowDistillation(true);
 
+      // Set suggested cross-topic connections from multi-bucket extraction
+      if (data.suggestedConnections && data.suggestedConnections.length > 0) {
+        setSuggestedConnections(data.suggestedConnections);
+        setSelectedConnectionIds(new Set());
+        setConnectionsSaved(false);
+      }
+
       // Update session status locally
       if (data.session) {
         setSession(data.session);
@@ -198,6 +238,54 @@ export default function SessionPage() {
       setError(err instanceof Error ? err.message : 'Failed to distill session');
     } finally {
       setIsDistilling(false);
+    }
+  };
+
+  // Toggle cross-topic connection selection
+  const toggleConnection = (topicId: string) => {
+    setSelectedConnectionIds(prev => {
+      const next = new Set(prev);
+      if (next.has(topicId)) {
+        next.delete(topicId);
+      } else {
+        next.add(topicId);
+      }
+      return next;
+    });
+  };
+
+  // Save selected cross-topic connections
+  const handleSaveConnections = async () => {
+    if (!user || !session || selectedConnectionIds.size === 0) return;
+
+    setIsSavingConnections(true);
+    try {
+      const connectionsToSave = suggestedConnections
+        .filter(c => selectedConnectionIds.has(c.targetTopicId))
+        .map(c => ({
+          targetTopicId: c.targetTopicId,
+          relevanceScore: c.relevanceScore,
+        }));
+
+      const res = await fetch(`/api/sessions/${session.id}/multi-bucket`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id,
+        },
+        body: JSON.stringify({ selectedConnections: connectionsToSave }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to save connections');
+      }
+
+      setConnectionsSaved(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save cross-topic connections');
+    } finally {
+      setIsSavingConnections(false);
     }
   };
 
@@ -1217,6 +1305,94 @@ export default function SessionPage() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Cross-topic connections (multi-bucket extraction) */}
+          {suggestedConnections.length > 0 && (
+            <div className="mt-8 border-t border-gray-200 dark:border-gray-700 pt-6">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                Suggested Cross-Topic Links ({suggestedConnections.length})
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                This session content is relevant to other topics. Select the connections you want to save.
+              </p>
+
+              {connectionsSaved ? (
+                <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-4 py-3 rounded-lg">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Cross-topic connections saved successfully.
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    {suggestedConnections.map((conn) => (
+                      <label
+                        key={conn.targetTopicId}
+                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                          selectedConnectionIds.has(conn.targetTopicId)
+                            ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
+                            : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-dark-surface hover:bg-gray-50 dark:hover:bg-gray-800'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedConnectionIds.has(conn.targetTopicId)}
+                          onChange={() => toggleConnection(conn.targetTopicId)}
+                          className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate block">
+                            {conn.topicTitle}
+                          </span>
+                        </div>
+                        <div className="shrink-0">
+                          <div className="flex items-center gap-2">
+                            <div className="w-20 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${
+                                  conn.relevanceScore >= 60
+                                    ? 'bg-green-500'
+                                    : conn.relevanceScore >= 35
+                                    ? 'bg-amber-500'
+                                    : 'bg-gray-400'
+                                }`}
+                                style={{ width: `${conn.relevanceScore}%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-gray-500 dark:text-gray-400 w-8 text-right">
+                              {conn.relevanceScore}%
+                            </span>
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="mt-4 flex items-center gap-3">
+                    <button
+                      onClick={handleSaveConnections}
+                      disabled={selectedConnectionIds.size === 0 || isSavingConnections}
+                      className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isSavingConnections ? 'Saving...' : `Save ${selectedConnectionIds.size} Connection${selectedConnectionIds.size !== 1 ? 's' : ''}`}
+                    </button>
+                    <button
+                      onClick={() => {
+                        const allIds = new Set(suggestedConnections.map(c => c.targetTopicId));
+                        setSelectedConnectionIds(prev => prev.size === allIds.size ? new Set() : allIds);
+                      }}
+                      className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                    >
+                      {selectedConnectionIds.size === suggestedConnections.length ? 'Deselect all' : 'Select all'}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
