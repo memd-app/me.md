@@ -15,6 +15,23 @@ authRouter.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Email and name are required' });
     }
 
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    // Validate password requirements: 8+ chars, 1 number, 1 special char
+    if (!password || password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+    if (!/\d/.test(password)) {
+      return res.status(400).json({ error: 'Password must contain at least 1 number' });
+    }
+    if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) {
+      return res.status(400).json({ error: 'Password must contain at least 1 special character' });
+    }
+
     // Check if user already exists
     const existing = db.select().from(users).where(eq(users.email, email)).get();
     if (existing) {
