@@ -132,8 +132,61 @@ graphRouter.get('/', async (req, res) => {
       });
     }
 
+    // Build a lookup of insight verification status for concept nodes
+    const insightStatusMap: Record<string, string> = {};
+    for (const insight of userInsights) {
+      insightStatusMap[insight.id] = insight.verificationStatus;
+    }
+
+    // Create placeholder nodes for unexplored categories (gap visualization)
+    const ALL_CATEGORIES = ['identity', 'skills', 'experiences', 'perspectives', 'goals'];
+    const CATEGORY_LABELS: Record<string, string> = {
+      identity: 'Identity',
+      skills: 'Skills',
+      experiences: 'Experiences',
+      perspectives: 'Perspectives',
+      goals: 'Goals',
+    };
+    const CATEGORY_DESCRIPTIONS: Record<string, string> = {
+      identity: 'Explore your core values, beliefs, personality traits, and what makes you who you are',
+      skills: 'Discover and document your abilities, expertise, and areas of competence',
+      experiences: 'Reflect on significant life events, milestones, and formative experiences',
+      perspectives: 'Examine your worldviews, opinions, and how you see different aspects of life',
+      goals: 'Clarify your aspirations, objectives, and what you want to achieve',
+    };
+
+    // Determine which categories have been explored (have at least one topic)
+    const exploredCategories = new Set<string>();
+    for (const topic of userTopics) {
+      if (topic.presetCategory) {
+        exploredCategories.add(topic.presetCategory);
+      }
+    }
+
+    // Add placeholder nodes for unexplored categories
+    for (const category of ALL_CATEGORIES) {
+      if (!exploredCategories.has(category)) {
+        graphNodes.push({
+          id: `gap-${category}`,
+          entityId: category,
+          type: 'gap',
+          label: CATEGORY_LABELS[category],
+          description: CATEGORY_DESCRIPTIONS[category],
+          status: 'unexplored',
+          category,
+          tags: [],
+          weight: 0.5,
+          insightCount: 0,
+          verifiedInsightCount: 0,
+          sessionCount: 0,
+          isUnexplored: true,
+        });
+      }
+    }
+
     // Create concept-level sub-nodes
     for (const cn of userConceptNodes) {
+      const insightVerificationStatus = cn.insightId ? (insightStatusMap[cn.insightId] || 'unverified') : 'unverified';
       graphNodes.push({
         id: `concept-${cn.id}`,
         entityId: cn.id,
@@ -142,6 +195,7 @@ graphRouter.get('/', async (req, res) => {
         parentTopicId: `topic-${cn.topicId}`,
         weight: cn.weight || 1.0,
         insightId: cn.insightId,
+        verificationStatus: insightVerificationStatus,
         lastUpdated: cn.updatedAt,
       });
 
@@ -247,6 +301,8 @@ graphRouter.get('/', async (req, res) => {
       }
     }
 
+    const unexploredCount = ALL_CATEGORIES.length - exploredCategories.size;
+
     res.json({
       nodes: graphNodes,
       edges: graphEdges,
@@ -256,6 +312,9 @@ graphRouter.get('/', async (req, res) => {
         edgeCount: graphEdges.length,
         insightCount: userInsights.length,
         verifiedInsightCount: Object.values(verifiedInsightsByTopic).reduce((a, b) => a + b, 0),
+        unexploredCategories: unexploredCount,
+        exploredCategories: exploredCategories.size,
+        totalCategories: ALL_CATEGORIES.length,
       },
     });
   } catch (error) {

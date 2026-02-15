@@ -6,7 +6,7 @@ import * as d3 from 'd3';
 interface GraphNode {
   id: string;
   entityId: string;
-  type: 'topic' | 'concept';
+  type: 'topic' | 'concept' | 'gap';
   label: string;
   description?: string;
   status?: string;
@@ -17,7 +17,9 @@ interface GraphNode {
   verifiedInsightCount?: number;
   sessionCount?: number;
   parentTopicId?: string;
+  verificationStatus?: string; // For concept nodes: verification status of linked insight
   lastUpdated?: string;
+  isUnexplored?: boolean;
   // D3 simulation properties
   x?: number;
   y?: number;
@@ -43,6 +45,9 @@ interface GraphStats {
   edgeCount: number;
   insightCount: number;
   verifiedInsightCount: number;
+  unexploredCategories?: number;
+  exploredCategories?: number;
+  totalCategories?: number;
 }
 
 // Color palette for topic categories
@@ -55,6 +60,16 @@ const CATEGORY_COLORS: Record<string, string> = {
   default: '#3b82f6',      // blue
 };
 
+// Dimmed versions of category colors for gap nodes
+const CATEGORY_COLORS_DIM: Record<string, string> = {
+  identity: '#a5b4fc',     // indigo-300
+  skills: '#67e8f9',       // cyan-300
+  experiences: '#fcd34d',  // amber-300
+  perspectives: '#c4b5fd', // violet-300
+  goals: '#6ee7b7',        // emerald-300
+  default: '#93c5fd',      // blue-300
+};
+
 const STATUS_COLORS: Record<string, string> = {
   backlog: '#9ca3af',      // gray
   scheduled: '#f59e0b',    // amber
@@ -64,12 +79,21 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 function getNodeColor(node: GraphNode): string {
-  if (node.type === 'concept') return '#a78bfa'; // violet-400
+  if (node.type === 'gap') {
+    // Dim version of the category color for unexplored nodes
+    return CATEGORY_COLORS_DIM[node.category || 'default'] || CATEGORY_COLORS_DIM.default;
+  }
+  if (node.type === 'concept') {
+    // Verified concept nodes get a green color, unverified stay violet
+    if (node.verificationStatus === 'verified') return '#10b981'; // emerald-500
+    return '#a78bfa'; // violet-400
+  }
   if (node.category) return CATEGORY_COLORS[node.category] || CATEGORY_COLORS.default;
   return CATEGORY_COLORS.default;
 }
 
 function getNodeRadius(node: GraphNode): number {
+  if (node.type === 'gap') return 18; // Fixed size for gap placeholder nodes
   if (node.type === 'concept') return 6 + (node.weight || 1) * 2;
   // Topic nodes: base + scaling by weight (sessions + verified insights)
   return 12 + Math.min(node.weight * 3, 24);
@@ -96,6 +120,7 @@ export default function KnowledgeGraphPage() {
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [showConcepts, setShowConcepts] = useState(true);
+  const [showGaps, setShowGaps] = useState(true);
   const simulationRef = useRef<d3.Simulation<GraphNode, GraphEdge> | null>(null);
 
   // Fetch graph data
@@ -126,16 +151,22 @@ export default function KnowledgeGraphPage() {
     if (!graphData || !svgRef.current || !containerRef.current) return;
     if (graphData.nodes.length === 0) return;
 
-    // Filter nodes/edges based on showConcepts toggle
+    // Filter nodes/edges based on toggles
     let nodes = graphData.nodes;
     let edges = graphData.edges;
+
+    // Filter out gap nodes if showGaps is off
+    if (!showGaps) {
+      nodes = nodes.filter(n => n.type !== 'gap');
+    }
+
     if (!showConcepts) {
-      const topicNodeIds = new Set(nodes.filter(n => n.type === 'topic').map(n => n.id));
-      nodes = nodes.filter(n => n.type === 'topic');
+      const topicAndGapNodeIds = new Set(nodes.filter(n => n.type === 'topic' || n.type === 'gap').map(n => n.id));
+      nodes = nodes.filter(n => n.type === 'topic' || n.type === 'gap');
       edges = edges.filter(e => {
         const srcId = typeof e.source === 'string' ? e.source : e.source.id;
         const tgtId = typeof e.target === 'string' ? e.target : e.target.id;
-        return topicNodeIds.has(srcId) && topicNodeIds.has(tgtId);
+        return topicAndGapNodeIds.has(srcId) && topicAndGapNodeIds.has(tgtId);
       });
     }
 
@@ -187,8 +218,8 @@ export default function KnowledgeGraphPage() {
     const alphaDecay = isLargeGraph ? 0.04 : 0.02;
     const velocityDecay = isLargeGraph ? 0.4 : 0.3;
     const chargeStrength = isLargeGraph
-      ? ((d: any) => d.type === 'concept' ? -20 : -80)
-      : ((d: any) => d.type === 'concept' ? -30 : -120);
+      ? ((d: any) => d.type === 'concept' ? -20 : (d.type === 'gap' ? -60 : -80))
+      : ((d: any) => d.type === 'concept' ? -30 : (d.type === 'gap' ? -80 : -120));
 
     // Create simulation with performance-tuned parameters
     const simulation = d3.forceSimulation<GraphNode>(simNodes)
@@ -199,13 +230,13 @@ export default function KnowledgeGraphPage() {
       )
       .force('charge', d3.forceManyBody()
         .strength(chargeStrength)
-        .theta(isLargeGraph ? 0.9 : 0.8) // Barnes-Hut approximation threshold (higher = faster but less accurate)
-        .distanceMax(isLargeGraph ? 300 : 500) // Limit charge distance for performance
+        .theta(isLargeGraph ? 0.9 : 0.8)
+        .distanceMax(isLargeGraph ? 300 : 500)
       )
       .force('center', d3.forceCenter(0, 0))
       .force('collision', d3.forceCollide<GraphNode>()
         .radius((d: GraphNode) => getNodeRadius(d) + (isLargeGraph ? 2 : 4))
-        .iterations(isLargeGraph ? 1 : 2) // Fewer collision iterations for large graphs
+        .iterations(isLargeGraph ? 1 : 2)
       )
       .alphaDecay(alphaDecay)
       .velocityDecay(velocityDecay);
@@ -250,18 +281,43 @@ export default function KnowledgeGraphPage() {
         })
       );
 
-    // Node circles
+    // Node circles - explored nodes are fully opaque, gap nodes are dim
     node.append('circle')
       .attr('r', (d: GraphNode) => getNodeRadius(d))
-      .attr('fill', (d: GraphNode) => getNodeColor(d))
-      .attr('stroke', '#fff')
-      .attr('stroke-width', (d: GraphNode) => d.type === 'topic' ? 2 : 1)
+      .attr('fill', (d: GraphNode) => {
+        if (d.type === 'gap') return getNodeColor(d);
+        return getNodeColor(d);
+      })
+      .attr('stroke', (d: GraphNode) => {
+        if (d.type === 'gap') return CATEGORY_COLORS[d.category || 'default'] || CATEGORY_COLORS.default;
+        return '#fff';
+      })
+      .attr('stroke-width', (d: GraphNode) => {
+        if (d.type === 'gap') return 2;
+        return d.type === 'topic' ? 2 : 1;
+      })
+      .attr('stroke-dasharray', (d: GraphNode) => {
+        if (d.type === 'gap') return '4,3'; // Dashed border for unexplored
+        return null;
+      })
       .attr('opacity', (d: GraphNode) => {
+        if (d.type === 'gap') return 0.35; // Very dim for unexplored
         if (d.type === 'concept') return 0.8;
         return 1;
       });
 
-    // Status ring for topics
+    // "?" icon inside gap nodes to indicate unexplored
+    node.filter((d: GraphNode) => d.type === 'gap')
+      .append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', '0.35em')
+      .attr('font-size', '14px')
+      .attr('font-weight', 'bold')
+      .attr('fill', (d: GraphNode) => CATEGORY_COLORS[d.category || 'default'] || CATEGORY_COLORS.default)
+      .attr('opacity', 0.6)
+      .text('?');
+
+    // Status ring for topic nodes (not gap)
     node.filter((d: GraphNode) => d.type === 'topic')
       .append('circle')
       .attr('r', (d: GraphNode) => getNodeRadius(d) + 3)
@@ -309,6 +365,49 @@ export default function KnowledgeGraphPage() {
         return label.length > 20 ? label.substring(0, 18) + '...' : label;
       });
 
+    // Labels for gap (unexplored) nodes
+    node.filter((d: GraphNode) => d.type === 'gap')
+      .append('text')
+      .attr('dy', (d: GraphNode) => getNodeRadius(d) + 14)
+      .attr('text-anchor', 'middle')
+      .attr('font-size', '10px')
+      .attr('font-weight', '500')
+      .attr('font-style', 'italic')
+      .attr('fill', 'currentColor')
+      .attr('class', 'text-gray-400 dark:text-gray-500')
+      .attr('opacity', 0.7)
+      .style('pointer-events', 'none')
+      .text((d: GraphNode) => d.label || '');
+
+    // Verified checkmark ring for verified concept nodes
+    node.filter((d: GraphNode) => d.type === 'concept' && d.verificationStatus === 'verified')
+      .append('circle')
+      .attr('r', (d: GraphNode) => getNodeRadius(d) + 2)
+      .attr('fill', 'none')
+      .attr('stroke', '#10b981') // emerald-500
+      .attr('stroke-width', 1.5)
+      .attr('opacity', 0.8);
+
+    // Small checkmark badge on verified concept nodes
+    node.filter((d: GraphNode) => d.type === 'concept' && d.verificationStatus === 'verified')
+      .append('circle')
+      .attr('cx', (d: GraphNode) => getNodeRadius(d) * 0.5)
+      .attr('cy', (d: GraphNode) => -getNodeRadius(d) * 0.5)
+      .attr('r', 5)
+      .attr('fill', '#10b981')
+      .attr('stroke', '#fff')
+      .attr('stroke-width', 1);
+
+    node.filter((d: GraphNode) => d.type === 'concept' && d.verificationStatus === 'verified')
+      .append('text')
+      .attr('x', (d: GraphNode) => getNodeRadius(d) * 0.5)
+      .attr('y', (d: GraphNode) => -getNodeRadius(d) * 0.5 + 3)
+      .attr('text-anchor', 'middle')
+      .attr('font-size', '7px')
+      .attr('font-weight', 'bold')
+      .attr('fill', '#fff')
+      .text('\u2713');
+
     // Labels for concept nodes (smaller, only visible on hover)
     node.filter((d: GraphNode) => d.type === 'concept')
       .append('text')
@@ -354,6 +453,15 @@ export default function KnowledgeGraphPage() {
     node.on('click', (_event: MouseEvent, d: GraphNode) => {
       if (d.type === 'topic') {
         navigate(`/app/topics/${d.entityId}`);
+      } else if (d.type === 'concept') {
+        // Clicking a concept node navigates to its parent topic detail page
+        const topicId = d.parentTopicId?.replace('topic-', '');
+        if (topicId) {
+          navigate(`/app/topics/${topicId}`);
+        }
+      } else if (d.type === 'gap') {
+        // Clicking an unexplored node navigates to topics page with preset category filter
+        navigate(`/app/topics?explore=${d.entityId}`);
       }
     });
 
@@ -373,7 +481,7 @@ export default function KnowledgeGraphPage() {
       simulation.stop();
       simulationRef.current = null;
     };
-  }, [graphData, showConcepts, navigate]);
+  }, [graphData, showConcepts, showGaps, navigate]);
 
   // Empty state
   if (!loading && graphData && graphData.nodes.length === 0) {
@@ -418,6 +526,16 @@ export default function KnowledgeGraphPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Toggle gap nodes */}
+          <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showGaps}
+              onChange={(e) => setShowGaps(e.target.checked)}
+              className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+            />
+            Show Gaps
+          </label>
           {/* Toggle concepts */}
           <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
             <input
@@ -445,6 +563,11 @@ export default function KnowledgeGraphPage() {
           <span>{graphData.stats.insightCount} insights</span>
           <span className="text-green-600 dark:text-green-400">{graphData.stats.verifiedInsightCount} verified</span>
           <span>{graphData.stats.edgeCount} connections</span>
+          {(graphData.stats.unexploredCategories || 0) > 0 && (
+            <span className="text-amber-600 dark:text-amber-400">
+              {graphData.stats.unexploredCategories} unexplored {graphData.stats.unexploredCategories === 1 ? 'area' : 'areas'}
+            </span>
+          )}
         </div>
       )}
 
@@ -492,15 +615,36 @@ export default function KnowledgeGraphPage() {
               <div className="flex items-center gap-2 mb-1">
                 <span
                   className="w-3 h-3 rounded-full inline-block"
-                  style={{ backgroundColor: getNodeColor(hoveredNode) }}
+                  style={{
+                    backgroundColor: hoveredNode.type === 'gap'
+                      ? (CATEGORY_COLORS[hoveredNode.category || 'default'] || CATEGORY_COLORS.default)
+                      : getNodeColor(hoveredNode),
+                    opacity: hoveredNode.type === 'gap' ? 0.5 : 1,
+                  }}
                 />
                 <span className="font-semibold text-sm text-gray-900 dark:text-white">
                   {hoveredNode.label}
                 </span>
                 <span className="text-xs text-gray-500 capitalize">
-                  ({hoveredNode.type})
+                  ({hoveredNode.type === 'gap' ? 'unexplored' : hoveredNode.type})
                 </span>
               </div>
+
+              {hoveredNode.type === 'gap' && (
+                <div className="mt-1 space-y-1.5">
+                  {hoveredNode.description && (
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      {hoveredNode.description}
+                    </p>
+                  )}
+                  <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    <span className="font-medium">Click to start exploring this area</span>
+                  </div>
+                </div>
+              )}
 
               {hoveredNode.type === 'topic' && (
                 <>
@@ -546,9 +690,27 @@ export default function KnowledgeGraphPage() {
               )}
 
               {hoveredNode.type === 'concept' && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Weight: {hoveredNode.weight?.toFixed(1)}
-                </p>
+                <div className="mt-1 space-y-1">
+                  <p className="text-xs text-gray-500">
+                    Weight: {hoveredNode.weight?.toFixed(1)}
+                  </p>
+                  {hoveredNode.verificationStatus && (
+                    <div className="flex items-center gap-1">
+                      {hoveredNode.verificationStatus === 'verified' ? (
+                        <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Verified
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                          {hoveredNode.verificationStatus === 'unverified' ? 'Pending verification' : hoveredNode.verificationStatus}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -559,7 +721,11 @@ export default function KnowledgeGraphPage() {
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-blue-500" />
-                <span className="text-gray-600 dark:text-gray-400">Topic</span>
+                <span className="text-gray-600 dark:text-gray-400">Topic (explored)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full border-2 border-dashed border-amber-400 opacity-50" style={{ backgroundColor: '#fcd34d' }} />
+                <span className="text-gray-600 dark:text-gray-400">Unexplored area</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-violet-400" />
