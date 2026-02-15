@@ -17,6 +17,7 @@ import { graphRouter } from './routes/graph.js';
 import { profileRouter } from './routes/profile.js';
 import { mcpRouter } from './routes/mcp.js';
 import { bookmarksRouter } from './routes/bookmarks.js';
+import { conflictsRouter } from './routes/conflicts.js';
 
 dotenv.config();
 
@@ -52,6 +53,9 @@ app.use('/api/dashboard', dashboardRouter);
 
 // Bookmarks route (must be before /api catch-all notesRouter)
 app.use('/api/bookmarks', bookmarksRouter);
+
+// Conflicts route
+app.use('/api/conflicts', conflictsRouter);
 
 // Distillation routes (mounted under /api AFTER all more specific routes to prevent /:id catch-all conflicts)
 app.use('/api', notesRouter);
