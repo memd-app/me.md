@@ -1,3 +1,56 @@
+## Session - 2026-02-15 (Agent handling Features #73 and #74)
+
+### Accomplished
+- Feature #73 (Insight conflict detection surfaces contradictions): PASSING
+  - Created server/src/routes/conflicts.ts with full conflicts API:
+    - POST /api/conflicts/detect - scans verified insights for contradictions using keyword-based analysis
+    - GET /api/conflicts - list all conflicts with insight details (optional status filter)
+    - GET /api/conflicts/stats - conflict statistics (total, unresolved, resolved)
+    - GET /api/conflicts/:id - get single conflict with full insight details
+    - POST /api/conflicts/:id/resolve - resolve conflict with resolution type and note
+  - Registered conflictsRouter in server/src/index.ts
+  - Created ConflictsSection component (client/src/components/verification/ConflictsSection.tsx):
+    - Scan for Conflicts button triggers detection
+    - Side-by-side display of contradicting insights (grid layout)
+    - Status badges (unresolved, both valid, outdated, clarified)
+    - Show/hide resolved toggle
+    - Topic labels on each insight card
+  - Added ConflictsSection to VerificationPage below the pending insights queue
+  - Conflict detection uses 10+ contradiction patterns (love/hate, always/never, introvert/extrovert, etc.)
+  - Deduplication: existing conflict pairs are not re-created on subsequent scans
+  - Tested: created 2 contradictory insight pairs, detected 1 conflict, verified side-by-side display
+
+- Feature #74 (Insight conflict resolution options work): PASSING
+  - All 3 resolution options implemented and tested:
+    1. "Both true in different contexts" (both_true_different_contexts) - both insights stay verified
+    2. "This one is outdated" (a_outdated / b_outdated) - outdated insight marked re_verification_pending
+    3. "Let me clarify" (clarified) - user provides clarification note saved as resolution_note
+  - Resolution UI: grid of selectable option cards with icons and descriptions
+  - Clarification option shows textarea for user note
+  - Other options show optional note text input
+  - resolution_status and resolution_note both saved correctly
+  - resolvedAt timestamp set on all resolved conflicts
+  - Invalid resolution rejected with 400 error
+  - Knowledge graph updated: outdated insights marked for re-verification, rejected insights excluded from graph
+  - Data persists across server restart (verified all resolution types preserved)
+  - No mock data patterns found in client/src or server/src
+
+### Verification
+- TypeScript compiles clean (client: zero errors)
+- Vite build succeeds (no errors)
+- Server starts without errors after restart
+- All conflict detection and resolution API endpoints tested end-to-end
+- Data persists across server restart
+- Resolved conflicts preserve resolution_status, resolution_note, resolvedAt
+- No mock data patterns in codebase
+- Test data cleaned up after verification
+
+### Current Status
+- Features #73 and #74 both passing
+- Conflicts API fully operational: detect, list, stats, get, resolve
+- ConflictsSection integrated into VerificationPage
+- 3 resolution types: both_true_different_contexts, a_outdated/b_outdated, clarified
+
 ## Session - 2026-02-15 (Agent handling Features #89 and #95)
 
 ### Accomplished
