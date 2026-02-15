@@ -279,30 +279,224 @@ importRouter.post('/text', async (req, res) => {
       return res.status(400).json({ error: 'Text content is required' });
     }
 
+    const trimmedText = text.trim();
     const fileId = uuidv4();
-    const summary = generateSummary(text.trim());
+    const displayTitle = title || 'Pasted text';
+    const summary = generateSummary(trimmedText);
 
     db.insert(importedFiles).values({
       id: fileId,
       userId,
-      filename: title || 'Pasted text',
+      filename: displayTitle,
       fileType: 'text',
       processedContent: JSON.stringify({
-        title: title || 'Pasted text',
+        title: displayTitle,
         summary,
-        textLength: text.trim().length,
-        extractedText: text.trim().substring(0, 10000),
+        textLength: trimmedText.length,
+        extractedText: trimmedText.substring(0, 10000),
         processedAt: new Date().toISOString(),
       }),
     }).run();
 
+    // Update user's imported_context with reference to the imported text
+    const user = db.select().from(users).where(eq(users.id, userId)).get();
+    if (user) {
+      let existingContext: Array<{ type: string; title: string; importedFileId: string }> = [];
+      try {
+        if (user.importedContext) {
+          existingContext = JSON.parse(user.importedContext);
+        }
+      } catch {
+        existingContext = [];
+      }
+
+      const newContext = [
+        ...existingContext,
+        {
+          type: 'text',
+          title: displayTitle,
+          importedFileId: fileId,
+        },
+      ];
+
+      db.update(users)
+        .set({
+          importedContext: JSON.stringify(newContext),
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(users.id, userId))
+        .run();
+    }
+
     res.json({
       message: 'Text imported successfully',
       id: fileId,
+      title: displayTitle,
       summary,
     });
   } catch (error) {
     console.error('Import text error:', error);
     res.status(500).json({ error: 'Failed to import text' });
+  }
+});
+
+// POST /api/import/file - Upload and import a file
+importRouter.post('/file', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string;
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    // Check content-type for multipart
+    const contentType = req.headers['content-type'] || '';
+    if (!contentType.includes('multipart/form-data')) {
+      return res.status(400).json({ error: 'File upload requires multipart/form-data' });
+    }
+
+    // Use dynamic import for multer to handle file upload
+    const multer = (await import('multer')).default;
+    const storage = multer.memoryStorage();
+    const upload = multer({
+      storage,
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB max
+      },
+      fileFilter: (_req, file, cb) => {
+        // Accept text files, PDFs, markdown, JSON
+        const allowedMimes = [
+          'text/plain',
+          'text/markdown',
+          'text/csv',
+          'application/json',
+          'application/pdf',
+        ];
+        const allowedExts = ['.txt', '.md', '.csv', '.json', '.pdf'];
+        const ext = file.originalname.toLowerCase().slice(file.originalname.lastIndexOf('.'));
+        if (allowedMimes.includes(file.mimetype) || allowedExts.includes(ext)) {
+          cb(null, true);
+        } else {
+          cb(new Error('Unsupported file type. Accepted: .txt, .md, .csv, .json, .pdf'));
+        }
+      },
+    });
+
+    // Process single file upload
+    upload.single('file')(req, res, async (err) => {
+      if (err) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ error: 'File too large. Maximum size is 5MB.' });
+        }
+        return res.status(400).json({ error: err.message || 'File upload failed' });
+      }
+
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: 'No file provided' });
+      }
+
+      try {
+        let extractedText = '';
+        const filename = file.originalname || 'Uploaded file';
+
+        // Extract text based on file type
+        if (file.mimetype === 'application/pdf') {
+          // For PDF, extract what we can from the raw buffer as text
+          // Simple PDF text extraction - get readable ASCII text from buffer
+          const rawText = file.buffer.toString('utf8');
+          // Extract text between stream markers in PDF
+          const textParts: string[] = [];
+          const streamRegex = /stream\s*\n([\s\S]*?)\nendstream/g;
+          let match;
+          while ((match = streamRegex.exec(rawText)) !== null) {
+            const part = match[1].replace(/[^\x20-\x7E\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim();
+            if (part.length > 10) {
+              textParts.push(part);
+            }
+          }
+          extractedText = textParts.join(' ').trim();
+          if (!extractedText || extractedText.length < 20) {
+            // Fallback: extract any readable text from the PDF
+            extractedText = rawText.replace(/[^\x20-\x7E\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim();
+          }
+        } else {
+          // For text-based files, just decode the buffer
+          extractedText = file.buffer.toString('utf8');
+        }
+
+        // Truncate if too long
+        if (extractedText.length > 10000) {
+          extractedText = extractedText.substring(0, 10000) + '... [truncated]';
+        }
+
+        if (!extractedText || extractedText.trim().length === 0) {
+          return res.status(400).json({ error: 'Could not extract text from file' });
+        }
+
+        const fileId = uuidv4();
+        const summary = generateSummary(extractedText);
+
+        db.insert(importedFiles).values({
+          id: fileId,
+          userId,
+          filename,
+          fileType: 'file',
+          processedContent: JSON.stringify({
+            title: filename,
+            summary,
+            textLength: extractedText.length,
+            extractedText,
+            originalSize: file.size,
+            mimeType: file.mimetype,
+            processedAt: new Date().toISOString(),
+          }),
+        }).run();
+
+        // Update user's imported_context
+        const user = db.select().from(users).where(eq(users.id, userId)).get();
+        if (user) {
+          let existingContext: Array<{ type: string; title: string; importedFileId: string }> = [];
+          try {
+            if (user.importedContext) {
+              existingContext = JSON.parse(user.importedContext);
+            }
+          } catch {
+            existingContext = [];
+          }
+
+          const newContext = [
+            ...existingContext,
+            {
+              type: 'file',
+              title: filename,
+              importedFileId: fileId,
+            },
+          ];
+
+          db.update(users)
+            .set({
+              importedContext: JSON.stringify(newContext),
+              updatedAt: new Date().toISOString(),
+            })
+            .where(eq(users.id, userId))
+            .run();
+        }
+
+        res.json({
+          message: 'File imported successfully',
+          id: fileId,
+          filename,
+          title: filename,
+          summary,
+          size: file.size,
+        });
+      } catch (innerErr) {
+        console.error('File processing error:', innerErr);
+        res.status(500).json({ error: 'Failed to process uploaded file' });
+      }
+    });
+  } catch (error) {
+    console.error('Import file error:', error);
+    res.status(500).json({ error: 'Failed to upload file' });
   }
 });

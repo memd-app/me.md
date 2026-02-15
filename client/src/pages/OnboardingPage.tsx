@@ -1,8 +1,9 @@
-import { useState, FormEvent } from 'react';
+import { useState, useRef, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
 type OnboardingStep = 'welcome' | 'profile' | 'context';
+type ImportTab = 'url' | 'text' | 'file';
 
 interface ProfileFields {
   name: string;
@@ -22,7 +23,8 @@ interface FieldErrors {
 
 interface ImportResult {
   id: string;
-  url: string;
+  url?: string;
+  source: 'url' | 'text' | 'file';
   status: 'success' | 'error';
   title?: string;
   summary?: string;
@@ -62,10 +64,22 @@ export default function OnboardingPage() {
   });
 
   // Context import state
+  const [activeImportTab, setActiveImportTab] = useState<ImportTab>('url');
   const [urlInput, setUrlInput] = useState('');
   const [isProcessingUrl, setIsProcessingUrl] = useState(false);
   const [urlError, setUrlError] = useState('');
   const [importResults, setImportResults] = useState<ImportResult[]>([]);
+
+  // Paste text state
+  const [pasteText, setPasteText] = useState('');
+  const [pasteTitle, setPasteTitle] = useState('');
+  const [isProcessingText, setIsProcessingText] = useState(false);
+  const [pasteError, setPasteError] = useState('');
+
+  // File upload state
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const [fileError, setFileError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentStepIndex = STEPS.findIndex((s) => s.key === currentStep);
   const progressPercent = ((currentStepIndex + 1) / STEPS.length) * 100;

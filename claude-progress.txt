@@ -1,3 +1,46 @@
+## Session - 2026-02-15 (Agent handling Features #18 and #99)
+
+### Accomplished
+- Feature #18 (Password reset flow via email): PASSING
+  - Added password_reset_tokens table to database schema and Drizzle ORM model
+  - Created POST /api/auth/forgot-password endpoint:
+    - Generates secure 32-byte hex token with 1-hour expiry
+    - Invalidates previous unused tokens for the same user
+    - Returns same success message for existing and non-existent emails (prevents email enumeration)
+    - Logs reset link to server console in development mode
+  - Created POST /api/auth/reset-password endpoint:
+    - Validates token existence, expiry, and used status
+    - Enforces password requirements (8+ chars, 1 number, 1 special char)
+    - Updates password hash and marks token as used
+  - Created ForgotPasswordPage with email form and success state
+  - Created ResetPasswordPage with password requirements indicators
+  - Added "Forgot your password?" link to LoginPage
+  - Added /forgot-password and /reset-password routes to App.tsx
+  - Tested full flow: register -> forgot-password -> get token -> reset -> login with new password
+  - Old password rejected after reset, used tokens cannot be reused
+
+- Feature #99 (Export requires authentication verification): PASSING
+  - Added password verification dialog to ExportPage before allowing export
+  - When user clicks Download or Copy, verification dialog appears with password input
+  - Uses existing POST /api/auth/verify-password endpoint
+  - After successful verification, isVerified state allows exports freely for the session
+  - Visual indicators: lock icon + "Requires identity verification" text before verification
+  - Green "Identity verified" banner shown after successful verification
+  - Both export API endpoints (/api/profile/export/markdown and /json) return 401 without auth
+  - No mock data patterns found
+
+### Verification
+- TypeScript compiles clean (client: zero errors, server: only pre-existing database.ts type export issue)
+- Server starts with password_reset_tokens table (16 tables total)
+- All API endpoints tested end-to-end
+- No mock data patterns in client/src or server/src
+- Export API returns 401 for unauthenticated access
+
+### Current Status
+- Features #18 and #99 both passing
+- Password reset flow fully functional with console-based dev mode
+- Export page requires password verification before proceeding
+
 ## Session - 2026-02-15 (Agent handling Features #19 and #39)
 
 ### Accomplished
