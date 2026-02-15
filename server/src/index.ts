@@ -11,6 +11,7 @@ import { importRouter } from './routes/import.js';
 import { sessionsRouter } from './routes/sessions.js';
 import { searchRouter } from './routes/search.js';
 import { notesRouter } from './routes/notes.js';
+import { insightsRouter } from './routes/insights.js';
 
 dotenv.config();
 
@@ -39,7 +40,7 @@ app.use('/api', notesRouter);
 
 // TODO: Add remaining routes as they are implemented
 // app.use('/api/messages', messagesRouter);
-// app.use('/api/insights', insightsRouter);
+app.use('/api/insights', insightsRouter);
 // app.use('/api/graph', graphRouter);
 // app.use('/api/profile', profileRouter);
 // app.use('/api/sandbox', sandboxRouter);
