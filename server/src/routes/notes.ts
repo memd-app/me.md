@@ -417,6 +417,74 @@ notesRouter.put('/:id', async (req, res) => {
   }
 });
 
+// GET /api/notes/:id/export/markdown - Export a single note as markdown file
+notesRouter.get('/:id/export/markdown', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const noteId = req.params.id;
+    const format = (req.query.format as string) || 'full_analysis';
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const note = db.select().from(notes).where(
+      and(eq(notes.id, noteId), eq(notes.userId, userId))
+    ).get();
+
+    if (!note) {
+      return res.status(404).json({ error: 'Note not found' });
+    }
+
+    // Get topic title for metadata
+    const topic = note.topicId ? db.select().from(topics).where(eq(topics.id, note.topicId)).get() : null;
+    const topicTitle = topic?.title || 'Unknown Topic';
+
+    // Select content based on format
+    let content: string;
+    let formatLabel: string;
+    switch (format) {
+      case 'brief_summary':
+        content = note.contentBriefSummary || 'No content available';
+        formatLabel = 'Brief Summary';
+        break;
+      case 'decision_framework':
+        content = note.contentDecisionFramework || 'No content available';
+        formatLabel = 'Decision Framework';
+        break;
+      case 'json':
+        content = note.contentJson || '{}';
+        formatLabel = 'JSON Data';
+        break;
+      default:
+        content = note.contentFullAnalysis || 'No content available';
+        formatLabel = 'Full Analysis';
+    }
+
+    const title = note.title || 'Untitled Note';
+    const createdDate = note.createdAt ? new Date(note.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+
+    let markdownContent: string;
+    if (format === 'json') {
+      markdownContent = `# ${title}\n\n**Topic:** ${topicTitle}  \n**Format:** ${formatLabel}  \n**Date:** ${createdDate}\n\n---\n\n\`\`\`json\n${content}\n\`\`\`\n`;
+    } else {
+      markdownContent = `# ${title}\n\n**Topic:** ${topicTitle}  \n**Format:** ${formatLabel}  \n**Date:** ${createdDate}\n\n---\n\n${content}\n`;
+    }
+
+    // Sanitize filename
+    const safeTitle = title.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '_').substring(0, 50);
+
+    res.set({
+      'Content-Type': 'text/markdown; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${safeTitle}.md"`,
+    });
+    res.send(markdownContent);
+  } catch (error) {
+    console.error('Export note markdown error:', error);
+    res.status(500).json({ error: 'Failed to export note' });
+  }
+});
+
 // GET /api/notes/session/:sessionId - Get note for a specific session
 notesRouter.get('/session/:sessionId', async (req, res) => {
   try {
