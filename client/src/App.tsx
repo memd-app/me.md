@@ -20,7 +20,8 @@ import ExportPage from '@/pages/ExportPage';
 import SettingsPage from '@/pages/SettingsPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 import CreateTopicPage from '@/pages/CreateTopicPage';
-import PlaceholderPage from '@/pages/PlaceholderPage';
+import TopicDetailPage from '@/pages/TopicDetailPage';
+import SessionPage from '@/pages/SessionPage';
 
 function App() {
   return (
@@ -57,9 +58,9 @@ function App() {
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="topics" element={<TopicsPage />} />
             <Route path="topics/new" element={<CreateTopicPage />} />
-            <Route path="topics/:id" element={<PlaceholderPage title="Topic Detail" icon="📋" />} />
+            <Route path="topics/:id" element={<TopicDetailPage />} />
             <Route path="session/new" element={<NewSessionPage />} />
-            <Route path="session/:id" element={<PlaceholderPage title="Interview Session" icon="💬" />} />
+            <Route path="session/:id" element={<SessionPage />} />
             <Route path="graph" element={<KnowledgeGraphPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="verify" element={<VerificationPage />} />
