@@ -77,6 +77,13 @@ export default function SettingsPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
+  // MCP Tools test state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Array<{ id: string; content: string; confidenceScore: number; verifiedAt: string; topicTitle: string; topicId: string }> | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [contextSummary, setContextSummary] = useState<{ content: string; totalInsights: number; topics: string[] } | null>(null);
+  const [contextLoading, setContextLoading] = useState(false);
+
   const tabs = [
     { id: 'account', label: 'Account' },
     { id: 'preferences', label: 'Preferences' },
@@ -242,6 +249,52 @@ export default function SettingsPage() {
       const message = err instanceof Error ? err.message : 'Failed to revoke access';
       setMcpError(message);
       setTimeout(() => setMcpError(null), 5000);
+    }
+  };
+
+  const handleSearchKnowledge = async () => {
+    if (!user?.id || !searchQuery.trim()) return;
+    setSearchLoading(true);
+    setSearchResults(null);
+    try {
+      const res = await fetch(`${API_BASE}/mcp/tools/search?q=${encodeURIComponent(searchQuery.trim())}&userId=${user.id}`, {
+        headers: { 'x-user-id': user.id },
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Search failed');
+      }
+      const data = await res.json();
+      setSearchResults(data.results || []);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Search failed';
+      setMcpError(message);
+      setTimeout(() => setMcpError(null), 5000);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleGetContextSummary = async () => {
+    if (!user?.id) return;
+    setContextLoading(true);
+    setContextSummary(null);
+    try {
+      const res = await fetch(`${API_BASE}/mcp/tools/context-summary?userId=${user.id}`, {
+        headers: { 'x-user-id': user.id },
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to get context summary');
+      }
+      const data = await res.json();
+      setContextSummary({ content: data.content, totalInsights: data.totalInsights, topics: data.topics });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to get context summary';
+      setMcpError(message);
+      setTimeout(() => setMcpError(null), 5000);
+    } finally {
+      setContextLoading(false);
     }
   };
 
@@ -1004,6 +1057,89 @@ export default function SettingsPage() {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* MCP Tools Test */}
+          <div className="card">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">MCP Tools</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Test the MCP tools that AI agents use to access your verified context.
+            </p>
+
+            {/* search_knowledge tool */}
+            <div className="mb-6">
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">search_knowledge</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                Search across your verified, exportable insights by keyword.
+              </p>
+              <div className="flex items-center gap-2 mb-3">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Enter search query..."
+                  className="input-field flex-1"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && searchQuery.trim()) handleSearchKnowledge();
+                  }}
+                />
+                <button
+                  onClick={handleSearchKnowledge}
+                  disabled={searchLoading || !searchQuery.trim()}
+                  className="btn-primary text-sm px-4 py-2"
+                >
+                  {searchLoading ? 'Searching...' : 'Search'}
+                </button>
+              </div>
+              {searchResults !== null && (
+                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-dark-border p-3">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+                    {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} found
+                  </p>
+                  {searchResults.length === 0 ? (
+                    <p className="text-sm text-gray-400 dark:text-gray-500 italic">No matching verified insights found.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {searchResults.map((r) => (
+                        <div key={r.id} className="bg-white dark:bg-gray-900 rounded p-2 border border-gray-100 dark:border-gray-700">
+                          <p className="text-sm text-gray-900 dark:text-gray-100">{r.content}</p>
+                          <div className="mt-1 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+                            <span>Topic: {r.topicTitle || 'Unknown'}</span>
+                            <span>Confidence: {r.confidenceScore}%</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* get_context_summary tool */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">get_context_summary</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                Generate a portable markdown summary of your verified personal context.
+              </p>
+              <button
+                onClick={handleGetContextSummary}
+                disabled={contextLoading}
+                className="btn-primary text-sm px-4 py-2 mb-3"
+              >
+                {contextLoading ? 'Generating...' : 'Generate Context Summary'}
+              </button>
+              {contextSummary && (
+                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-dark-border p-3">
+                  <div className="flex items-center gap-3 mb-2 text-xs text-gray-500 dark:text-gray-400">
+                    <span>{contextSummary.totalInsights} verified insight{contextSummary.totalInsights !== 1 ? 's' : ''}</span>
+                    <span>{contextSummary.topics.length} topic{contextSummary.topics.length !== 1 ? 's' : ''}</span>
+                  </div>
+                  <pre className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200 font-mono bg-white dark:bg-gray-900 rounded p-3 border border-gray-100 dark:border-gray-700 max-h-64 overflow-y-auto">
+                    {contextSummary.content}
+                  </pre>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* MCP Info Card */}
