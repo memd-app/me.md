@@ -91,8 +91,8 @@ function calculateReVerifyAt(interval: string): string {
  * Check for insights that are due for re-verification and mark them.
  * Called on server startup and periodically.
  */
-export function checkReVerificationDue(): number {
-  const now = new Date().toISOString();
+export function checkReVerificationDue(asOfDate?: string): number {
+  const now = asOfDate || new Date().toISOString();
 
   // Find all verified insights where re_verify_at has passed
   const dueInsights = db.select().from(insights)
@@ -410,10 +410,12 @@ insightsRouter.put('/:id/re-verify-interval', async (req, res) => {
 });
 
 // POST /api/insights/check-reverification - Trigger a re-verification check
+// Accepts optional body param `asOfDate` to simulate checking at a future date (for testing)
 insightsRouter.post('/check-reverification', async (req, res) => {
   try {
-    const count = checkReVerificationDue();
-    res.json({ checked: true, markedForReVerification: count });
+    const { asOfDate } = req.body || {};
+    const count = checkReVerificationDue(asOfDate);
+    res.json({ checked: true, markedForReVerification: count, asOfDate: asOfDate || new Date().toISOString() });
   } catch (error) {
     console.error('Re-verification check error:', error);
     res.status(500).json({ error: 'Failed to run re-verification check' });

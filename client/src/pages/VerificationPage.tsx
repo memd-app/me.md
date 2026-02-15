@@ -27,6 +27,22 @@ interface Stats {
   total: number;
 }
 
+const INTERVAL_LABELS: Record<string, string> = {
+  weekly: '1-4 weeks',
+  monthly: '~1 month',
+  quarterly: '~3 months',
+  biannual: '~6 months',
+  annual: '~12 months',
+};
+
+const INTERVAL_OPTIONS = [
+  { value: 'weekly', label: 'Weekly (1-4 weeks)', description: 'Situational insights that change frequently' },
+  { value: 'monthly', label: 'Monthly (~1 month)', description: 'Moderate insights' },
+  { value: 'quarterly', label: 'Quarterly (~3 months)', description: 'Preferences and styles' },
+  { value: 'biannual', label: 'Biannual (~6 months)', description: 'Core traits and values' },
+  { value: 'annual', label: 'Annual (~12 months)', description: 'Deep, stable identity traits' },
+];
+
 export default function VerificationPage() {
   const { user } = useAuth();
   const [pendingInsights, setPendingInsights] = useState<Insight[]>([]);
@@ -34,6 +50,7 @@ export default function VerificationPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
+  const [intervalDropdownOpen, setIntervalDropdownOpen] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!user) return;
@@ -70,16 +87,22 @@ export default function VerificationPage() {
     fetchData();
   }, [fetchData]);
 
-  const handleApprove = async (insightId: string) => {
+  const handleApprove = async (insightId: string, reVerifyInterval?: string) => {
     if (!user) return;
     setActionInProgress(insightId);
     try {
+      const body: Record<string, string> = {};
+      if (reVerifyInterval) {
+        body.reVerifyInterval = reVerifyInterval;
+      }
+
       const res = await fetch(`/api/insights/${insightId}/verify`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-user-id': user.id,
         },
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
@@ -93,6 +116,7 @@ export default function VerificationPage() {
         pending: prev.pending - 1,
         verified: prev.verified + 1,
       }));
+      setIntervalDropdownOpen(null);
     } catch (err) {
       console.error('Failed to approve insight:', err);
       setError('Failed to approve insight');
@@ -158,6 +182,11 @@ export default function VerificationPage() {
     } catch {
       return dateStr;
     }
+  };
+
+  const getIntervalLabel = (interval: string | null) => {
+    if (!interval) return null;
+    return INTERVAL_LABELS[interval] || interval;
   };
 
   if (isLoading) {
@@ -291,13 +320,31 @@ export default function VerificationPage() {
                 {/* Re-verification indicator */}
                 {insight.verificationStatus === 're_verification_pending' && (
                   <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300">
+                    <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
                     Re-verification
+                  </span>
+                )}
+
+                {/* Previous verification info for re-verification items */}
+                {insight.verificationStatus === 're_verification_pending' && insight.reVerifyInterval && (
+                  <span className="text-xs text-purple-600 dark:text-purple-400">
+                    Interval: {getIntervalLabel(insight.reVerifyInterval)}
+                  </span>
+                )}
+
+                {/* Previously verified date for re-verification items */}
+                {insight.verificationStatus === 're_verification_pending' && insight.verifiedAt && (
+                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                    Last verified: {formatDate(insight.verifiedAt)}
                   </span>
                 )}
               </div>
 
               {/* Action buttons */}
               <div className="flex items-center gap-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                {/* Quick approve button */}
                 <button
                   onClick={() => handleApprove(insight.id)}
                   disabled={actionInProgress === insight.id}
@@ -315,6 +362,49 @@ export default function VerificationPage() {
                   )}
                   Approve
                 </button>
+
+                {/* Re-verification interval selector */}
+                <div className="relative">
+                  <button
+                    onClick={() => setIntervalDropdownOpen(intervalDropdownOpen === insight.id ? null : insight.id)}
+                    disabled={actionInProgress === insight.id}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors border border-gray-300 dark:border-gray-600"
+                    title="Set re-verification interval and approve"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Schedule
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {/* Dropdown menu */}
+                  {intervalDropdownOpen === insight.id && (
+                    <div className="absolute bottom-full mb-1 left-0 z-10 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
+                      <div className="p-2 border-b border-gray-100 dark:border-gray-700">
+                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Approve with re-verification interval
+                        </p>
+                      </div>
+                      <div className="py-1">
+                        {INTERVAL_OPTIONS.map(option => (
+                          <button
+                            key={option.value}
+                            onClick={() => handleApprove(insight.id, option.value)}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                          >
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">{option.label}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">{option.description}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Reject button */}
                 <button
                   onClick={() => handleReject(insight.id)}
                   disabled={actionInProgress === insight.id}
