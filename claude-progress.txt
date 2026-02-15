@@ -1,3 +1,35 @@
+## Session 13 - 2026-02-15 (Agent handling Features #12 and #179)
+
+### Accomplished
+- Feature #12 (User can logout): PASSING
+  - Verified logout() in AuthContext clears user state and removes memd_user_id from localStorage
+  - Verified Firebase sign-out is called when configured
+  - Sidebar handleLogout() calls logout() then navigate('/') to landing page
+  - ProtectedRoute redirects unauthenticated users to /login
+  - After logout, navigating to /app/dashboard is properly blocked
+  - API returns 401/404 for invalid user IDs confirming server-side session invalidation
+  - TypeScript compiles clean, Vite build succeeds (70 modules)
+  - No mock data patterns found
+
+- Feature #179 (Post-logout redirect to landing page): PASSING
+  - Sidebar handleLogout navigates to '/' (landing page) after calling logout()
+  - LandingPage is a pure public page with no auth-dependent content
+  - No authenticated content visible after logout (only Sign In/Get Started links)
+  - No error messages on landing page after logout
+  - Landing page renders cleanly as a fresh public page
+
+### Verification
+- TypeScript compiles clean (npx tsc --noEmit - zero errors)
+- Vite build succeeds (70 modules, no errors)
+- Server health check passing
+- API tested: register, auth/me with valid/invalid IDs, account deletion
+- No mock data patterns in client/src or server/src
+
+### Current Status
+- 25/209 features passing (added #12 and #179)
+- Both features were already implemented in previous sessions' code
+- Logout flow: Sidebar Sign Out -> logout() clears state/localStorage -> navigate('/') -> landing page
+
 ## Session 12 - 2026-02-15 (Agent handling Features #85 and #199)
 
 ### Accomplished
