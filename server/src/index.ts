@@ -12,6 +12,9 @@ import { sessionsRouter } from './routes/sessions.js';
 import { searchRouter } from './routes/search.js';
 import { notesRouter } from './routes/notes.js';
 import { insightsRouter } from './routes/insights.js';
+import { dashboardRouter } from './routes/dashboard.js';
+import { graphRouter } from './routes/graph.js';
+import { profileRouter } from './routes/profile.js';
 
 dotenv.config();
 
@@ -35,17 +38,18 @@ app.use('/api/import', importRouter);
 app.use('/api/sessions', sessionsRouter);
 
 app.use('/api/notes', notesRouter);
-// Distillation routes (mounted under /api for convenience)
-app.use('/api', notesRouter);
 
 // TODO: Add remaining routes as they are implemented
 // app.use('/api/messages', messagesRouter);
 app.use('/api/insights', insightsRouter);
-// app.use('/api/graph', graphRouter);
-// app.use('/api/profile', profileRouter);
+app.use('/api/graph', graphRouter);
+app.use('/api/profile', profileRouter);
 // app.use('/api/sandbox', sandboxRouter);
 app.use('/api/search', searchRouter);
-// app.use('/api/dashboard', dashboardRouter);
+app.use('/api/dashboard', dashboardRouter);
+
+// Distillation routes (mounted under /api AFTER all more specific routes to prevent /:id catch-all conflicts)
+app.use('/api', notesRouter);
 // app.use('/api/bookmarks', bookmarksRouter);
 // app.use('/api/mcp', mcpRouter);
 // app.use('/api/templates', templatesRouter);
