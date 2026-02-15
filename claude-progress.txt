@@ -1,3 +1,37 @@
+## Session 18 - 2026-02-15 (Agent handling Features #96 and #98)
+
+### Accomplished
+- Feature #96 (Export profile as JSON structured data): PASSING
+  - JSON export endpoint already existed at GET /api/profile/export/json
+  - Returns valid JSON with profile sections, insights, and metadata
+  - Includes userName, occupation, location, generatedAt, totalVerifiedInsights, topicsExplored
+  - All 6 profile sections (personalPortrait, communicationStyle, decisionMakingPatterns, strengthsAndExpertise, toneOfVoice, keyThemes)
+  - Privacy filtering: only insights with privacyTier='exportable' and verificationStatus='verified'
+  - Content-Disposition header triggers file download as .json
+  - No mock data patterns found
+
+- Feature #98 (Export format selection between markdown and JSON): PASSING
+  - Redesigned ExportPage with format selection UI
+  - Three selectable format cards: Markdown, JSON, Both
+  - Cards show selection state with blue border, ring, and checkmark indicator
+  - "Both" option downloads me.md and profile.json sequentially (500ms delay between)
+  - Download button text updates dynamically based on selected format
+  - Success messages reflect which format(s) were downloaded
+  - Privacy note enhanced to mention exportable tier filtering
+  - Copy to clipboard functionality preserved
+  - Unified download logic via shared downloadFile helper function
+
+### Verification
+- TypeScript compiles cleanly (zero errors)
+- Vite dev server serves ExportPage without errors
+- Both backend endpoints (markdown + json) return correct Content-Type and data
+- Privacy filtering confirmed: both endpoints use eq(insights.privacyTier, 'exportable')
+- No mock data patterns in ExportPage.tsx or profile.ts
+
+### Current Status
+- Features #96 and #98 both passing
+- 41/209 features passing (approx 19.6%)
+
 ## Session 17 - 2026-02-15 (Agent handling Features #80 and #83)
 
 ### Accomplished
