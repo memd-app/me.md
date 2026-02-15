@@ -1,3 +1,37 @@
+## Session 7 - 2026-02-15 (Agent handling Features #11 and #27)
+
+### Accomplished
+- Feature #11 (User can login with email and password): PASSING
+  - Added password_hash column to users table (schema + migration)
+  - Implemented scrypt password hashing on registration using Node.js crypto
+  - Login endpoint now validates password against stored hash
+  - Client AuthContext sends password to server on login
+  - Invalid credentials return 401, password_hash never in API responses
+  - Data persists across server restart
+
+- Feature #27 (Create custom topic with all fields): PASSING
+  - Created CreateTopicPage component with full form (title, description, tags, intent, trigger)
+  - Tags support: add/remove with Enter/comma/Tab, chip display with remove button
+  - Intent selector: 4 options (articulate, explore, decide, document) with toggle UI
+  - Updated TopicsPage to fetch and display topics from API with status filters
+  - Topics list shows status badge, intent badge, tags, priority icon, date
+  - Route /app/topics/new added to App.tsx
+
+### Critical Fix: WAL Checkpoint for Data Durability
+  - Added WAL checkpoint after schema init (ensures tables are in main db)
+  - Added periodic WAL checkpoint every 30 seconds
+  - Added graceful shutdown handler (SIGTERM/SIGINT) that checkpoints and closes db
+  - This fixes data loss issue when server was killed without checkpoint
+
+### Current Status
+- 10/209 features passing (Features #1-6, #10, #11, #14, #27, + others by other agents)
+- Frontend: CreateTopicPage, updated TopicsPage with API integration
+- Backend: Password hashing, WAL persistence fix
+
+### What to Work on Next
+- Continue with next assigned features from orchestrator
+- Key areas: topic detail page, session management, interview UI
+
 ## Session 6 - 2026-02-15 (Agent handling Features #13 and #14)
 
 ### Accomplished
