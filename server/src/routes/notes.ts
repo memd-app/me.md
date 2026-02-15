@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../config/database.js';
-import { notes, sessions, topics, messages, insights, conceptNodes, topicConnections } from '../models/schema.js';
-import { eq, and, desc, ne, or } from 'drizzle-orm';
+import { notes, sessions, topics, messages, insights, conceptNodes } from '../models/schema.js';
+import { eq, and, desc, ne } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export const notesRouter = Router();
@@ -334,7 +334,16 @@ notesRouter.get('/', async (req, res) => {
       .orderBy(desc(notes.createdAt))
       .all();
 
-    res.json({ notes: userNotes });
+    // Enrich notes with topic title
+    const enrichedNotes = userNotes.map(n => {
+      const topic = n.topicId ? db.select().from(topics).where(eq(topics.id, n.topicId)).get() : null;
+      return {
+        ...n,
+        topicTitle: topic?.title || 'Unknown Topic',
+      };
+    });
+
+    res.json({ notes: enrichedNotes });
   } catch (error) {
     console.error('List notes error:', error);
     res.status(500).json({ error: 'Failed to list notes' });
