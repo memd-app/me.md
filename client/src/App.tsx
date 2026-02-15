@@ -20,6 +20,8 @@ import SearchPage from '@/pages/SearchPage';
 import ExportPage from '@/pages/ExportPage';
 import SettingsPage from '@/pages/SettingsPage';
 import NotFoundPage from '@/pages/NotFoundPage';
+import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
+import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import CreateTopicPage from '@/pages/CreateTopicPage';
 import TopicDetailPage from '@/pages/TopicDetailPage';
 import SessionPage from '@/pages/SessionPage';
@@ -34,6 +36,8 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           {/* Onboarding (protected, but no onboarding guard) */}
           <Route

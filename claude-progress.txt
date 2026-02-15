@@ -1,3 +1,36 @@
+## Session - 2026-02-15 (Agent handling Features #16 and #17)
+
+### Accomplished
+- Feature #16 (Auth error handling for invalid credentials): PASSING
+  - Updated server login endpoint with differentiated error messages:
+    - Non-existent email: "No account found with this email address. Please check your email or sign up for a new account."
+    - Wrong password: "Incorrect password. Please try again or reset your password."
+  - Enhanced LoginPage error display with icon (SVG) and role="alert" for accessibility
+  - Added auto-clear of errors when user starts typing in email or password fields
+  - Improved AuthContext login() with network failure handling: "Unable to connect to the server"
+  - Form fields preserved after errors for easy retry (useState, never cleared)
+  - Client-side validation before submitting (no empty fields sent to server)
+
+- Feature #17 (Auth error handling for duplicate email registration): PASSING
+  - Updated server register endpoint: duplicate email returns "An account with this email already exists. Please sign in instead or use a different email address."
+  - Enhanced RegisterPage error display with icon and role="alert" matching login page style
+  - Added auto-clear of errors when user types in email or name fields
+  - Improved AuthContext register() with network failure handling
+  - Form fields preserved after errors, user can change email and retry
+  - Verified: register first user succeeds, second register with same email returns 409 with clear message, register with different email succeeds
+
+### Verification
+- TypeScript compiles with zero errors (client)
+- Server starts and health check returns OK
+- All error scenarios tested via API (non-existent email, wrong password, duplicate email, empty fields)
+- No mock data patterns found in client/src or server/src
+- Form fields persist after errors (useState-based state management)
+
+### Current Status
+- Features #16 and #17 both passing
+- Auth error handling improved across login and registration flows
+- Consistent error display pattern (icon + message + auto-clear) across auth pages
+
 ## Session - 2026-02-15 (Agent handling Features #94 and #143)
 
 ### Accomplished

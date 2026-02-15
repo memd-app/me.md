@@ -217,6 +217,18 @@ export const mcpAccessPermissions = sqliteTable('mcp_access_permissions', {
 });
 
 // ============================================
+// Password Reset Tokens
+// ============================================
+export const passwordResetTokens = sqliteTable('password_reset_tokens', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  token: text('token').unique().notNull(),
+  expiresAt: text('expires_at').notNull(),
+  used: integer('used', { mode: 'boolean' }).default(false),
+  createdAt: text('created_at').default(sql`(datetime('now'))`),
+});
+
+// ============================================
 // Imported Files
 // ============================================
 export const importedFiles = sqliteTable('imported_files', {
