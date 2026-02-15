@@ -1,3 +1,35 @@
+## Session - 2026-02-15 (Agent handling Feature #59)
+
+### Accomplished
+- Feature #59 (Notes list shows all notes with correct data): PASSING
+  - Enhanced NotesPage.tsx with full detail view when clicking a note
+  - List view shows: title, format type badge, associated topic, date, content preview
+  - Detail view renders full note content with SimpleMarkdown renderer
+  - Format tabs allow switching between Full Analysis, Brief Summary, Decision Framework, JSON
+  - Extracted insights displayed with confidence scores and verification status badges
+  - Search bar filters notes by title or topic name
+  - Format filter buttons to show only specific note types
+  - Breadcrumb navigation between list and detail views
+  - Link to original session from detail view
+  - Fixed double-encoded JSON tag parsing in notes.ts and sessions.ts distill routes
+    (tags stored as '"[\"tag1\",\"tag2\"]"' would fail JSON.parse -> .map)
+  - All data from real SQLite database via GET /api/notes and GET /api/notes/:id
+  - Data persists across server restart (verified with 3 test notes)
+  - No mock data patterns found in client/src or server/src
+
+### Verification
+- Vite build succeeds (642 modules, no errors)
+- TypeScript compiles (only pre-existing errors in SessionPage.tsx, not in NotesPage)
+- Server starts without errors after restart
+- 3 test notes created, verified in list, verified in detail view, persisted across restart
+- Note count in UI header matches GET /api/notes response count
+- No mock data patterns (globalThis, devStore, mockDb, etc.) found
+- Test data cleaned up after verification
+
+### Current Status
+- Feature #59 passing
+- NotesPage accessible at /app/notes with full list + detail view
+
 ## Session - 2026-02-15 (Agent handling Feature #58)
 
 ### Accomplished
