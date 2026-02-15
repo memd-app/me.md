@@ -6,6 +6,16 @@ import LandingPage from '@/pages/LandingPage';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import DashboardPage from '@/pages/DashboardPage';
+import TopicsPage from '@/pages/TopicsPage';
+import NewSessionPage from '@/pages/NewSessionPage';
+import KnowledgeGraphPage from '@/pages/KnowledgeGraphPage';
+import ProfilePage from '@/pages/ProfilePage';
+import VerificationPage from '@/pages/VerificationPage';
+import SandboxPage from '@/pages/SandboxPage';
+import BookmarksPage from '@/pages/BookmarksPage';
+import SearchPage from '@/pages/SearchPage';
+import ExportPage from '@/pages/ExportPage';
+import SettingsPage from '@/pages/SettingsPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 import PlaceholderPage from '@/pages/PlaceholderPage';
 
@@ -29,18 +39,18 @@ function App() {
             }
           >
             <Route index element={<DashboardPage />} />
-            <Route path="topics" element={<PlaceholderPage title="Topics" icon="📋" description="Manage your interview topics and knowledge areas." />} />
+            <Route path="topics" element={<TopicsPage />} />
             <Route path="topics/:id" element={<PlaceholderPage title="Topic Detail" icon="📋" />} />
-            <Route path="session/new" element={<PlaceholderPage title="New Session" icon="💬" description="Start a new AI-guided interview session." />} />
+            <Route path="session/new" element={<NewSessionPage />} />
             <Route path="session/:id" element={<PlaceholderPage title="Interview Session" icon="💬" />} />
-            <Route path="graph" element={<PlaceholderPage title="Knowledge Graph" icon="🔗" description="Visualize connections between your topics and insights." />} />
-            <Route path="profile" element={<PlaceholderPage title="Profile Summary" icon="👤" description="Your auto-generated personal profile." />} />
-            <Route path="verify" element={<PlaceholderPage title="Verification Queue" icon="✅" description="Review and verify AI-extracted insights." />} />
-            <Route path="sandbox" element={<PlaceholderPage title="Context Sandbox" icon="🧪" description="Test how your personal context improves AI outputs." />} />
-            <Route path="bookmarks" element={<PlaceholderPage title="Bookmarks" icon="⭐" description="Your saved aha moments from interview sessions." />} />
-            <Route path="search" element={<PlaceholderPage title="Search" icon="🔍" description="Search across topics, insights, and session transcripts." />} />
-            <Route path="export" element={<PlaceholderPage title="Export" icon="📤" description="Export your verified profile as me.md or JSON." />} />
-            <Route path="settings" element={<PlaceholderPage title="Settings" icon="⚙️" description="Manage your account, preferences, and privacy." />} />
+            <Route path="graph" element={<KnowledgeGraphPage />} />
+            <Route path="profile" element={<ProfilePage />} />
+            <Route path="verify" element={<VerificationPage />} />
+            <Route path="sandbox" element={<SandboxPage />} />
+            <Route path="bookmarks" element={<BookmarksPage />} />
+            <Route path="search" element={<SearchPage />} />
+            <Route path="export" element={<ExportPage />} />
+            <Route path="settings" element={<SettingsPage />} />
           </Route>
 
           {/* 404 */}
