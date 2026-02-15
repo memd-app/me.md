@@ -1,3 +1,36 @@
+## Session - 2026-02-15 (Agent handling Features #15 and #21)
+
+### Accomplished
+- Feature #15 (Registration validates password requirements): PASSING
+  - Enhanced RegisterPage.tsx with real-time password requirement indicators
+  - Three inline checklist items: length (8+ chars), number, special character
+  - Green checkmarks for passing requirements, red X for failing
+  - Uses useMemo for efficient re-computation on password change
+  - Both client-side (validatePassword) and server-side validation verified
+  - Tested all 5 scenarios: short, no number, no special, no number+special, valid
+  - All error messages are specific about what's missing
+
+- Feature #21 (Onboarding profile field validation): PASSING
+  - Already fully implemented in OnboardingPage.tsx with comprehensive validation
+  - Client-side: validateProfileFields() checks all 5 required fields (name, DOB, location, occupation, gender)
+  - Server-side: POST /api/users/onboarding validates all fields, returns 400 with specific errors
+  - Date format validation: YYYY-MM-DD regex + Date validity check + future date check
+  - Inline error display with red borders and text for each field
+  - Error clears when user starts typing in a field (handleFieldChange)
+  - Verified all scenarios: all empty, partial fill, invalid date, valid submission
+
+### Verification
+- TypeScript compiles clean (zero errors)
+- Server starts and responds to /api/health
+- All API validation tested end-to-end with curl
+- No mock data patterns in client/src or server/src
+- Test data cleaned up after verification
+
+### Current Status
+- Features #15 and #21 both passing
+- Registration page now has real-time password requirement indicators
+- Onboarding profile validation works client-side and server-side
+
 ## Session - 2026-02-15 (Agent handling Features #73 and #74)
 
 ### Accomplished
