@@ -1,3 +1,41 @@
+## Session - 2026-02-15 (Agent handling Features #45 and #161)
+
+### Accomplished
+- Feature #45 (AI retry button on failure preserves session): PASSING
+  - Added POST /api/sessions/:id/messages/retry server endpoint
+  - Endpoint checks if last message is from user (AI response failed), regenerates AI response
+  - On AI failure in SessionPage, user message preserved (not removed)
+  - User-friendly error message: "Something went wrong while generating the AI response"
+  - Retry button in error banner with spinner/loading state
+  - handleRetry refreshes session from server, then calls retry endpoint or re-streams
+  - Typing indicator shows "AI Interviewer (Retrying...)" during retry
+  - Auth/session verification on retry endpoint
+  - No mock data patterns
+
+- Feature #161 (Network failure during form submission shows error): PASSING
+  - Enhanced CreateTopicPage error handling with network error detection
+  - Detects TypeError/Failed to fetch/NetworkError patterns from fetch API
+  - Network errors show specific icon (disconnection) and user-friendly message
+  - Error explicitly states "Your form data has been preserved"
+  - Retry Submission button appears in error banner for network errors
+  - Dismiss button to clear error
+  - Form data preserved in React state across error/retry cycles (controlled components)
+  - Also added .catch() fallback on res.json() for server error parsing
+  - No mock data patterns
+
+### Verification
+- TypeScript compiles clean (client: zero errors from our changes, only pre-existing SpeechRecognition type issues from another agent)
+- Server starts and health check returns OK
+- Retry endpoint tested: rejects when last msg is assistant, accepts when last msg is user
+- Auth check works on retry endpoint (wrong user gets 404)
+- No mock data patterns in client/src or server/src
+- Test data created and cleaned up
+
+### Current Status
+- Features #45 and #161 both passing
+- Session page now has full error recovery with retry for AI failures
+- Create Topic form handles network errors gracefully with data preservation
+
 ## Session - 2026-02-15 (Agent handling Features #44 and #70)
 
 ### Accomplished
