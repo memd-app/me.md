@@ -542,7 +542,7 @@ export default function SessionPage() {
   if (showDistillation && note) {
     return (
       <div className="flex flex-col h-full max-w-4xl mx-auto -m-6">
-        {/* Header */}
+        {/* Header with breadcrumb */}
         <div className="flex items-center justify-between px-6 py-3 bg-white dark:bg-dark-surface border-b border-gray-200 dark:border-dark-border shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <button
@@ -555,9 +555,18 @@ export default function SessionPage() {
               </svg>
             </button>
             <div className="min-w-0">
-              <h1 className="text-base font-semibold text-gray-900 dark:text-white truncate">
-                {note.title || `Session Notes: ${topic.title}`}
-              </h1>
+              {/* Breadcrumb navigation */}
+              <nav className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 mb-0.5">
+                <Link to="/app/topics" className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
+                  Topics
+                </Link>
+                <span>/</span>
+                <Link to={`/app/topics/${topic.id}`} className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors truncate max-w-[150px]" title={topic.title}>
+                  {topic.title}
+                </Link>
+                <span>/</span>
+                <span className="text-gray-600 dark:text-gray-300">Notes</span>
+              </nav>
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-green-500" />
                 <span className="text-xs text-gray-500 dark:text-gray-400">
@@ -655,7 +664,7 @@ export default function SessionPage() {
 
   return (
     <div className="flex flex-col h-full max-w-4xl mx-auto -m-6">
-      {/* Session header */}
+      {/* Session header with breadcrumb */}
       <div className="flex items-center justify-between px-6 py-3 bg-white dark:bg-dark-surface border-b border-gray-200 dark:border-dark-border shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <Link
@@ -668,9 +677,18 @@ export default function SessionPage() {
             </svg>
           </Link>
           <div className="min-w-0">
-            <h1 className="text-base font-semibold text-gray-900 dark:text-white truncate">
-              {topic.title}
-            </h1>
+            {/* Breadcrumb navigation */}
+            <nav className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 mb-0.5">
+              <Link to="/app/topics" className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
+                Topics
+              </Link>
+              <span>/</span>
+              <Link to={`/app/topics/${topic.id}`} className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors truncate max-w-[150px]" title={topic.title}>
+                {topic.title}
+              </Link>
+              <span>/</span>
+              <span className="text-gray-600 dark:text-gray-300">Session</span>
+            </nav>
             <div className="flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full ${isSessionActive ? 'bg-green-500 animate-pulse' : isSessionPaused ? 'bg-amber-500' : 'bg-gray-400'}`} />
               <span className="text-xs text-gray-500 dark:text-gray-400">

@@ -1,5 +1,5 @@
 import { useState, FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
 const INTENT_OPTIONS = [
@@ -91,6 +91,15 @@ export default function CreateTopicPage() {
 
   return (
     <div className="max-w-2xl mx-auto">
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-6">
+        <Link to="/app/topics" className="hover:text-primary-600 dark:hover:text-primary-400">
+          Topics
+        </Link>
+        <span>/</span>
+        <span className="text-gray-900 dark:text-white">New Topic</span>
+      </nav>
+
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Create New Topic</h1>
         <p className="mt-1 text-gray-600 dark:text-gray-400">
