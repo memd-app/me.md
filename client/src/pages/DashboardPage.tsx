@@ -233,47 +233,90 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Recent activity */}
+      {/* Session History Timeline */}
       <div className="card p-4 sm:p-6">
-        <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">
-          Recent Activity
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-1">
+          Session History
         </h2>
+        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-3 sm:mb-4">
+          Your recent interview sessions, most recent first
+        </p>
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-12 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
+              <div key={i} className="h-14 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
             ))}
           </div>
         ) : activity.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-gray-500 dark:text-gray-400 text-sm">
-              No activity yet. Start your first interview session to see activity here.
+              No sessions yet. Start your first interview to see your session history here.
             </p>
           </div>
         ) : (
-          <div className="space-y-2 sm:space-y-3">
-            {activity.map((item) => (
-              <Link
-                key={item.id}
-                to={`/app/session/${item.id}`}
-                className="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors min-h-[48px] active:bg-gray-100 dark:active:bg-gray-800"
-              >
-                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                  <span className="text-base sm:text-lg flex-shrink-0">💬</span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                      {item.title}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {SESSION_STATUS_LABELS[item.status] || item.status}
-                    </p>
-                  </div>
-                </div>
-                <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0 ml-2">
-                  {new Date(item.date).toLocaleDateString()}
-                </span>
-              </Link>
-            ))}
+          <div className="relative">
+            {/* Timeline line */}
+            <div className="absolute left-[19px] sm:left-[23px] top-4 bottom-4 w-0.5 bg-gray-200 dark:bg-gray-700" />
+            <div className="space-y-1">
+              {activity.map((item) => {
+                const sessionDate = new Date(item.date);
+                const statusColor = item.status === 'completed'
+                  ? 'bg-green-500'
+                  : item.status === 'active'
+                    ? 'bg-blue-500'
+                    : item.status === 'paused'
+                      ? 'bg-amber-500'
+                      : 'bg-gray-400';
+                return (
+                  <Link
+                    key={item.id}
+                    to={`/app/session/${item.id}`}
+                    className="relative flex items-start gap-3 sm:gap-4 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors min-h-[56px] active:bg-gray-100 dark:active:bg-gray-800 group"
+                  >
+                    {/* Timeline dot */}
+                    <div className="relative z-10 flex-shrink-0 mt-1">
+                      <div className={`w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full ${statusColor} ring-2 ring-white dark:ring-gray-900 group-hover:ring-gray-50 dark:group-hover:ring-gray-800`} />
+                    </div>
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {item.title}
+                        </p>
+                        <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${
+                          item.status === 'completed'
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                            : item.status === 'active'
+                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                              : item.status === 'paused'
+                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                : 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
+                        }`}>
+                          {SESSION_STATUS_LABELS[item.status] || item.status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        {sessionDate.toLocaleDateString('en-US', {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                          year: sessionDate.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
+                        })}
+                        {' at '}
+                        {sessionDate.toLocaleTimeString('en-US', {
+                          hour: 'numeric',
+                          minute: '2-digit',
+                        })}
+                      </p>
+                    </div>
+                    {/* Arrow indicator */}
+                    <svg className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Link>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
