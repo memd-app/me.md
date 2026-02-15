@@ -19,6 +19,7 @@ import { mcpRouter } from './routes/mcp.js';
 import { bookmarksRouter } from './routes/bookmarks.js';
 import { conflictsRouter } from './routes/conflicts.js';
 import { templatesRouter } from './routes/templates.js';
+import { sandboxRouter } from './routes/sandbox.js';
 
 dotenv.config();
 
@@ -48,7 +49,7 @@ app.use('/api/notes', notesRouter);
 app.use('/api/insights', insightsRouter);
 app.use('/api/graph', graphRouter);
 app.use('/api/profile', profileRouter);
-// app.use('/api/sandbox', sandboxRouter);
+app.use('/api/sandbox', sandboxRouter);
 app.use('/api/search', searchRouter);
 app.use('/api/dashboard', dashboardRouter);
 
