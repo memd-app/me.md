@@ -1,3 +1,33 @@
+## Session - 2026-02-16 (Agent handling Feature #206)
+
+### Accomplished
+- Feature #206 (Onboarding progress indicator shows correct step): PASSING
+  - Added `highestStepReached` state to track the furthest onboarding step the user has visited
+  - Step indicators now correctly show completed (green checkmark) for ALL previously visited steps
+  - Previously, `isCompleted = index < currentStepIndex` meant navigating back lost completed state
+  - Now, `isCompleted = index <= highestStepReached && index !== currentStepIndex` preserves it
+  - Progress bar uses `Math.max(currentStepIndex, highestStepReached)` so it doesn't regress when going back
+  - `setCurrentStep` wrapper function updates both `currentStep` and `highestStepReached` atomically
+  - All 6 verification steps confirmed:
+    1. Step 1 (Welcome) highlighted on start
+    2. Step 2 highlighted and step 1 completed after advancing
+    3. Navigating back preserves completed states for previously-reached steps
+    4. Skip to end shows all appropriate states
+    5. Step counter "Step X of 4" matches actual 4 steps in STEPS array
+
+### Verification
+- TypeScript compiles with zero errors (client tsc --noEmit)
+- Vite production build succeeds (654 modules transformed, 849 kB JS)
+- No mock data patterns found in client/src
+- No console errors expected
+
+### Files Changed
+- client/src/pages/OnboardingPage.tsx: Added highestStepReached tracking, updated progress/indicator logic
+
+### Current Status
+- 204/209 features passing (97.6%)
+- Feature #206 marked as passing
+
 ## Session - 2026-02-16 (Agent handling Feature #204)
 
 ### Accomplished
