@@ -1,3 +1,39 @@
+## Session - 2026-02-16 (Agent handling Features #103, #147, #148)
+
+### Accomplished
+- Feature #103 (MCP permission changes require confirmation): PASSING
+  - Added modal confirmation dialog for adding new MCP agent (shows agent name, explains access)
+  - Added modal confirmation dialog for toggling agent enable/disable
+  - Replaced inline delete confirmation with full modal dialog for revoking agent access
+  - Each dialog has Cancel (dismisses without changes) and Confirm buttons
+  - requestAddAgent/requestToggleAgent gate the actions behind confirmation state
+  - handleAddAgentConfirmed/handleToggleAgentConfirmed/handleDeleteAgentConfirmed execute after user confirms
+  - All three dialogs have data-testid attributes for testing
+
+- Feature #147 (API endpoints reject unauthenticated requests with 401): PASSING
+  - All 7 endpoints from feature steps verified to return 401 without auth:
+    GET /api/topics, POST /api/topics, GET /api/insights, GET /api/graph,
+    GET /api/profile/summary, GET /api/dashboard/stats, POST /api/sessions
+  - Additional endpoints verified: /api/notes, /api/mcp/permissions, /api/users/profile,
+    /api/bookmarks, /api/search - all return 401
+  - All 401 responses include {"error":"Not authenticated"} message
+  - Health endpoint remains public (200)
+  - No code changes needed - auth was already implemented in all routes
+
+- Feature #148 (Data isolation between users): PASSING
+  - Created User A and User B with separate accounts
+  - User A created topics; User B could not see them (empty list)
+  - User B could not access User A's specific topic by ID (404)
+  - User B could not modify or delete User A's topics (404)
+  - User B's insights, graph, profile, dashboard all show only their own data
+  - All route handlers filter by userId via WHERE clause
+  - Test data cleaned up (all test users deleted)
+  - No code changes needed - isolation was already implemented
+
+### Current Status
+- Features #103, #147, #148 all passing (Security & Access Control)
+- 117+/209 features passing
+
 ## Session - 2026-02-15 (Agent handling Features #86, #87, #88)
 
 ### Accomplished
