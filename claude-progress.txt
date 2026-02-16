@@ -1,3 +1,40 @@
+## Session - 2026-02-16 (Agent handling Feature #149 - Firebase Auth token verification on backend)
+
+### Accomplished
+- Feature #149 (Firebase Auth token verification on backend): PASSING
+  - Created server/src/middleware/auth.ts with full HMAC-signed session token system
+  - Token format: <random_hex>.<hmac_signature> - signed with server-side secret
+  - Added session_tokens table to database (schema + Drizzle ORM model)
+  - Token verification flow: validate HMAC signature -> lookup token hash in DB -> check expiry -> verify user exists
+  - Login, register, and Google auth endpoints now generate and return session tokens
+  - authMiddleware applied to ALL protected API routes in index.ts
+  - Auth routes (login, register, google, forgot-password, reset-password) remain public
+  - /api/auth/me uses authMiddleware for token validation
+  - verify-password, change-password, delete endpoints also protected with authMiddleware
+  - Added POST /api/auth/logout endpoint to revoke session tokens
+  - Client stores token in localStorage as memd_auth_token
+  - Global fetch interceptor in main.tsx auto-injects Bearer token on /api requests
+  - AuthContext updated: stores token on login/register/google, clears on logout
+  - Periodic cleanup of expired tokens (hourly)
+  - Token expiry: 7 days
+
+### Verification Results
+  - Valid token -> 200 on /api/auth/me, /api/topics, /api/dashboard/stats, /api/users/profile, /api/search, /api/bookmarks
+  - Corrupted token -> 401 "Invalid authentication token"
+  - Tampered HMAC -> 401 "Invalid authentication token"
+  - Random/foreign token -> 401 "Invalid authentication token"
+  - No auth at all -> 401 "Not authenticated" on all protected routes
+  - Deleted user's token -> 401 "Authentication token expired or invalid" (tokens revoked on deletion)
+  - Health endpoint remains public (200 without auth)
+  - TypeScript client compiles with zero errors
+  - Server TypeScript has only pre-existing errors in graph.ts and sessions.ts (not related)
+  - Vite build succeeds (646 modules, no errors)
+  - No mock data patterns in middleware code
+
+### Current Status
+- Feature #149 marked as passing
+- 161/209 features passing (76.6% + this one)
+
 ## Session - 2026-02-16 (Agent handling Feature #146 - Round-trip export and re-import preserves data)
 
 ### Accomplished
