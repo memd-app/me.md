@@ -71,6 +71,7 @@ function App() {
             <Route path="templates" element={<TemplatesPage />} />
             <Route path="session/new" element={<NewSessionPage />} />
             <Route path="session/:id" element={<SessionPage />} />
+            <Route path="sessions/:id" element={<SessionPage />} />
             <Route path="notes" element={<NotesPage />} />
             <Route path="graph" element={<KnowledgeGraphPage />} />
             <Route path="profile" element={<ProfilePage />} />
