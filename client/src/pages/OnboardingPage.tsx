@@ -610,36 +610,53 @@ export default function OnboardingPage() {
         />
       </div>
 
+      {/* Step counter text */}
+      <div className="text-center pt-4 pb-1">
+        <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
+          Step {currentStepIndex + 1} of {STEPS.length}
+        </span>
+      </div>
+
       {/* Step indicators */}
-      <div className="flex justify-center gap-4 sm:gap-6 pt-6 pb-4">
-        {STEPS.map((step, index) => (
-          <div key={step.key} className="flex items-center gap-2">
-            <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
-                index <= currentStepIndex
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-300'
-              }`}
-            >
-              {index < currentStepIndex ? (
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              ) : (
-                index + 1
-              )}
+      <div className="flex justify-center gap-4 sm:gap-6 pt-2 pb-4">
+        {STEPS.map((step, index) => {
+          const isCompleted = index < currentStepIndex;
+          const isCurrent = index === currentStepIndex;
+          return (
+            <div key={step.key} className="flex items-center gap-2">
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
+                  isCompleted
+                    ? 'bg-green-500 text-white'
+                    : isCurrent
+                      ? 'bg-primary-600 text-white ring-2 ring-primary-300 dark:ring-primary-700 ring-offset-2 dark:ring-offset-gray-900'
+                      : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                }`}
+                aria-label={`Step ${index + 1}: ${step.label}${isCompleted ? ' (completed)' : isCurrent ? ' (current)' : ' (pending)'}`}
+                aria-current={isCurrent ? 'step' : undefined}
+              >
+                {isCompleted ? (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  index + 1
+                )}
+              </div>
+              <span
+                className={`text-sm font-medium hidden sm:inline ${
+                  isCompleted
+                    ? 'text-green-600 dark:text-green-400'
+                    : isCurrent
+                      ? 'text-primary-600 dark:text-primary-400 font-semibold'
+                      : 'text-gray-400 dark:text-gray-500'
+                }`}
+              >
+                {step.label}
+              </span>
             </div>
-            <span
-              className={`text-sm font-medium hidden sm:inline ${
-                index <= currentStepIndex
-                  ? 'text-primary-600 dark:text-primary-400'
-                  : 'text-gray-500 dark:text-gray-300'
-              }`}
-            >
-              {step.label}
-            </span>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Content */}
