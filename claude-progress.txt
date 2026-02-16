@@ -1,3 +1,27 @@
+## Session - 2026-02-16 (Agent handling Feature #154 - Deep link to deleted entity)
+
+### Accomplished
+- Feature #154 (Deep link to deleted entity shows appropriate message): PASSING
+  - Verified backend returns 404 with "Topic not found" for deleted/non-existent topics
+  - Verified backend returns 404 with "Session not found" for deleted/non-existent sessions
+  - TopicDetailPage: detects 404, sets topicNotFound state, shows styled "Topic not found" card
+    with message "This topic has been deleted or does not exist." and "Back to Topics" link
+  - SessionPage: detects 404, shows "Session not found" card with descriptive error and "Back to Topics" link
+  - No crash or infinite loading: isLoading properly set to false in finally blocks
+  - Sidebar remains visible (pages render inside AppLayout) for easy navigation
+  - checkTopicDeleted helper used consistently across all action handlers (start session, add URL, remove URL, update topic)
+  - End-to-end test: created topic, deleted it, API correctly returns 404 for deleted topic
+  - TypeScript compiles with zero errors, Vite build succeeds
+  - No mock data patterns in client/src or server/src
+
+### Verification
+- Backend: POST /api/topics -> DELETE /api/topics/:id -> GET /api/topics/:id returns 404
+- Frontend: TopicDetailPage and SessionPage both handle 404 gracefully with user-friendly messages
+- TypeScript: zero errors (npx tsc --noEmit)
+- Vite build: succeeds (3 files, 2.83s)
+- No mock data patterns found
+- Server running without errors
+
 ## Session - 2026-02-16 (Agent handling Feature #153 - Malformed URL parameters handled gracefully)
 
 ### Accomplished
