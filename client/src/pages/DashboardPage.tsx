@@ -198,16 +198,105 @@ export default function DashboardPage() {
     };
   };
 
+  // Determine if user is brand new (no data at all)
+  const isNewUser = !isLoading && stats && stats.topics === 0 && stats.sessions === 0 && stats.insights === 0;
+
   return (
     <div className="max-w-6xl mx-auto overflow-x-hidden">
       <div className="mb-6 sm:mb-8">
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
-          Welcome back, {user?.name || 'there'}
+          {isNewUser ? `Welcome, ${user?.name || 'there'}!` : `Welcome back, ${user?.name || 'there'}`}
         </h1>
         <p className="mt-1 text-gray-600 dark:text-gray-300 text-sm sm:text-base">
-          Here&apos;s your knowledge overview
+          {isNewUser
+            ? 'Let\u2019s get started building your personal knowledge system'
+            : 'Here\u2019s your knowledge overview'}
         </p>
       </div>
+
+      {/* New user get-started guidance */}
+      {isNewUser && (
+        <div className="mb-6 sm:mb-8 p-6 sm:p-8 rounded-2xl bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-indigo-900/20 dark:via-purple-900/20 dark:to-pink-900/20 border border-indigo-100 dark:border-indigo-800">
+          <div className="text-center mb-6">
+            <span className="text-4xl sm:text-5xl block mb-3">&#x1F680;</span>
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-2">
+              Get Started with me.md
+            </h2>
+            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 max-w-xl mx-auto">
+              Build a comprehensive understanding of yourself through AI-guided conversations.
+              Here&apos;s how to begin your journey in 3 simple steps:
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+            {/* Step 1: Create */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-sm font-bold">
+                  1
+                </span>
+                <h3 className="font-semibold text-gray-900 dark:text-white">Create a Topic</h3>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                Start by creating a topic you&apos;d like to explore &mdash; your values, skills, goals, or experiences.
+              </p>
+              <Link
+                to="/app/topics/new"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Create Your First Topic
+              </Link>
+            </div>
+
+            {/* Step 2: Interview */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 text-sm font-bold">
+                  2
+                </span>
+                <h3 className="font-semibold text-gray-900 dark:text-white">Have an Interview</h3>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                Start an AI-guided conversation. The interviewer uses proven techniques to help you articulate your thoughts.
+              </p>
+              <Link
+                to="/app/new-session"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                Start Quick Interview
+              </Link>
+            </div>
+
+            {/* Step 3: Verify */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-pink-100 dark:bg-pink-900/50 text-pink-600 dark:text-pink-400 text-sm font-bold">
+                  3
+                </span>
+                <h3 className="font-semibold text-gray-900 dark:text-white">Verify Insights</h3>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                Review AI-extracted insights about you. Approve, edit, or reject each one to build your verified profile.
+              </p>
+              <Link
+                to="/app/verify"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Go to Verification
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
@@ -326,9 +415,16 @@ export default function DashboardPage() {
           </div>
         ) : activity.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-gray-500 dark:text-gray-300 text-sm">
-              No activity yet. Start by creating a topic or having your first interview.
+            <span className="text-3xl block mb-2">&#x1F4AD;</span>
+            <p className="text-gray-500 dark:text-gray-300 text-sm mb-3">
+              No activity yet. Your recent actions will appear here as you use the platform.
             </p>
+            <Link
+              to="/app/topics/new"
+              className="text-indigo-600 dark:text-indigo-400 text-sm font-medium hover:underline"
+            >
+              Create your first topic to get started &rarr;
+            </Link>
           </div>
         ) : (
           <div className="relative">
