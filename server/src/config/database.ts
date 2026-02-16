@@ -237,6 +237,35 @@ function initializeSchema() {
       email TEXT UNIQUE NOT NULL,
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS assessment_attempts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      started_at TEXT DEFAULT (datetime('now')),
+      completed_at TEXT,
+      status TEXT DEFAULT 'in_progress'
+    );
+
+    CREATE TABLE IF NOT EXISTS assessment_answers (
+      id TEXT PRIMARY KEY,
+      attempt_id TEXT NOT NULL REFERENCES assessment_attempts(id) ON DELETE CASCADE,
+      question_id TEXT NOT NULL,
+      answer_value INTEGER NOT NULL,
+      answered_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS assessment_results (
+      id TEXT PRIMARY KEY,
+      attempt_id TEXT NOT NULL REFERENCES assessment_attempts(id) ON DELETE CASCADE,
+      domain TEXT NOT NULL,
+      domain_score REAL NOT NULL,
+      facet_1_score REAL,
+      facet_2_score REAL,
+      facet_3_score REAL,
+      facet_4_score REAL,
+      facet_5_score REAL,
+      facet_6_score REAL
+    );
   `);
   console.log('[me.md] Database schema initialized');
 }

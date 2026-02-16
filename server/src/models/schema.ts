@@ -252,3 +252,41 @@ export const importedFiles = sqliteTable('imported_files', {
   processedContent: text('processed_content'),
   createdAt: text('created_at').default(sql`(datetime('now'))`),
 });
+
+// ============================================
+// Assessment Attempts (Big Five Personality Test)
+// ============================================
+export const assessmentAttempts = sqliteTable('assessment_attempts', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  startedAt: text('started_at').default(sql`(datetime('now'))`),
+  completedAt: text('completed_at'),
+  status: text('status').default('in_progress'), // in_progress | completed
+});
+
+// ============================================
+// Assessment Answers (Individual question responses)
+// ============================================
+export const assessmentAnswers = sqliteTable('assessment_answers', {
+  id: text('id').primaryKey(),
+  attemptId: text('attempt_id').references(() => assessmentAttempts.id, { onDelete: 'cascade' }).notNull(),
+  questionId: text('question_id').notNull(),
+  answerValue: integer('answer_value').notNull(), // 1-5 Likert scale
+  answeredAt: text('answered_at').default(sql`(datetime('now'))`),
+});
+
+// ============================================
+// Assessment Results (Calculated domain & facet scores)
+// ============================================
+export const assessmentResults = sqliteTable('assessment_results', {
+  id: text('id').primaryKey(),
+  attemptId: text('attempt_id').references(() => assessmentAttempts.id, { onDelete: 'cascade' }).notNull(),
+  domain: text('domain').notNull(), // O | C | E | A | N
+  domainScore: real('domain_score').notNull(),
+  facet1Score: real('facet_1_score'),
+  facet2Score: real('facet_2_score'),
+  facet3Score: real('facet_3_score'),
+  facet4Score: real('facet_4_score'),
+  facet5Score: real('facet_5_score'),
+  facet6Score: real('facet_6_score'),
+});
