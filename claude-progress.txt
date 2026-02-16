@@ -1,3 +1,46 @@
+## Session - 2026-02-16 (Agent handling Feature #226)
+
+### Accomplished
+- Feature #226 (Unified AI Insight Extraction Service): PASSING ✅
+
+### Changes Made
+- **server/src/services/insightExtraction.ts** (NEW): Unified insight extraction service
+  - `extractInsights()` main entry point accepts ExtractionContext and returns ExtractedInsight[]
+  - SourceType: 'interview' | 'import_url' | 'import_text' | 'import_chatgpt' | 'import_file'
+  - AI extraction with Claude: adapts prompt by source type (conversation-aware for interviews, content-analysis for imports)
+  - Deduplication against existing verified insights (passed in context, included in Claude prompt)
+  - Standardized output: { content: string, confidenceScore: number, category: string, extractionMethod: 'ai' | 'fallback' }
+  - Content chunking for large imports (MAX_CHUNK_SIZE=12000 chars, sentence/paragraph boundaries)
+  - Rule-based fallback when AI unavailable (preserves existing scoring logic)
+  - `formatInterviewTranscript()` helper for formatting messages into transcript strings
+
+- **server/src/routes/notes.ts**: Migrated distillation endpoint to unified service
+  - POST /api/sessions/:sessionId/distill now uses extractInsights() from insightExtraction.ts
+  - Queries existing verified insights for deduplication context
+  - Removed dependency on extractInsightsAI from ai.ts (old function still exists but unused by notes.ts)
+
+- **server/src/routes/import.ts**: Migrated import processing to unified service
+  - POST /api/import/:id/process now uses extractInsights() with source type mapping
+  - Maps fileType (chatgpt/url/text/file) to SourceType
+  - Queries existing verified insights for deduplication context
+  - Old rule-based functions (extractInsightsFromChatgpt/Url/Text) remain as dead code
+
+- **server/src/tests/insightExtraction.test.ts** (NEW): Integration tests
+  - 228/228 assertions passing across 11 test suites
+  - Tests: interview, mini session, ChatGPT import, URL import, text import, file import
+  - Tests: deduplication, empty content, consistent output format, transcript formatting, large content chunking
+  - Verifies all source types produce identical output shape {content, confidenceScore, category, extractionMethod}
+
+### Verification
+- TypeScript compiles with zero new errors (only pre-existing graph.ts and sessions.ts issues)
+- Client compiles with zero errors
+- Integration tests: 228 passed, 0 failed
+- No mock data patterns found in server/src
+
+### Current Status
+- 224/226 features passing (99.1%)
+- Feature #226 marked as passing
+
 ## Session - 2026-02-16 (Agent handling Feature #223)
 
 ### Accomplished
