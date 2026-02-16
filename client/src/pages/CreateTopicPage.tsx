@@ -320,6 +320,23 @@ export default function CreateTopicPage() {
             </button>
             <button
               type="button"
+              onClick={() => {
+                setTitle('');
+                setDescription('');
+                setTagInput('');
+                setTags([]);
+                setIntent('');
+                setTrigger('');
+                setError(null);
+                setIsNetworkError(false);
+              }}
+              className="btn-secondary"
+              disabled={isSubmitting}
+            >
+              Reset
+            </button>
+            <button
+              type="button"
               onClick={() => navigate('/app/topics')}
               className="btn-secondary"
             >
