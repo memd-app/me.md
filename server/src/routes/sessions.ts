@@ -356,8 +356,17 @@ sessionsRouter.post('/:id/messages', async (req, res) => {
   }
 });
 
+// Server-side timeout for AI operations (30 seconds)
+const AI_OPERATION_TIMEOUT_MS = 30000;
+
 // POST /api/sessions/:id/messages/retry - Retry AI response generation for the last user message
 sessionsRouter.post('/:id/messages/retry', async (req, res) => {
+  const retryTimeout = setTimeout(() => {
+    if (!res.headersSent) {
+      res.status(504).json({ error: 'AI response timed out. Please try again.' });
+    }
+  }, AI_OPERATION_TIMEOUT_MS);
+
   try {
     const userId = req.headers['x-user-id'] as string || req.body.userId;
     const sessionId = req.params.id;
@@ -429,22 +438,43 @@ sessionsRouter.post('/:id/messages/retry', async (req, res) => {
       updatedAt: new Date().toISOString(),
     }).where(eq(sessions.id, sessionId)).run();
 
+    clearTimeout(retryTimeout);
     res.status(201).json({
       aiMessage,
     });
   } catch (error) {
+    clearTimeout(retryTimeout);
     console.error('Retry message error:', error);
-    res.status(500).json({ error: 'Failed to retry AI response. Please try again.' });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to retry AI response. Please try again.' });
+    }
   }
 });
 
 // POST /api/sessions/:id/messages/stream - Send a message and stream AI response via SSE
 sessionsRouter.post('/:id/messages/stream', async (req, res) => {
+  // Set request timeout - if the entire operation takes too long, clean up
+  const requestTimeout = setTimeout(() => {
+    if (!res.writableEnded) {
+      if (res.headersSent) {
+        // Already streaming - send timeout error event and close
+        res.write(`data: ${JSON.stringify({ type: 'error', error: 'AI response timed out. Please try again.' })}\n\n`);
+        res.end();
+      } else {
+        res.status(504).json({ error: 'AI response timed out. Please try again.' });
+      }
+    }
+  }, AI_OPERATION_TIMEOUT_MS);
+
+  // Clean up timeout when client disconnects
+  res.on('close', () => clearTimeout(requestTimeout));
+
   try {
     const userId = req.headers['x-user-id'] as string || req.body.userId;
     const sessionId = req.params.id;
 
     if (!userId) {
+      clearTimeout(requestTimeout);
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
@@ -579,6 +609,7 @@ sessionsRouter.post('/:id/messages/stream', async (req, res) => {
     }
 
     // Send the complete message with metadata at the end
+    clearTimeout(requestTimeout);
     if (!res.writableEnded) {
       res.write(`data: ${JSON.stringify({ type: 'ai_complete', message: aiMessage })}\n\n`);
       res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
@@ -586,14 +617,17 @@ sessionsRouter.post('/:id/messages/stream', async (req, res) => {
     }
 
   } catch (error) {
+    clearTimeout(requestTimeout);
     console.error('Stream message error:', error);
     // If headers haven't been sent yet, send JSON error
     if (!res.headersSent) {
       res.status(500).json({ error: 'Failed to send message. Please try again.' });
     } else {
       // If already streaming, send error event
-      res.write(`data: ${JSON.stringify({ type: 'error', error: 'Failed to generate response' })}\n\n`);
-      res.end();
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ type: 'error', error: 'Failed to generate response' })}\n\n`);
+        res.end();
+      }
     }
   }
 });

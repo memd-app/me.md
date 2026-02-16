@@ -79,6 +79,9 @@ const DISTILL_STEPS = [
 
 const DISTILL_STEP_DURATIONS = [1500, 2500, 3000, 2000, 2000]; // ms per step
 
+// Timeout for AI operations (30 seconds)
+const AI_TIMEOUT_MS = 30000;
+
 // Pure render function for message content (bold + newlines) - defined outside component for stability
 function renderMessageContent(content: string) {
   const parts = content.split(/(\*\*[^*]+\*\*)/g);
@@ -853,9 +856,19 @@ export default function SessionPage() {
 
     setMessages(prev => [...prev, tempUserMessage]);
 
+    // Track whether the abort was triggered by timeout (vs user cancel)
+    let didTimeout = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
     try {
       const abortController = new AbortController();
       streamAbortRef.current = abortController;
+
+      // Set a timeout that will abort the request after AI_TIMEOUT_MS
+      timeoutId = setTimeout(() => {
+        didTimeout = true;
+        abortController.abort();
+      }, AI_TIMEOUT_MS);
 
       const res = await fetch(`/api/sessions/${session.id}/messages/stream`, {
         method: 'POST',
@@ -886,6 +899,9 @@ export default function SessionPage() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+
+        // Reset timeout on each chunk received (AI is still responding)
+        if (timeoutId) clearTimeout(timeoutId);
 
         buffer += decoder.decode(value, { stream: true });
 
@@ -935,6 +951,14 @@ export default function SessionPage() {
 
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
+        // Check if this was a timeout-triggered abort vs user-initiated cancel
+        if (didTimeout) {
+          setError('The AI response timed out (over 30 seconds). Your message has been saved — please try again.');
+          setFailedMessageContent(trimmedContent);
+          setStreamingContent('');
+          setIsStreaming(false);
+        }
+        // User-initiated abort: silently return
         return;
       }
       setError('Something went wrong while generating the AI response. Please try again.');
@@ -943,6 +967,7 @@ export default function SessionPage() {
       setStreamingContent('');
       setIsStreaming(false);
     } finally {
+      if (timeoutId) clearTimeout(timeoutId);
       setIsSending(false);
       isSendingRef.current = false;
       streamAbortRef.current = null;
@@ -959,9 +984,19 @@ export default function SessionPage() {
     setStreamingContent('');
     setIsStreaming(false);
 
+    // Track timeout for retry operations
+    let retryDidTimeout = false;
+    let retryTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
     try {
       const abortController = new AbortController();
       streamAbortRef.current = abortController;
+
+      // Set timeout for retry operation
+      retryTimeoutId = setTimeout(() => {
+        retryDidTimeout = true;
+        abortController.abort();
+      }, AI_TIMEOUT_MS);
 
       // The user message was already stored on the server from the first attempt.
       // We need to re-send to get the AI response. Use the non-streaming fallback
@@ -1031,6 +1066,9 @@ export default function SessionPage() {
             const { done, value } = await reader.read();
             if (done) break;
 
+            // Reset timeout on each chunk received
+            if (retryTimeoutId) clearTimeout(retryTimeoutId);
+
             bufferStr += decoder.decode(value, { stream: true });
             const events = bufferStr.split('\n\n');
             bufferStr = events.pop() || '';
@@ -1068,9 +1106,15 @@ export default function SessionPage() {
         throw new Error('Failed to fetch session state');
       }
     } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') return;
+      if (err instanceof Error && err.name === 'AbortError') {
+        if (retryDidTimeout) {
+          setError('The AI response timed out (over 30 seconds). Your session is preserved — please try again.');
+        }
+        return;
+      }
       setError('Retry failed. Please check your connection and try again.');
     } finally {
+      if (retryTimeoutId) clearTimeout(retryTimeoutId);
       setIsRetrying(false);
       streamAbortRef.current = null;
       inputRef.current?.focus();

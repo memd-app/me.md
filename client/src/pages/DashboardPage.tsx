@@ -278,7 +278,7 @@ export default function DashboardPage() {
                 Start an AI-guided conversation. The interviewer uses proven techniques to help you articulate your thoughts.
               </p>
               <Link
-                to="/app/new-session"
+                to="/app/session/new"
                 className="inline-flex items-center gap-1.5 text-sm font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -399,16 +399,34 @@ export default function DashboardPage() {
       {/* Quick actions */}
       <div className="card mb-6 sm:mb-8 p-4 sm:p-6">
         <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">
-          Get Started
+          Quick Actions
         </h2>
         <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 mb-4">
-          Start your journey by exploring a topic and having your first AI-guided interview.
+          Jump into an interview, create a topic, or explore your knowledge graph.
         </p>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <Link to="/app/new-session" className="btn-primary text-center min-h-[44px] flex items-center justify-center">
-            Start Quick Interview
+        <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
+          <Link to="/app/session/new" className="btn-primary text-center min-h-[44px] flex items-center justify-center gap-2">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            Start Interview
           </Link>
-          <Link to="/app/topics" className="btn-secondary text-center min-h-[44px] flex items-center justify-center">
+          <Link to="/app/topics/new" className="btn-secondary text-center min-h-[44px] flex items-center justify-center gap-2">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Create Topic
+          </Link>
+          <Link to="/app/graph" className="btn-secondary text-center min-h-[44px] flex items-center justify-center gap-2">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+            Explore Graph
+          </Link>
+          <Link to="/app/topics" className="btn-secondary text-center min-h-[44px] flex items-center justify-center gap-2">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+            </svg>
             Browse Topics
           </Link>
         </div>
