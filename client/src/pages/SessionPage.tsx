@@ -67,6 +67,17 @@ const FORMAT_LABELS: Record<NoteFormat, string> = {
   json: 'JSON Data',
 };
 
+// Distillation progress step labels - defined outside component to avoid re-creation
+const DISTILL_STEPS = [
+  { label: 'Analyzing conversation...', description: 'Reading through your session messages' },
+  { label: 'Extracting key insights...', description: 'Identifying important themes and patterns' },
+  { label: 'Generating notes...', description: 'Creating structured notes in multiple formats' },
+  { label: 'Finding connections...', description: 'Discovering links to other topics' },
+  { label: 'Finalizing...', description: 'Wrapping up your distilled session' },
+];
+
+const DISTILL_STEP_DURATIONS = [1500, 2500, 3000, 2000, 2000]; // ms per step
+
 // Pure render function for message content (bold + newlines) - defined outside component for stability
 function renderMessageContent(content: string) {
   const parts = content.split(/(\*\*[^*]+\*\*)/g);
@@ -182,6 +193,7 @@ export default function SessionPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [isDistilling, setIsDistilling] = useState(false);
+  const [distillStep, setDistillStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<Note | null>(null);
   const [noteInsights, setNoteInsights] = useState<Insight[]>([]);
@@ -209,6 +221,28 @@ export default function SessionPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isSendingRef = useRef(false); // Synchronous guard against double-send
+
+  // Progress through distill steps while distilling
+  useEffect(() => {
+    if (!isDistilling) {
+      setDistillStep(0);
+      return;
+    }
+    // Advance through steps on a timer (the actual API call runs in parallel)
+    let currentStep = 0;
+    setDistillStep(0);
+
+    const advance = () => {
+      currentStep++;
+      if (currentStep < DISTILL_STEPS.length) {
+        setDistillStep(currentStep);
+        timer = setTimeout(advance, DISTILL_STEP_DURATIONS[currentStep]);
+      }
+    };
+
+    let timer = setTimeout(advance, DISTILL_STEP_DURATIONS[0]);
+    return () => clearTimeout(timer);
+  }, [isDistilling]);
 
   // Prevent parent main area from scrolling - SessionPage handles its own scroll
   useEffect(() => {
@@ -1872,17 +1906,74 @@ export default function SessionPage() {
           </div>
         )}
 
-        {/* Distilling indicator */}
+        {/* Distilling progress indicator */}
         {isDistilling && (
-          <div className="flex justify-center">
-            <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl px-6 py-4 text-center">
-              <div className="animate-spin inline-block w-6 h-6 border-3 border-emerald-200 border-t-emerald-600 rounded-full mb-2" />
-              <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
-                Distilling your session...
-              </p>
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
-                Extracting insights and generating notes
-              </p>
+          <div className="flex justify-center px-4" role="status" aria-live="polite" aria-label="Distillation in progress">
+            <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-2xl px-6 py-5 w-full max-w-md shadow-sm">
+              {/* Header with spinner */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="animate-spin w-6 h-6 border-[3px] border-emerald-200 dark:border-emerald-800 border-t-emerald-600 dark:border-t-emerald-400 rounded-full shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
+                    Generating your notes
+                  </p>
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                    This may take a moment
+                  </p>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div className="w-full bg-emerald-100 dark:bg-emerald-900/40 rounded-full h-1.5 mb-4 overflow-hidden">
+                <div
+                  className="bg-emerald-500 dark:bg-emerald-400 h-1.5 rounded-full transition-all duration-700 ease-out"
+                  style={{ width: `${Math.min(((distillStep + 1) / DISTILL_STEPS.length) * 100, 100)}%` }}
+                />
+              </div>
+
+              {/* Step list */}
+              <div className="space-y-2">
+                {DISTILL_STEPS.map((step, index) => (
+                  <div key={index} className="flex items-start gap-2.5">
+                    {/* Step status icon */}
+                    <div className="mt-0.5 shrink-0">
+                      {index < distillStep ? (
+                        /* Completed step - checkmark */
+                        <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : index === distillStep ? (
+                        /* Current step - animated dot */
+                        <div className="w-4 h-4 flex items-center justify-center">
+                          <div className="w-2 h-2 bg-emerald-500 dark:bg-emerald-400 rounded-full animate-pulse" />
+                        </div>
+                      ) : (
+                        /* Pending step - empty circle */
+                        <div className="w-4 h-4 flex items-center justify-center">
+                          <div className="w-2 h-2 border border-emerald-300 dark:border-emerald-700 rounded-full" />
+                        </div>
+                      )}
+                    </div>
+                    {/* Step text */}
+                    <div className="min-w-0">
+                      <p className={`text-xs leading-snug ${
+                        index < distillStep
+                          ? 'text-emerald-600 dark:text-emerald-500 line-through'
+                          : index === distillStep
+                            ? 'text-emerald-800 dark:text-emerald-200 font-medium'
+                            : 'text-emerald-400 dark:text-emerald-600'
+                      }`}>
+                        {step.label}
+                      </p>
+                      {index === distillStep && (
+                        <p className="text-[11px] text-emerald-500 dark:text-emerald-400 mt-0.5">
+                          {step.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
