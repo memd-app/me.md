@@ -1,3 +1,31 @@
+## Session - 2026-02-16 (Agent handling Feature #204)
+
+### Accomplished
+- Feature #204 (Timeout handling for long AI operations): PASSING
+  - Added 30-second timeout for AI streaming responses in sendMessage function
+  - Added 30-second timeout for AI retry operations in handleRetry function
+  - Timeout aborts the fetch request and shows specific timeout error message
+  - Error message: "The AI response timed out (over 30 seconds). Your message has been saved — please try again."
+  - Retry button available after timeout (failedMessageContent is set)
+  - Session state preserved: user message saved to DB before AI response generation
+  - Server-side timeout handling for SSE stream endpoint (sends error event or 504)
+  - Server-side timeout handling for retry endpoint (504 on timeout)
+  - Timeout resets on each received SSE chunk (only fires if no data received within 30s)
+
+### Verification
+- Client TypeScript compiles with zero errors
+- Vite production build succeeds (652 modules transformed)
+- Server starts cleanly with timeout handlers active
+- No mock data patterns found in modified files
+
+### Files Changed
+- client/src/pages/SessionPage.tsx: Added AI_TIMEOUT_MS constant, timeout handling in sendMessage and handleRetry
+- server/src/routes/sessions.ts: Added AI_OPERATION_TIMEOUT_MS, server-side timeouts for stream and retry endpoints
+
+### Current Status
+- 202/209 features passing (96.7%)
+- Feature #204 marked as passing
+
 ## Session - 2026-02-16 (Agent handling Feature #205)
 
 ### Accomplished
