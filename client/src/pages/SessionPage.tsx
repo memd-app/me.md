@@ -240,7 +240,11 @@ export default function SessionPage() {
         });
 
         if (!res.ok) {
-          throw new Error('Failed to load session');
+          const data = await res.json().catch(() => ({}));
+          if (res.status === 404) {
+            throw new Error(data.error || 'This session does not exist or has been deleted.');
+          }
+          throw new Error(data.error || 'Failed to load session');
         }
 
         const data = await res.json();
@@ -1184,11 +1188,15 @@ export default function SessionPage() {
     return (
       <div className="max-w-4xl mx-auto">
         <div className="card text-center py-12" role="alert">
-          <span className="text-4xl block mb-3">Not found</span>
+          <svg className="w-12 h-12 mx-auto text-gray-400 dark:text-gray-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             Session not found
           </h2>
-          <p className="text-gray-600 dark:text-gray-300 mb-4">{error}</p>
+          <p className="text-gray-600 dark:text-gray-300 mb-4">
+            {error || 'This session does not exist or has been deleted.'}
+          </p>
           <Link to="/app/topics" className="btn-primary inline-block">
             Back to Topics
           </Link>
