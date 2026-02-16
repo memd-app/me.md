@@ -11,7 +11,10 @@
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
+    "@alheimsins/bigfive-calculate-score": "^3.0.3",
     "@anthropic-ai/sdk": "^0.30.0",
+    "@bigfive-org/questions": "^1.2.1",
+    "@bigfive-org/results": "^1.0.0",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "better-sqlite3": "^12.6.2",
     "cors": "^2.8.5",
