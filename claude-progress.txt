@@ -1,3 +1,49 @@
+## Session - 2026-02-16 (Agent handling Feature #235)
+
+### Accomplished
+- Feature #235 (Big Five Test - Export Integration): PASSING
+
+### Changes Made
+- **server/src/routes/profile.ts**: Added personality data to me.md export
+  - Added `getPersonalityExportData()` function that fetches latest Big Five scores, verified insights (respecting privacy tiers), and change trends across multiple assessments
+  - Added `generatePersonalityMarkdown()` function that generates structured markdown with domain/facet score tables, verified insights with confidence scores, and change trend tables
+  - Added `normalizeTo5()` function to convert raw sum scores (24-120 domain, 4-20 facet) to readable 0-5 scale
+  - Markdown export includes "Personality Profile (Big Five)" section after the standard profile sections
+  - JSON export (bumped to v1.2) includes `personality` top-level field with `domainScores`, `verifiedInsights`, `changeTrends`, `privacyTier`
+  - Metadata includes `hasPersonalityAssessment`, `personalityInsightCount`, `assessmentCount`
+  - Privacy tier filtering: only exports insights with `privacyTier = 'exportable'`
+
+- **server/src/mcp-server.ts**: Added personality resource to MCP stdio server
+  - Added `user://personality` resource exposing Big Five assessment data
+  - Updated `user://profile` resource to include `personality` field
+  - Updated `get_context_summary` tool to include personality section in markdown output
+  - All personality data respects `exportable` privacy tier filter
+  - Score normalization to 0-5 scale consistent with export
+
+- **server/src/routes/mcp.ts**: Added personality resource to MCP REST API
+  - Added `GET /api/mcp/resources/personality` endpoint
+  - Updated `GET /api/mcp/resources/profile` to include personality data
+  - Updated `GET /api/mcp/tools/context-summary` to include personality section
+  - All endpoints respect agent access permissions and privacy tiers
+  - Score normalization consistent across all endpoints
+
+### Verification
+- TypeScript compiles with zero errors (only pre-existing errors in graph.ts and sessions.ts)
+- Server starts and runs cleanly after changes
+- All 6 endpoints tested with real assessment data:
+  - JSON export: personality section present with 5 domains, 6 facets each, normalized 0-5 scores
+  - Markdown export: personality section with domain/facet tables
+  - MCP personality resource: returns full assessment data
+  - MCP profile resource: includes personality field
+  - MCP context summary: includes personality section in markdown
+  - All endpoints return null/false for users without assessments
+- No mock data patterns found in modified files
+- Test data cleaned up after verification
+
+### Current Status
+- 236/236 features passing (100%)
+- Feature #235 marked as passing
+
 ## Session - 2026-02-16 (Agent handling Feature #234)
 
 ### Accomplished
