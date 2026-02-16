@@ -3,7 +3,7 @@ import { db } from '../config/database.js';
 import { sessions, messages, topics, conceptNodes, topicConnections, insights, users, notes, bookmarks } from '../models/schema.js';
 import { eq, and, desc, ne, or } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
-import { generateClaudeResponse, streamClaudeResponse, checkUserAIRateLimit, isAIAvailable } from '../services/ai.js';
+import { generateClaudeResponse, streamClaudeResponse, generateClaudeQuickReplies, checkUserAIRateLimit, isAIAvailable } from '../services/ai.js';
 import type { ProfileContext as AIProfileContext, InterviewMap as AIInterviewMap, AIResponseOptions } from '../services/ai.js';
 
 export const sessionsRouter = Router();
@@ -402,7 +402,7 @@ sessionsRouter.post('/:id/messages', async (req, res) => {
 
       if (claudeResponse) {
         aiResponseContent = claudeResponse;
-        quickRepliesArr = generateQuickReplies(userMessageCount, aiResponseContent, historyForAI);
+        quickRepliesArr = await getAIQuickReplies(userMessageCount, aiResponseContent, historyForAI, rateLimitCheck.allowed);
       } else {
         // Fallback: use template-based mini session response
         const miniResponse = generateMiniSessionAIResponse(userMessageCount, content, historyForAI);
@@ -457,7 +457,7 @@ sessionsRouter.post('/:id/messages', async (req, res) => {
         );
       }
 
-      quickRepliesArr = generateQuickReplies(userMessageCount, aiResponseContent, historyForAI);
+      quickRepliesArr = await getAIQuickReplies(userMessageCount, aiResponseContent, historyForAI, rateLimitCheck.allowed);
 
       // AI suggests completion after 10+ user message exchanges (thorough conversation)
       shouldSuggestCompletion = userMessageCount >= 10;
@@ -579,9 +579,9 @@ sessionsRouter.post('/:id/messages/retry', async (req, res) => {
       );
     }
 
-    // Generate context-aware quick replies
+    // Generate context-aware quick replies (AI-powered with template fallback)
     const userMessageCount = conversationHistory.filter(m => m.role === 'user').length;
-    const quickRepliesArr = generateQuickReplies(userMessageCount, aiResponseContent, historyForAI);
+    const quickRepliesArr = await getAIQuickReplies(userMessageCount, aiResponseContent, historyForAI, retryRateCheck.allowed);
 
     // AI suggests completion after 10+ user message exchanges
     const shouldSuggestCompletion = userMessageCount >= 10;
@@ -795,12 +795,12 @@ sessionsRouter.post('/:id/messages/stream', async (req, res) => {
       }
     }
 
-    // Generate quick replies based on the full response
+    // Generate quick replies based on the full response (AI-powered with template fallback)
     if (session.isMiniSession && !usedRealStreaming) {
       const miniResponse = generateMiniSessionAIResponse(userMessageCount, content, historyForAI);
       quickRepliesArr = miniResponse.quickReplies;
     } else {
-      quickRepliesArr = generateQuickReplies(userMessageCount, fullResponseText, historyForAI);
+      quickRepliesArr = await getAIQuickReplies(userMessageCount, fullResponseText, historyForAI, streamRateCheck.allowed);
     }
 
     // Save the complete AI message to database only after streaming completes
@@ -2071,6 +2071,29 @@ function generateQuickReplies(
   ];
 
   return contextualSets[(messageCount - 2) % contextualSets.length];
+}
+
+// AI-powered quick replies with fallback to template
+// Tries Claude API first for contextual suggestions, falls back to hardcoded templates on failure
+async function getAIQuickReplies(
+  messageCount: number,
+  aiResponseContent: string,
+  conversationHistory: Array<{ role: string; content: string }>,
+  rateLimitAllowed: boolean,
+): Promise<string[]> {
+  // Only try Claude if rate limit allows and we have conversation context
+  if (rateLimitAllowed && conversationHistory.length > 0 && aiResponseContent) {
+    try {
+      const aiReplies = await generateClaudeQuickReplies(conversationHistory, aiResponseContent);
+      if (aiReplies && aiReplies.length >= 2) {
+        return aiReplies;
+      }
+    } catch (_) {
+      // Fall through to template
+    }
+  }
+  // Fallback to template-based quick replies
+  return generateQuickReplies(messageCount, aiResponseContent, conversationHistory);
 }
 
 // ============================================

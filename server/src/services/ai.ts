@@ -523,6 +523,99 @@ export async function* streamClaudeResponse(options: AIResponseOptions): AsyncGe
 }
 
 // ============================================
+// AI-Powered Quick Reply Suggestions
+// ============================================
+
+/**
+ * Generate contextual quick reply suggestions using Claude API.
+ * Analyzes the last few messages of conversation and the AI's latest response
+ * to produce 3-4 short, first-person reply options that are contextually relevant.
+ *
+ * Returns null if the API is unavailable or the call fails.
+ * The caller should fall back to template-based quick replies on null.
+ */
+export async function generateClaudeQuickReplies(
+  conversationHistory: Array<{ role: string; content: string }>,
+  lastAiResponse: string,
+): Promise<string[] | null> {
+  const client = getClient();
+  if (!client) {
+    return null;
+  }
+
+  // Build a condensed context from the last few messages (to keep token usage low)
+  const recentMessages = conversationHistory.slice(-6); // last 3 exchanges max
+  const contextSummary = recentMessages.map(m => {
+    const role = m.role === 'user' ? 'User' : 'Interviewer';
+    // Truncate long messages to save tokens
+    const content = m.content.length > 300 ? m.content.substring(0, 300) + '...' : m.content;
+    return `${role}: ${content}`;
+  }).join('\n\n');
+
+  const systemPrompt = `You are a quick reply suggestion generator for me.md, a personal knowledge system. Your job is to generate 3-4 short, contextual quick reply options that the user might want to send in response to an AI interviewer's message.
+
+## Rules
+- Each reply MUST be in first-person voice ("I...", "My...", "That reminds me...")
+- Each reply MUST be 1-2 sentences, under 15 words
+- Replies should be CONTEXTUALLY relevant to what the interviewer just asked or discussed
+- Provide a MIX of reply types: one that agrees/affirms, one that offers a specific example, one that goes deeper or challenges, and optionally one that redirects
+- Do NOT use generic phrases like "Tell me more" — these are USER replies, not interviewer prompts
+- Do NOT number the replies or add labels
+
+## Output Format
+Return ONLY the reply options, one per line, with no numbering, bullets, or other formatting. Exactly 3 or 4 lines.`;
+
+  const userPrompt = `Here is the recent conversation context:
+
+${contextSummary}
+
+The interviewer's latest message:
+${lastAiResponse.length > 500 ? lastAiResponse.substring(0, 500) + '...' : lastAiResponse}
+
+Generate 3-4 contextual first-person quick reply options for the user:`;
+
+  try {
+    console.log('[me.md:ai] Calling Claude API for quick reply suggestions');
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 256,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    });
+
+    const textBlocks = response.content.filter(block => block.type === 'text');
+    const responseText = textBlocks.map(block => block.text).join('\n');
+
+    if (!responseText || responseText.trim().length === 0) {
+      console.warn('[me.md:ai] Claude returned empty quick replies response.');
+      return null;
+    }
+
+    // Parse the response: one reply per line, filter empty lines
+    const replies = responseText
+      .split('\n')
+      .map(line => line.trim())
+      // Remove any numbering prefixes like "1.", "1)", "- ", "* "
+      .map(line => line.replace(/^\d+[\.\)]\s*/, '').replace(/^[-*]\s*/, '').trim())
+      .filter(line => line.length > 0 && line.length <= 100);
+
+    if (replies.length < 2) {
+      console.warn('[me.md:ai] Claude returned too few quick replies, falling back.');
+      return null;
+    }
+
+    // Take at most 4 replies
+    const finalReplies = replies.slice(0, 4);
+    console.log(`[me.md:ai] Quick replies generated: ${finalReplies.length} options (${response.usage.input_tokens} in / ${response.usage.output_tokens} out tokens)`);
+    return finalReplies;
+  } catch (error: unknown) {
+    const err = error as { status?: number; message?: string };
+    console.error(`[me.md:ai] Claude quick replies error: ${err.message || 'Unknown error'}`);
+    return null;
+  }
+}
+
+// ============================================
 // AI-Powered Note Distillation
 // ============================================
 
@@ -870,6 +963,175 @@ Output format (JSON array only, no wrapping):
       .slice(0, 10);
   } catch {
     console.warn('[me.md:ai] Failed to parse AI insight extraction result.');
+    return null;
+  }
+}
+
+// ============================================
+// AI-Powered Personalized Topic Suggestions
+// ============================================
+
+export interface TopicSuggestionContext {
+  userName: string;
+  occupation: string;
+  existingTopics: Array<{ title: string; status: string; tags: string | null; intent: string | null; presetCategory: string | null }>;
+  verifiedInsights: Array<{ content: string; topicTitle: string; confidenceScore: number }>;
+  topicConnections: Array<{ sourceTopic: string; targetTopic: string; connectionType: string | null }>;
+}
+
+export interface AISuggestedTopic {
+  title: string;
+  description: string;
+  category: string;
+  intent: string;
+  tags: string[];
+  suggestedQuestion: string;
+  rationale: string;
+}
+
+/**
+ * Generate personalized topic suggestions using Claude AI.
+ * Analyzes the user's existing topics, verified insights, and knowledge gaps
+ * to suggest relevant follow-up topics.
+ * Returns null if AI is unavailable (caller should use preset fallback).
+ */
+export async function generatePersonalizedTopicSuggestions(ctx: TopicSuggestionContext): Promise<AISuggestedTopic[] | null> {
+  const client = getClient();
+  if (!client) {
+    return null;
+  }
+
+  const systemPrompt = `You are a personal knowledge analyst for me.md, a personal knowledge system that helps users build comprehensive self-understanding through AI-guided interviews.
+
+Your job is to suggest personalized follow-up topics for exploration based on the user's existing knowledge graph — their explored topics, verified insights, and knowledge gaps.
+
+Output ONLY a valid JSON array with no markdown code fences, no explanation, and no commentary. Just the raw JSON array.
+
+${ctx.userName ? `The user's name is ${ctx.userName}${ctx.occupation ? `, occupation: ${ctx.occupation}` : ''}.` : ''}`;
+
+  // Build a summary of existing topics
+  const topicSummary = ctx.existingTopics.map(t => {
+    const tags = t.tags ? JSON.parse(t.tags).join(', ') : 'none';
+    return `- "${t.title}" (status: ${t.status}, intent: ${t.intent || 'none'}, tags: ${tags}, category: ${t.presetCategory || 'custom'})`;
+  }).join('\n');
+
+  // Build insights summary
+  const insightSummary = ctx.verifiedInsights.slice(0, 20).map(i =>
+    `- [From "${i.topicTitle}", confidence: ${i.confidenceScore}]: "${i.content}"`
+  ).join('\n');
+
+  // Build connections summary
+  const connectionSummary = ctx.topicConnections.slice(0, 15).map(c =>
+    `- "${c.sourceTopic}" ↔ "${c.targetTopic}" (${c.connectionType || 'related'})`
+  ).join('\n');
+
+  // Identify which preset categories the user has explored
+  const exploredCategories = new Set(ctx.existingTopics
+    .filter(t => t.presetCategory)
+    .map(t => t.presetCategory));
+
+  const allCategories = ['identity', 'skills', 'experiences', 'perspectives', 'goals'];
+  const unexploredCategories = allCategories.filter(c => !exploredCategories.has(c));
+
+  const userPrompt = `Analyze this user's personal knowledge profile and suggest 3-5 personalized follow-up topics they should explore next.
+
+## User's Existing Topics (${ctx.existingTopics.length} total)
+${topicSummary || '(No topics yet)'}
+
+## Verified Insights (${ctx.verifiedInsights.length} total)
+${insightSummary || '(No verified insights yet)'}
+
+## Topic Connections
+${connectionSummary || '(No connections yet)'}
+
+## Knowledge Gap Analysis
+${unexploredCategories.length > 0
+    ? `Unexplored categories: ${unexploredCategories.join(', ')}. Consider suggesting topics in these areas.`
+    : 'All major categories have been explored. Suggest deeper dives or cross-cutting topics.'}
+
+## Instructions
+
+Generate 3-5 personalized topic suggestions. Each suggestion should:
+1. Be relevant to the user's profile, occupation, and existing insights
+2. Fill knowledge gaps or deepen existing understanding
+3. Consider cross-topic connections (e.g., how career decisions relate to core values)
+4. Avoid duplicating existing topics
+5. Include a compelling opening question tailored to what the user has already shared
+
+Use one of these categories: identity, skills, experiences, perspectives, goals
+Use one of these intents: articulate, explore, decide, document
+
+## Output Format (JSON array only)
+[
+  {
+    "title": "Topic Title",
+    "description": "Why this topic matters for the user's self-knowledge",
+    "category": "one of: identity, skills, experiences, perspectives, goals",
+    "intent": "one of: articulate, explore, decide, document",
+    "tags": ["tag1", "tag2", "tag3"],
+    "suggestedQuestion": "A personalized opening question referencing the user's existing insights",
+    "rationale": "Brief explanation of why this topic was suggested (e.g., fills a gap, deepens a theme, connects two areas)"
+  }
+]`;
+
+  try {
+    console.log(`[me.md:ai] Calling Claude API for personalized topic suggestions (${ctx.existingTopics.length} topics, ${ctx.verifiedInsights.length} insights)`);
+
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2048,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    });
+
+    const textBlocks = response.content.filter(block => block.type === 'text');
+    const responseText = textBlocks.map(block => block.text).join('\n\n');
+
+    if (!responseText || responseText.trim().length === 0) {
+      console.warn('[me.md:ai] Claude returned empty topic suggestions response.');
+      return null;
+    }
+
+    console.log(`[me.md:ai] Topic suggestions response received (${responseText.length} chars, ${response.usage.input_tokens} in / ${response.usage.output_tokens} out tokens)`);
+
+    // Clean up markdown code fences
+    let cleaned = responseText.trim();
+    if (cleaned.startsWith('```json')) {
+      cleaned = cleaned.slice(7);
+    } else if (cleaned.startsWith('```')) {
+      cleaned = cleaned.slice(3);
+    }
+    if (cleaned.endsWith('```')) {
+      cleaned = cleaned.slice(0, -3);
+    }
+    cleaned = cleaned.trim();
+
+    const parsed = JSON.parse(cleaned);
+    if (!Array.isArray(parsed)) return null;
+
+    // Validate and sanitize each suggestion
+    const validIntents = ['articulate', 'explore', 'decide', 'document'];
+    const validCategories = ['identity', 'skills', 'experiences', 'perspectives', 'goals'];
+
+    return parsed
+      .filter((item: unknown) => {
+        if (typeof item !== 'object' || item === null) return false;
+        const obj = item as Record<string, unknown>;
+        return typeof obj.title === 'string' && typeof obj.description === 'string';
+      })
+      .map((item: AISuggestedTopic) => ({
+        title: item.title.substring(0, 200),
+        description: item.description.substring(0, 500),
+        category: validCategories.includes(item.category) ? item.category : 'perspectives',
+        intent: validIntents.includes(item.intent) ? item.intent : 'explore',
+        tags: Array.isArray(item.tags) ? item.tags.slice(0, 6).map((t: string) => String(t).toLowerCase().trim()) : [],
+        suggestedQuestion: typeof item.suggestedQuestion === 'string' ? item.suggestedQuestion.substring(0, 500) : '',
+        rationale: typeof item.rationale === 'string' ? item.rationale.substring(0, 300) : '',
+      }))
+      .slice(0, 5);
+  } catch (error: unknown) {
+    const err = error as { status?: number; message?: string };
+    console.error(`[me.md:ai] Topic suggestions error: ${err.message || 'Unknown error'}`);
     return null;
   }
 }
