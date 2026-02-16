@@ -91,9 +91,14 @@ export default function TopicsPage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [topics, setTopics] = useState<Topic[]>([]);
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [priorityFilter, setPriorityFilter] = useState('all');
-  const [sortBy, setSortBy] = useState<SortOption>('date_newest');
+  // Initialize filter state from URL params for deep-linking support
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || 'all');
+  const [priorityFilter, setPriorityFilter] = useState(() => searchParams.get('priority') || 'all');
+  const [sortBy, setSortBy] = useState<SortOption>(() => {
+    const sortParam = searchParams.get('sort');
+    return (sortParam && sortParam in SORT_LABELS) ? sortParam as SortOption : 'date_newest';
+  });
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') || '');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -162,30 +167,43 @@ export default function TopicsPage() {
     return () => window.removeEventListener('focus', handleFocus);
   }, []);
 
-  const hasActiveFilters = statusFilter !== 'all' || priorityFilter !== 'all';
+  const hasActiveFilters = statusFilter !== 'all' || priorityFilter !== 'all' || searchQuery.trim() !== '';
 
   const clearAllFilters = () => {
     setStatusFilter('all');
     setPriorityFilter('all');
     setSortBy('date_newest');
+    setSearchQuery('');
     setCurrentPage(1);
+    // Clear all filter-related URL params immediately
+    const newParams = new URLSearchParams();
+    // Preserve non-filter params like 'explore'
+    const explore = searchParams.get('explore');
+    if (explore) newParams.set('explore', explore);
+    setSearchParams(newParams, { replace: true });
   };
 
-  // Sync page number to URL params
+  // Sync all filter state to URL params for deep linking and filter reset verification
   useEffect(() => {
-    const newParams = new URLSearchParams(searchParams);
-    if (currentPage > 1) {
-      newParams.set('page', String(currentPage));
-    } else {
-      newParams.delete('page');
-    }
+    const newParams = new URLSearchParams();
+    // Preserve non-filter params
+    const explore = searchParams.get('explore');
+    if (explore) newParams.set('explore', explore);
+
+    // Set filter params (only include non-default values to keep URL clean)
+    if (statusFilter !== 'all') newParams.set('status', statusFilter);
+    if (priorityFilter !== 'all') newParams.set('priority', priorityFilter);
+    if (sortBy !== 'date_newest') newParams.set('sort', sortBy);
+    if (searchQuery.trim()) newParams.set('q', searchQuery.trim());
+    if (currentPage > 1) newParams.set('page', String(currentPage));
+
     // Only update if actually different to avoid infinite loops
-    const currentPageParam = searchParams.get('page');
-    const targetPageParam = currentPage > 1 ? String(currentPage) : null;
-    if (currentPageParam !== targetPageParam) {
+    const currentStr = searchParams.toString();
+    const newStr = newParams.toString();
+    if (currentStr !== newStr) {
       setSearchParams(newParams, { replace: true });
     }
-  }, [currentPage]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [statusFilter, priorityFilter, sortBy, searchQuery, currentPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filter and sort topics - deduplicate by ID for consistency during data updates
   const filteredAndSortedTopics = useMemo(() => {
@@ -196,6 +214,18 @@ export default function TopicsPage() {
       seen.add(t.id);
       return true;
     });
+
+    // Apply search query filter (matches title, description, and tags)
+    const trimmedSearch = searchQuery.trim().toLowerCase();
+    if (trimmedSearch) {
+      result = result.filter((t) => {
+        const titleMatch = t.title.toLowerCase().includes(trimmedSearch);
+        const descMatch = t.description?.toLowerCase().includes(trimmedSearch) || false;
+        const tagsMatch = t.tags?.toLowerCase().includes(trimmedSearch) || false;
+        const intentMatch = t.intent?.toLowerCase().includes(trimmedSearch) || false;
+        return titleMatch || descMatch || tagsMatch || intentMatch;
+      });
+    }
 
     // Apply status filter
     if (statusFilter !== 'all') {
@@ -228,7 +258,7 @@ export default function TopicsPage() {
     });
 
     return result;
-  }, [topics, statusFilter, priorityFilter, sortBy]);
+  }, [topics, statusFilter, priorityFilter, sortBy, searchQuery]);
 
   // Pagination computed values
   const totalFilteredTopics = filteredAndSortedTopics.length;
@@ -249,7 +279,7 @@ export default function TopicsPage() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, priorityFilter, sortBy]);
+  }, [statusFilter, priorityFilter, sortBy, searchQuery]);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -390,6 +420,41 @@ export default function TopicsPage() {
 
       {/* Filters and Sort Controls */}
       <div className="card mb-6 !p-4">
+        {/* Search Input */}
+        <div className="mb-3">
+          <label className="text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider mb-1.5 block">
+            Search
+          </label>
+          <div className="relative">
+            <svg
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search topics by name, description, or tags..."
+              className="input-field !py-2 !pl-10 !pr-10 text-sm w-full"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                title="Clear search"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Status Filter Row */}
         <div className="mb-3">
           <label className="text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider mb-1.5 block">
@@ -497,6 +562,11 @@ export default function TopicsPage() {
           <div className="mt-3 pt-3 border-t border-gray-200 dark:border-dark-border">
             <p className="text-sm text-gray-600 dark:text-gray-300">
               Showing {filteredAndSortedTopics.length} of {topics.length} topics
+              {searchQuery.trim() && (
+                <span className="ml-1">
+                  | Search: <span className="font-medium">&quot;{searchQuery.trim()}&quot;</span>
+                </span>
+              )}
               {statusFilter !== 'all' && (
                 <span className="ml-1">
                   | Status: <span className="font-medium">{STATUS_LABELS[statusFilter]}</span>
