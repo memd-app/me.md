@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import ConflictsSection from '../components/verification/ConflictsSection';
 import SwipeableCard from '../components/verification/SwipeableCard';
@@ -70,6 +71,7 @@ const INTERVAL_OPTIONS = [
 
 export default function VerificationPage() {
   const { user } = useAuth();
+  const { addToast } = useToast();
   const [pendingInsights, setPendingInsights] = useState<Insight[]>([]);
   const [verifiedInsights, setVerifiedInsights] = useState<Insight[]>([]);
   const [activeView, setActiveView] = useState<'verification' | 'privacy'>('verification');
@@ -171,9 +173,11 @@ export default function VerificationPage() {
         verified: prev.verified + 1,
       }));
       setIntervalDropdownOpen(null);
+      addToast('Insight approved and verified successfully!', 'success');
     } catch (err) {
       console.error('Failed to approve insight:', err);
       setError('Failed to approve insight');
+      addToast('Failed to approve insight', 'error');
     } finally {
       setActionInProgress(null);
     }
@@ -203,9 +207,11 @@ export default function VerificationPage() {
         pending: prev.pending - 1,
         rejected: prev.rejected + 1,
       }));
+      addToast('Insight rejected', 'warning');
     } catch (err) {
       console.error('Failed to reject insight:', err);
       setError('Failed to reject insight');
+      addToast('Failed to reject insight', 'error');
     } finally {
       setActionInProgress(null);
     }
