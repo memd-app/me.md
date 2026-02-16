@@ -9,7 +9,7 @@ import * as d3 from 'd3';
 interface GraphNode {
   id: string;
   entityId: string;
-  type: 'topic' | 'concept' | 'gap';
+  type: 'topic' | 'concept' | 'gap' | 'personality_domain' | 'personality_facet';
   label: string;
   description?: string;
   status?: string;
@@ -23,6 +23,13 @@ interface GraphNode {
   verificationStatus?: string; // For concept nodes: verification status of linked insight
   lastUpdated?: string;
   isUnexplored?: boolean;
+  // Personality node fields
+  domainScore?: number;
+  facetScore?: number;
+  scoreLevel?: string;
+  domainKey?: string;
+  parentDomainId?: string;
+  completedAt?: string;
   // D3 simulation properties
   x?: number;
   y?: number;
@@ -45,6 +52,7 @@ interface GraphEdge {
 interface GraphStats {
   topicCount: number;
   conceptCount: number;
+  personalityNodeCount?: number;
   edgeCount: number;
   insightCount: number;
   verifiedInsightCount: number;
@@ -73,6 +81,26 @@ const CATEGORY_COLORS_DIM: Record<string, string> = {
   default: '#93c5fd',      // blue-300
 };
 
+// Colors for Big Five personality domain nodes
+const PERSONALITY_DOMAIN_COLORS: Record<string, string> = {
+  O: '#3B82F6',   // blue (Openness)
+  C: '#8B5CF6',   // purple (Conscientiousness)
+  E: '#F59E0B',   // amber (Extraversion)
+  A: '#10B981',   // emerald (Agreeableness)
+  N: '#F43F5E',   // rose (Neuroticism)
+  default: '#ec4899', // pink fallback
+};
+
+// Lighter versions for facet nodes
+const PERSONALITY_FACET_COLORS: Record<string, string> = {
+  O: '#93c5fd',   // blue-300
+  C: '#c4b5fd',   // purple-300
+  E: '#fcd34d',   // amber-300
+  A: '#6ee7b7',   // emerald-300
+  N: '#fda4af',   // rose-300
+  default: '#f9a8d4', // pink-300
+};
+
 const STATUS_COLORS: Record<string, string> = {
   backlog: '#9ca3af',      // gray
   scheduled: '#f59e0b',    // amber
@@ -82,6 +110,12 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 function getNodeColor(node: GraphNode): string {
+  if (node.type === 'personality_domain') {
+    return PERSONALITY_DOMAIN_COLORS[node.domainKey || 'default'] || PERSONALITY_DOMAIN_COLORS.default;
+  }
+  if (node.type === 'personality_facet') {
+    return PERSONALITY_FACET_COLORS[node.domainKey || 'default'] || PERSONALITY_FACET_COLORS.default;
+  }
   if (node.type === 'gap') {
     // Dim version of the category color for unexplored nodes
     return CATEGORY_COLORS_DIM[node.category || 'default'] || CATEGORY_COLORS_DIM.default;
@@ -96,6 +130,8 @@ function getNodeColor(node: GraphNode): string {
 }
 
 function getNodeRadius(node: GraphNode): number {
+  if (node.type === 'personality_domain') return 16 + ((node.domainScore || 3) / 5) * 6; // 16-22, sized by score
+  if (node.type === 'personality_facet') return 7 + ((node.facetScore || 3) / 5) * 3; // 7-10, smaller sub-nodes
   if (node.type === 'gap') return 18; // Fixed size for gap placeholder nodes
   if (node.type === 'concept') return 6 + (node.weight || 1) * 2;
   // Topic nodes: base + scaling by weight (sessions + verified insights)
@@ -108,6 +144,8 @@ function getEdgeColor(edge: GraphEdge): string {
     case 'tag_shared': return '#93c5fd'; // blue-300
     case 'multi_bucket': return '#c4b5fd'; // violet-300
     case 'concept_relation': return '#a5f3fc'; // cyan-200
+    case 'personality_contains': return '#f9a8d4'; // pink-300
+    case 'personality_related': return '#fbcfe8'; // pink-200
     default: return '#9ca3af'; // gray-400
   }
 }
@@ -124,6 +162,7 @@ export default function KnowledgeGraphPage() {
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [showConcepts, setShowConcepts] = useState(true);
   const [showGaps, setShowGaps] = useState(true);
+  const [showPersonality, setShowPersonality] = useState(true);
   const simulationRef = useRef<d3.Simulation<GraphNode, GraphEdge> | null>(null);
 
   // Fetch graph data
@@ -197,15 +236,29 @@ export default function KnowledgeGraphPage() {
       nodes = nodes.filter(n => n.type !== 'gap');
     }
 
+    // Filter out personality nodes if showPersonality is off
+    if (!showPersonality) {
+      nodes = nodes.filter(n => n.type !== 'personality_domain' && n.type !== 'personality_facet');
+    }
+
     if (!showConcepts) {
-      const topicAndGapNodeIds = new Set(nodes.filter(n => n.type === 'topic' || n.type === 'gap').map(n => n.id));
-      nodes = nodes.filter(n => n.type === 'topic' || n.type === 'gap');
+      const keepTypes = new Set(['topic', 'gap', 'personality_domain', 'personality_facet']);
+      const keepNodeIds = new Set(nodes.filter(n => keepTypes.has(n.type)).map(n => n.id));
+      nodes = nodes.filter(n => keepTypes.has(n.type));
       edges = edges.filter(e => {
         const srcId = typeof e.source === 'string' ? e.source : e.source.id;
         const tgtId = typeof e.target === 'string' ? e.target : e.target.id;
-        return topicAndGapNodeIds.has(srcId) && topicAndGapNodeIds.has(tgtId);
+        return keepNodeIds.has(srcId) && keepNodeIds.has(tgtId);
       });
     }
+
+    // Final pass: ensure all edges reference nodes that exist after filtering
+    const finalNodeIds = new Set(nodes.map(n => n.id));
+    edges = edges.filter(e => {
+      const srcId = typeof e.source === 'string' ? e.source : e.source.id;
+      const tgtId = typeof e.target === 'string' ? e.target : e.target.id;
+      return finalNodeIds.has(srcId) && finalNodeIds.has(tgtId);
+    });
 
     // Deep clone nodes and edges for D3 mutation
     const simNodes: GraphNode[] = nodes.map(n => ({ ...n }));
@@ -257,8 +310,18 @@ export default function KnowledgeGraphPage() {
     const alphaDecay = isLargeGraph ? 0.04 : 0.02;
     const velocityDecay = isLargeGraph ? 0.4 : 0.3;
     const chargeStrength = isLargeGraph
-      ? ((d: any) => d.type === 'concept' ? -20 : (d.type === 'gap' ? -60 : -80))
-      : ((d: any) => d.type === 'concept' ? -30 : (d.type === 'gap' ? -80 : -120));
+      ? ((d: any) => {
+          if (d.type === 'concept' || d.type === 'personality_facet') return -20;
+          if (d.type === 'gap') return -60;
+          if (d.type === 'personality_domain') return -70;
+          return -80;
+        })
+      : ((d: any) => {
+          if (d.type === 'concept' || d.type === 'personality_facet') return -30;
+          if (d.type === 'gap') return -80;
+          if (d.type === 'personality_domain') return -100;
+          return -120;
+        });
 
     // Create simulation with performance-tuned parameters
     const simulation = d3.forceSimulation<GraphNode>(simNodes)
@@ -320,8 +383,42 @@ export default function KnowledgeGraphPage() {
         })
       );
 
-    // Node circles - explored nodes are fully opaque, gap nodes are dim
-    node.append('circle')
+    // Helper: generate pentagon path string centered at (0,0)
+    function pentagonPath(radius: number): string {
+      const points: string[] = [];
+      for (let i = 0; i < 5; i++) {
+        const angle = -Math.PI / 2 + (2 * Math.PI * i) / 5;
+        points.push(`${radius * Math.cos(angle)},${radius * Math.sin(angle)}`);
+      }
+      return `M${points.join('L')}Z`;
+    }
+
+    // Helper: generate diamond (rotated square) path string
+    function diamondPath(radius: number): string {
+      return `M0,${-radius} L${radius * 0.7},0 L0,${radius} L${-radius * 0.7},0 Z`;
+    }
+
+    // Personality domain nodes: pentagon shape
+    node.filter((d: GraphNode) => d.type === 'personality_domain')
+      .append('path')
+      .attr('d', (d: GraphNode) => pentagonPath(getNodeRadius(d)))
+      .attr('fill', (d: GraphNode) => getNodeColor(d))
+      .attr('stroke', '#fff')
+      .attr('stroke-width', 2)
+      .attr('opacity', 0.95);
+
+    // Personality facet nodes: diamond shape
+    node.filter((d: GraphNode) => d.type === 'personality_facet')
+      .append('path')
+      .attr('d', (d: GraphNode) => diamondPath(getNodeRadius(d)))
+      .attr('fill', (d: GraphNode) => getNodeColor(d))
+      .attr('stroke', (d: GraphNode) => PERSONALITY_DOMAIN_COLORS[d.domainKey || 'default'] || PERSONALITY_DOMAIN_COLORS.default)
+      .attr('stroke-width', 1.5)
+      .attr('opacity', 0.85);
+
+    // Non-personality node circles - explored nodes are fully opaque, gap nodes are dim
+    node.filter((d: GraphNode) => d.type !== 'personality_domain' && d.type !== 'personality_facet')
+      .append('circle')
       .attr('r', (d: GraphNode) => getNodeRadius(d))
       .attr('fill', (d: GraphNode) => {
         if (d.type === 'gap') return getNodeColor(d);
@@ -343,6 +440,45 @@ export default function KnowledgeGraphPage() {
         if (d.type === 'gap') return 0.35; // Very dim for unexplored
         if (d.type === 'concept') return 0.8;
         return 1;
+      });
+
+    // Score text inside personality domain nodes
+    node.filter((d: GraphNode) => d.type === 'personality_domain')
+      .append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', '0.35em')
+      .attr('font-size', '10px')
+      .attr('font-weight', 'bold')
+      .attr('fill', '#fff')
+      .style('pointer-events', 'none')
+      .text((d: GraphNode) => d.domainScore ? d.domainScore.toFixed(1) : '');
+
+    // Labels for personality domain nodes
+    node.filter((d: GraphNode) => d.type === 'personality_domain')
+      .append('text')
+      .attr('dy', (d: GraphNode) => getNodeRadius(d) + 14)
+      .attr('text-anchor', 'middle')
+      .attr('font-size', '10px')
+      .attr('font-weight', '600')
+      .attr('fill', 'currentColor')
+      .attr('class', 'text-gray-900 dark:text-gray-100')
+      .style('pointer-events', 'none')
+      .text((d: GraphNode) => d.label || '');
+
+    // Labels for personality facet nodes (small, compact)
+    node.filter((d: GraphNode) => d.type === 'personality_facet')
+      .append('text')
+      .attr('dy', (d: GraphNode) => getNodeRadius(d) + 10)
+      .attr('text-anchor', 'middle')
+      .attr('font-size', '8px')
+      .attr('font-weight', '500')
+      .attr('fill', 'currentColor')
+      .attr('class', 'text-gray-600 dark:text-gray-300')
+      .attr('opacity', 0.8)
+      .style('pointer-events', 'none')
+      .text((d: GraphNode) => {
+        const label = d.label || '';
+        return label.length > 14 ? label.substring(0, 12) + '..' : label;
       });
 
     // "?" icon inside gap nodes to indicate unexplored
@@ -520,6 +656,9 @@ export default function KnowledgeGraphPage() {
       } else if (d.type === 'gap') {
         // Clicking an unexplored node navigates to topics page with preset category filter
         navigate(`/app/topics?explore=${d.entityId}`);
+      } else if (d.type === 'personality_domain' || d.type === 'personality_facet') {
+        // Clicking a personality node navigates to the assessment page
+        navigate('/app/assessment');
       }
     });
 
@@ -539,7 +678,7 @@ export default function KnowledgeGraphPage() {
       simulation.stop();
       simulationRef.current = null;
     };
-  }, [graphData, showConcepts, showGaps, navigate]);
+  }, [graphData, showConcepts, showGaps, showPersonality, navigate]);
 
   // Empty state
   if (!loading && graphData && graphData.nodes.length === 0) {
@@ -604,6 +743,18 @@ export default function KnowledgeGraphPage() {
             />
             <span className="hidden sm:inline">Show </span>Concepts
           </label>
+          {/* Toggle personality nodes */}
+          {(graphData?.stats?.personalityNodeCount || 0) > 0 && (
+            <label className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showPersonality}
+                onChange={(e) => setShowPersonality(e.target.checked)}
+                className="w-4 h-4 text-pink-600 border-gray-300 rounded focus:ring-pink-500"
+              />
+              <span className="hidden sm:inline">Show </span>Personality
+            </label>
+          )}
           <button
             onClick={handleRefreshGraph}
             className="px-3 py-1.5 text-xs sm:text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors min-h-[36px]"
@@ -619,6 +770,9 @@ export default function KnowledgeGraphPage() {
         <div className="mb-3 flex gap-2 sm:gap-4 flex-wrap text-xs sm:text-sm text-gray-600 dark:text-gray-300">
           <span>{graphData.stats.topicCount} topics</span>
           <span>{graphData.stats.conceptCount} concepts</span>
+          {(graphData.stats.personalityNodeCount || 0) > 0 && (
+            <span className="text-pink-600 dark:text-pink-400">{graphData.stats.personalityNodeCount} personality</span>
+          )}
           <span>{graphData.stats.insightCount} insights</span>
           <span className="text-green-600 dark:text-green-400">{graphData.stats.verifiedInsightCount} verified</span>
           <span>{graphData.stats.edgeCount} connections</span>
@@ -676,19 +830,23 @@ export default function KnowledgeGraphPage() {
             >
               <div className="flex items-center gap-2 mb-1">
                 <span
-                  className="w-3 h-3 rounded-full inline-block"
+                  className={`w-3 h-3 inline-block ${hoveredNode.type === 'personality_domain' ? 'rotate-45' : 'rounded-full'}`}
                   style={{
                     backgroundColor: hoveredNode.type === 'gap'
                       ? (CATEGORY_COLORS[hoveredNode.category || 'default'] || CATEGORY_COLORS.default)
                       : getNodeColor(hoveredNode),
                     opacity: hoveredNode.type === 'gap' ? 0.5 : 1,
+                    borderRadius: hoveredNode.type === 'personality_domain' ? '2px' : undefined,
                   }}
                 />
                 <span className="font-semibold text-sm text-gray-900 dark:text-white">
                   {hoveredNode.label}
                 </span>
                 <span className="text-xs text-gray-500 capitalize">
-                  ({hoveredNode.type === 'gap' ? 'unexplored' : hoveredNode.type})
+                  ({hoveredNode.type === 'gap' ? 'unexplored'
+                    : hoveredNode.type === 'personality_domain' ? 'Big Five domain'
+                    : hoveredNode.type === 'personality_facet' ? 'personality facet'
+                    : hoveredNode.type})
                 </span>
               </div>
 
@@ -774,6 +932,90 @@ export default function KnowledgeGraphPage() {
                   )}
                 </div>
               )}
+
+              {/* Personality domain node tooltip */}
+              {hoveredNode.type === 'personality_domain' && (
+                <div className="mt-1 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium text-gray-600 dark:text-gray-300">Score</span>
+                        <span className="text-sm font-bold text-gray-900 dark:text-white">
+                          {hoveredNode.domainScore?.toFixed(1)}<span className="text-xs text-gray-400 font-normal">/5</span>
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                        <div
+                          className="h-1.5 rounded-full"
+                          style={{
+                            width: `${((hoveredNode.domainScore || 0) / 5) * 100}%`,
+                            backgroundColor: getNodeColor(hoveredNode),
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {hoveredNode.scoreLevel && (
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                      hoveredNode.scoreLevel === 'High' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
+                      hoveredNode.scoreLevel === 'Above Average' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' :
+                      hoveredNode.scoreLevel === 'Average' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' :
+                      'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                    }`}>
+                      {hoveredNode.scoreLevel}
+                    </span>
+                  )}
+                  {hoveredNode.description && (
+                    <p className="text-xs text-gray-600 dark:text-gray-300">{hoveredNode.description}</p>
+                  )}
+                  {hoveredNode.completedAt && (
+                    <p className="text-xs text-gray-400">
+                      Assessed: {formatShortDate(hoveredNode.completedAt)}
+                    </p>
+                  )}
+                  <div className="mt-1 flex items-center gap-1.5 text-xs text-pink-600 dark:text-pink-400">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    <span className="font-medium">Click to view assessment details</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Personality facet node tooltip */}
+              {hoveredNode.type === 'personality_facet' && (
+                <div className="mt-1 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-600 dark:text-gray-300">Score</span>
+                    <span className="text-sm font-bold text-gray-900 dark:text-white">
+                      {hoveredNode.facetScore?.toFixed(1)}<span className="text-xs text-gray-400 font-normal">/5</span>
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                    <div
+                      className="h-1.5 rounded-full"
+                      style={{
+                        width: `${((hoveredNode.facetScore || 0) / 5) * 100}%`,
+                        backgroundColor: PERSONALITY_DOMAIN_COLORS[hoveredNode.domainKey || 'default'] || PERSONALITY_DOMAIN_COLORS.default,
+                      }}
+                    />
+                  </div>
+                  {hoveredNode.scoreLevel && (
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                      hoveredNode.scoreLevel === 'High' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
+                      hoveredNode.scoreLevel === 'Moderate-High' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' :
+                      hoveredNode.scoreLevel === 'Average' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' :
+                      'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                    }`}>
+                      {hoveredNode.scoreLevel}
+                    </span>
+                  )}
+                  {hoveredNode.description && (
+                    <p className="text-xs text-gray-600 dark:text-gray-300">{hoveredNode.description}</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -794,6 +1036,18 @@ export default function KnowledgeGraphPage() {
                 <span className="text-gray-600 dark:text-gray-300">Concept</span>
               </div>
               <div className="flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 14 14">
+                  <polygon points="7,1 13,5.5 10.7,12.5 3.3,12.5 1,5.5" fill="#ec4899" stroke="#fff" strokeWidth="1" />
+                </svg>
+                <span className="text-gray-600 dark:text-gray-300">Personality domain</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 12 12">
+                  <polygon points="6,1 11,6 6,11 1,6" fill="#f9a8d4" stroke="#ec4899" strokeWidth="1" />
+                </svg>
+                <span className="text-gray-600 dark:text-gray-300">Personality facet</span>
+              </div>
+              <div className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-green-500 text-white flex items-center justify-center text-[7px] font-bold">3</span>
                 <span className="text-gray-600 dark:text-gray-300">Verified insights</span>
               </div>
@@ -804,6 +1058,10 @@ export default function KnowledgeGraphPage() {
               <div className="flex items-center gap-1.5">
                 <span className="w-4 border-t border-dashed border-blue-300" />
                 <span className="text-gray-600 dark:text-gray-300">Shared tag</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-4 border-t border-pink-300" />
+                <span className="text-gray-600 dark:text-gray-300">Personality link</span>
               </div>
             </div>
           </div>

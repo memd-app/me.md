@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../config/database.js';
-import { topics, insights, topicConnections, conceptNodes, conceptEdges, sessions } from '../models/schema.js';
-import { eq, and, or, inArray, isNull, not } from 'drizzle-orm';
+import { topics, insights, topicConnections, conceptNodes, conceptEdges, sessions, assessmentAttempts, assessmentResults } from '../models/schema.js';
+import { eq, and, or, inArray, isNull, not, desc } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export const graphRouter = Router();
@@ -232,6 +232,181 @@ graphRouter.get('/', async (req, res) => {
       });
     }
 
+    // =============================================
+    // Personality (Big Five) domain & facet nodes
+    // =============================================
+    // Fetch the latest completed Big Five assessment for this user
+    const DOMAIN_LABELS: Record<string, string> = {
+      O: 'Openness to Experience',
+      C: 'Conscientiousness',
+      E: 'Extraversion',
+      A: 'Agreeableness',
+      N: 'Neuroticism',
+    };
+
+    const FACET_LABELS: Record<string, string[]> = {
+      O: ['Imagination', 'Artistic Interests', 'Emotionality', 'Adventurousness', 'Intellect', 'Liberalism'],
+      C: ['Self-Efficacy', 'Orderliness', 'Dutifulness', 'Achievement-Striving', 'Self-Discipline', 'Cautiousness'],
+      E: ['Friendliness', 'Gregariousness', 'Assertiveness', 'Activity Level', 'Excitement-Seeking', 'Cheerfulness'],
+      A: ['Trust', 'Morality', 'Altruism', 'Cooperation', 'Modesty', 'Sympathy'],
+      N: ['Anxiety', 'Anger', 'Depression', 'Self-Consciousness', 'Immoderation', 'Vulnerability'],
+    };
+
+    const DOMAIN_SHORT: Record<string, string> = {
+      O: 'Openness',
+      C: 'Conscientiousness',
+      E: 'Extraversion',
+      A: 'Agreeableness',
+      N: 'Neuroticism',
+    };
+
+    const latestCompletedAttempt = db.select()
+      .from(assessmentAttempts)
+      .where(and(
+        eq(assessmentAttempts.userId, userId),
+        eq(assessmentAttempts.status, 'completed'),
+      ))
+      .orderBy(desc(assessmentAttempts.completedAt))
+      .limit(1)
+      .get();
+
+    let personalityNodeCount = 0;
+
+    if (latestCompletedAttempt) {
+      const domainResults = db.select()
+        .from(assessmentResults)
+        .where(eq(assessmentResults.attemptId, latestCompletedAttempt.id))
+        .all();
+
+      if (domainResults.length > 0) {
+        // Find the "Big Five Personality Assessment" topic to link to
+        const assessmentTopic = userTopics.find(t => t.title === 'Big Five Personality Assessment');
+        const assessmentTopicNodeId = assessmentTopic ? `topic-${assessmentTopic.id}` : null;
+
+        // Create domain-level personality nodes
+        for (const dr of domainResults) {
+          const domainNodeId = `personality-domain-${dr.domain}`;
+          const domainLabel = DOMAIN_SHORT[dr.domain] || dr.domain;
+          const score = dr.domainScore;
+          const scoreLevel = score >= 4 ? 'High' : score >= 3.5 ? 'Above Average' : score >= 2.5 ? 'Average' : score >= 2 ? 'Below Average' : 'Low';
+
+          graphNodes.push({
+            id: domainNodeId,
+            entityId: dr.domain,
+            type: 'personality_domain',
+            label: domainLabel,
+            description: `${DOMAIN_LABELS[dr.domain] || dr.domain}: ${score.toFixed(1)}/5 (${scoreLevel})`,
+            weight: 1.5 + (score / 5),
+            domainScore: score,
+            scoreLevel,
+            domainKey: dr.domain,
+            completedAt: latestCompletedAttempt.completedAt,
+          });
+          personalityNodeCount++;
+
+          // Connect domain node to the Big Five topic if it exists
+          if (assessmentTopicNodeId) {
+            graphEdges.push({
+              id: `personality-topic-${dr.domain}`,
+              source: assessmentTopicNodeId,
+              target: domainNodeId,
+              type: 'personality_contains',
+              weight: 0.6,
+            });
+          }
+
+          // Create facet sub-nodes under each domain
+          const facetLabels = FACET_LABELS[dr.domain] || [];
+          const facetScores = [
+            dr.facet1Score, dr.facet2Score, dr.facet3Score,
+            dr.facet4Score, dr.facet5Score, dr.facet6Score,
+          ];
+
+          for (let fi = 0; fi < facetScores.length; fi++) {
+            const facetScore = facetScores[fi];
+            if (facetScore === null || facetScore === undefined) continue;
+
+            const facetNodeId = `personality-facet-${dr.domain}-${fi + 1}`;
+            const facetLabel = facetLabels[fi] || `Facet ${fi + 1}`;
+            const facetLevel = facetScore >= 4 ? 'High' : facetScore >= 3 ? 'Moderate-High' : facetScore >= 2.5 ? 'Average' : 'Low';
+
+            graphNodes.push({
+              id: facetNodeId,
+              entityId: `${dr.domain}-facet-${fi + 1}`,
+              type: 'personality_facet',
+              label: facetLabel,
+              description: `${facetLabel}: ${facetScore.toFixed(1)}/5 (${facetLevel})`,
+              parentDomainId: domainNodeId,
+              weight: 0.8 + (facetScore / 5) * 0.5,
+              facetScore,
+              scoreLevel: facetLevel,
+              domainKey: dr.domain,
+            });
+            personalityNodeCount++;
+
+            // Edge from domain to facet
+            graphEdges.push({
+              id: `personality-df-${dr.domain}-${fi + 1}`,
+              source: domainNodeId,
+              target: facetNodeId,
+              type: 'personality_contains',
+              weight: 0.4,
+            });
+          }
+        }
+
+        // Cross-link personality nodes with relevant existing topic nodes
+        // Look at personality insights linked to topics and create edges
+        // between domain nodes and topics that have related insights
+        if (assessmentTopic) {
+          const personalityInsights = db.select()
+            .from(insights)
+            .where(and(
+              eq(insights.topicId, assessmentTopic.id),
+              eq(insights.userId, userId),
+              not(eq(insights.verificationStatus, 'rejected')),
+            ))
+            .all();
+
+          // Cross-reference: for each user topic that shares tags with personality domains,
+          // or has been referenced in personality insights, create a cross-link edge
+          const personalityCategoryKeywords: Record<string, string[]> = {
+            O: ['creative', 'imagination', 'artistic', 'curious', 'adventurous', 'intellectual', 'open'],
+            C: ['organized', 'discipline', 'goal', 'achievement', 'planning', 'efficient', 'reliable'],
+            E: ['social', 'communication', 'leadership', 'energy', 'outgoing', 'enthusiastic', 'assertive'],
+            A: ['empathy', 'trust', 'cooperation', 'helping', 'altruism', 'compassion', 'kind'],
+            N: ['stress', 'anxiety', 'emotional', 'worry', 'mood', 'coping', 'resilience'],
+          };
+
+          for (const topic of userTopics) {
+            if (topic.id === assessmentTopic.id) continue;
+
+            let parsedTags: string[] = [];
+            try {
+              if (topic.tags) parsedTags = JSON.parse(topic.tags);
+            } catch { /* ignore */ }
+
+            const topicText = `${topic.title} ${topic.description || ''} ${parsedTags.join(' ')}`.toLowerCase();
+
+            for (const [domainKey, keywords] of Object.entries(personalityCategoryKeywords)) {
+              const matchCount = keywords.filter(kw => topicText.includes(kw)).length;
+              if (matchCount >= 2) {
+                // Strong enough association to create a cross-link
+                graphEdges.push({
+                  id: `personality-cross-${domainKey}-${topic.id}`,
+                  source: `personality-domain-${domainKey}`,
+                  target: `topic-${topic.id}`,
+                  type: 'personality_related',
+                  weight: 0.3 + (matchCount * 0.1),
+                  relationship: `Related to ${DOMAIN_SHORT[domainKey]}`,
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+
     // Generate edges from shared tags between topics
     const tagToTopics: Record<string, string[]> = {};
     for (const node of graphNodes) {
@@ -309,6 +484,7 @@ graphRouter.get('/', async (req, res) => {
       stats: {
         topicCount: userTopics.length,
         conceptCount: userConceptNodes.length,
+        personalityNodeCount,
         edgeCount: graphEdges.length,
         insightCount: userInsights.length,
         verifiedInsightCount: Object.values(verifiedInsightsByTopic).reduce((a, b) => a + b, 0),
