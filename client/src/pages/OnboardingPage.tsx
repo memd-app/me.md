@@ -541,6 +541,8 @@ export default function OnboardingPage() {
     }
   };
 
+  const [showAssessmentSuggestion, setShowAssessmentSuggestion] = useState(false);
+
   const handleCompleteOnboarding = async () => {
     setIsSubmitting(true);
     try {
@@ -560,7 +562,8 @@ export default function OnboardingPage() {
         if (data.user) {
           updateUser(data.user);
         }
-        navigate('/app', { replace: true });
+        // Show assessment suggestion instead of navigating directly
+        setShowAssessmentSuggestion(true);
       }
     } catch {
       navigate('/app', { replace: true });
@@ -1337,6 +1340,45 @@ export default function OnboardingPage() {
           )}
         </div>
       </div>
+
+      {/* Assessment Suggestion Overlay - shown after onboarding completion */}
+      {showAssessmentSuggestion && (
+        <div className="fixed inset-0 z-50 bg-gray-50 dark:bg-dark-bg flex items-center justify-center px-4">
+          <div className="max-w-md w-full text-center">
+            <div className="bg-white dark:bg-dark-card rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-8">
+              <span className="text-5xl block mb-4">🧠</span>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+                Discover Your Personality
+              </h2>
+              <p className="text-gray-600 dark:text-gray-300 mb-2">
+                Take the Big Five personality assessment to add scientifically-validated personality insights to your profile.
+              </p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                120 questions &middot; ~15 minutes &middot; Based on the IPIP-NEO model
+              </p>
+
+              <div className="space-y-3">
+                <button
+                  onClick={() => navigate('/app/assessment', { replace: true })}
+                  className="btn-primary w-full py-3 text-base font-semibold"
+                >
+                  Take the Big Five Test
+                </button>
+                <button
+                  onClick={() => navigate('/app', { replace: true })}
+                  className="w-full py-2.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                >
+                  Skip for now &mdash; I&apos;ll do it later
+                </button>
+              </div>
+
+              <p className="mt-4 text-xs text-gray-400 dark:text-gray-500">
+                You can always take the test from the sidebar menu
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

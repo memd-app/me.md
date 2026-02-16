@@ -1,14 +1,23 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
-const navItems = [
+interface NavItem {
+  to: string;
+  label: string;
+  icon: string;
+  end?: boolean;
+  badge?: boolean;
+}
+
+const navItems: NavItem[] = [
   { to: '/app', label: 'Dashboard', icon: '📊', end: true },
   { to: '/app/topics', label: 'Topics', icon: '📋' },
   { to: '/app/session/new', label: 'New Session', icon: '💬' },
   { to: '/app/notes', label: 'Notes', icon: '📝' },
   { to: '/app/graph', label: 'Knowledge Graph', icon: '🔗' },
   { to: '/app/profile', label: 'Profile', icon: '👤' },
+  { to: '/app/assessment', label: 'Personality Test', icon: '🧠' },
   { to: '/app/verify', label: 'Verification', icon: '✅' },
   { to: '/app/sandbox', label: 'Sandbox', icon: '🧪' },
   { to: '/app/bookmarks', label: 'Bookmarks', icon: '⭐' },
@@ -27,11 +36,37 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const [hasNeverTakenTest, setHasNeverTakenTest] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate('/');
   };
+
+  // Check if user has ever taken the personality assessment
+  useEffect(() => {
+    if (!user) return;
+    const controller = new AbortController();
+    fetch('/api/assessment/history', {
+      headers: { 'x-user-id': user.id },
+      signal: controller.signal,
+    })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && data.history) {
+          const hasCompleted = data.history.some((a: { status: string }) => a.status === 'completed');
+          setHasNeverTakenTest(!hasCompleted);
+        }
+      })
+      .catch(() => {/* ignore */});
+    return () => controller.abort();
+  }, [user]);
+
+  // Compute nav items with badge info
+  const navItemsWithBadge = navItems.map(item => ({
+    ...item,
+    badge: item.to === '/app/assessment' && hasNeverTakenTest,
+  }));
 
   // Trap focus in sidebar when open on mobile + handle Escape key
   useEffect(() => {
@@ -94,13 +129,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           {/* Navigation */}
           <nav className="flex-1 overflow-y-auto py-4 px-3" role="navigation" aria-label="Main navigation">
             <ul className="space-y-1" role="list">
-              {navItems.map((item) => (
+              {navItemsWithBadge.map((item) => (
                 <li key={item.to} role="listitem">
                   <NavLink
                     to={item.to}
                     end={item.end}
                     onClick={onClose}
-                    aria-label={item.label}
+                    aria-label={item.badge ? `${item.label} (new)` : item.label}
                     className={({ isActive }) =>
                       `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-150 ${
                         isActive
@@ -110,7 +145,12 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                     }
                   >
                     <span className="text-base" aria-hidden="true">{item.icon}</span>
-                    <span>{item.label}</span>
+                    <span className="flex-1">{item.label}</span>
+                    {item.badge && (
+                      <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold leading-none text-white bg-rose-500 rounded-full" aria-label="Not taken yet">
+                        NEW
+                      </span>
+                    )}
                   </NavLink>
                 </li>
               ))}

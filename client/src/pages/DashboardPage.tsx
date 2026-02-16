@@ -47,6 +47,13 @@ interface ActivityItem {
   date: string;
 }
 
+interface AssessmentStatus {
+  hasTaken: boolean;
+  lastCompletedAt: string | null;
+  attemptId: string | null;
+  domainScores: Array<{ domain: string; score: number }> | null;
+}
+
 const CATEGORY_COLORS: Record<string, { bg: string; fill: string; text: string }> = {
   identity: { bg: 'bg-blue-100 dark:bg-blue-900/30', fill: 'bg-blue-500', text: 'text-blue-700 dark:text-blue-300' },
   skills: { bg: 'bg-emerald-100 dark:bg-emerald-900/30', fill: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-300' },
@@ -70,15 +77,22 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fetchVersion, setFetchVersion] = useState(0);
+  const [assessmentStatus, setAssessmentStatus] = useState<AssessmentStatus>({
+    hasTaken: false,
+    lastCompletedAt: null,
+    attemptId: null,
+    domainScores: null,
+  });
 
   const fetchDashboard = useCallback(async (signal?: AbortSignal) => {
     if (!user) return;
     setIsLoading(true);
     setError(null);
     try {
-      const [statsRes, activityRes] = await Promise.all([
+      const [statsRes, activityRes, assessmentRes] = await Promise.all([
         fetch('/api/dashboard/stats', { headers: { 'x-user-id': user.id }, signal }),
         fetch('/api/dashboard/activity', { headers: { 'x-user-id': user.id }, signal }),
+        fetch('/api/assessment/latest', { headers: { 'x-user-id': user.id }, signal }).catch(() => null),
       ]);
 
       if (!statsRes.ok || !activityRes.ok) {
@@ -90,6 +104,22 @@ export default function DashboardPage() {
 
       const activityData = await activityRes.json();
       setActivity(activityData.activity || []);
+
+      // Assessment data (optional - 404 means not taken)
+      if (assessmentRes && assessmentRes.ok) {
+        const aData = await assessmentRes.json();
+        setAssessmentStatus({
+          hasTaken: true,
+          lastCompletedAt: aData.completedAt,
+          attemptId: aData.attemptId,
+          domainScores: aData.domainScores?.map((d: { domain: string; domainScore: number }) => ({
+            domain: d.domain,
+            score: d.domainScore,
+          })) || null,
+        });
+      } else {
+        setAssessmentStatus({ hasTaken: false, lastCompletedAt: null, attemptId: null, domainScores: null });
+      }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       const message = err instanceof Error ? err.message : 'Failed to load dashboard data. Please try again.';
@@ -343,6 +373,84 @@ export default function DashboardPage() {
           </div>
         ))}
       </div>
+
+      {/* Personality Assessment Widget */}
+      {!isLoading && (
+        <div className="card mb-6 sm:mb-8 p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🧠</span>
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
+                Personality Assessment
+              </h2>
+            </div>
+            {assessmentStatus.hasTaken && assessmentStatus.attemptId && (
+              <Link
+                to={`/app/assessment/${assessmentStatus.attemptId}/results`}
+                className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+              >
+                View Details
+              </Link>
+            )}
+          </div>
+
+          {assessmentStatus.hasTaken && assessmentStatus.domainScores ? (
+            <>
+              <div className="flex items-center gap-2 sm:gap-3 mb-3">
+                {assessmentStatus.domainScores.map(ds => {
+                  const domainLabels: Record<string, string> = { O: 'Openness', C: 'Conscientiousness', E: 'Extraversion', A: 'Agreeableness', N: 'Neuroticism' };
+                  const domainColors: Record<string, string> = { O: 'bg-blue-500', C: 'bg-purple-500', E: 'bg-amber-500', A: 'bg-emerald-500', N: 'bg-rose-500' };
+                  const pct = Math.round((ds.score / 5) * 100);
+                  return (
+                    <div key={ds.domain} className="flex-1 text-center">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 truncate" title={domainLabels[ds.domain] || ds.domain}>
+                        {domainLabels[ds.domain] || ds.domain}
+                      </p>
+                      <div className="w-full h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${domainColors[ds.domain] || 'bg-gray-500'} transition-all duration-500`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mt-1">
+                        {ds.score.toFixed(1)}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Last taken: {assessmentStatus.lastCompletedAt ? formatActivityDate(assessmentStatus.lastCompletedAt) : 'Unknown'}
+                </p>
+                <Link
+                  to="/app/assessment"
+                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  Take again
+                </Link>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">
+                  Discover your Big Five personality traits with a scientifically-validated assessment.
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  120 questions &middot; ~15 minutes
+                </p>
+              </div>
+              <Link
+                to="/app/assessment"
+                className="btn-primary text-sm whitespace-nowrap flex-shrink-0"
+              >
+                Take Test
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Knowledge Completeness by Category */}
       <div className="card mb-6 sm:mb-8 p-4 sm:p-6">
