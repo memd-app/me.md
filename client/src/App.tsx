@@ -32,6 +32,7 @@ import NotesPage from '@/pages/NotesPage';
 import ImportPage from '@/pages/ImportPage';
 import AssessmentPage from '@/pages/AssessmentPage';
 import AssessmentResultsPage from '@/pages/AssessmentResultsPage';
+import AssessmentHistoryPage from '@/pages/AssessmentHistoryPage';
 
 function App() {
   return (
@@ -89,6 +90,7 @@ function App() {
             <Route path="export" element={<ExportPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="assessment" element={<AssessmentPage />} />
+            <Route path="assessment/history" element={<AssessmentHistoryPage />} />
             <Route path="assessment/:attemptId/results" element={<AssessmentResultsPage />} />
             {/* Catch-all for unknown /app/* routes */}
             <Route path="*" element={<NotFoundPage />} />

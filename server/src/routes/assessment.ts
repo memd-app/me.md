@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { db } from '../config/database.js';
 import { assessmentAttempts, assessmentAnswers, assessmentResults, insights, topics, notes } from '../models/schema.js';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, asc } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import bigFiveService from '../services/bigfive.js';
 import type { BigFiveAnswer } from '../services/bigfive.js';
-import { generatePersonalityInsights, storePersonalityInsights } from '../services/personalityInsights.js';
+import { generatePersonalityInsights, storePersonalityInsights, generateChangeInsights } from '../services/personalityInsights.js';
 
 export const assessmentRouter = Router();
 
@@ -348,6 +348,14 @@ assessmentRouter.get('/history', (req, res) => {
       const domainScores = results.map(r => ({
         domain: r.domain,
         score: r.domainScore,
+        facetScores: {
+          facet1: r.facet1Score,
+          facet2: r.facet2Score,
+          facet3: r.facet3Score,
+          facet4: r.facet4Score,
+          facet5: r.facet5Score,
+          facet6: r.facet6Score,
+        },
       }));
 
       // Get answer count for progress tracking
@@ -745,5 +753,282 @@ assessmentRouter.post('/:attemptId/generate-insights', async (req, res) => {
   } catch (err: any) {
     console.error('[me.md:assessment] Error generating insights:', err.message);
     res.status(500).json({ error: 'Failed to generate personality insights' });
+  }
+});
+
+// ============================================
+// GET /api/assessment/compare
+// ============================================
+// Compare two assessment attempts side-by-side.
+// Query params: attemptA, attemptB (attempt IDs)
+assessmentRouter.get('/compare', (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string;
+    if (!userId) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { attemptA, attemptB } = req.query;
+    if (!attemptA || !attemptB) {
+      res.status(400).json({ error: 'Both attemptA and attemptB query parameters are required' });
+      return;
+    }
+
+    // Verify both attempts belong to user and are completed
+    const getAttemptWithResults = (attemptId: string) => {
+      const attempt = db.select()
+        .from(assessmentAttempts)
+        .where(and(
+          eq(assessmentAttempts.id, attemptId),
+          eq(assessmentAttempts.userId, userId),
+          eq(assessmentAttempts.status, 'completed'),
+        ))
+        .get();
+
+      if (!attempt) return null;
+
+      const results = db.select()
+        .from(assessmentResults)
+        .where(eq(assessmentResults.attemptId, attemptId))
+        .all();
+
+      return {
+        attemptId: attempt.id,
+        completedAt: attempt.completedAt,
+        domainScores: results.map(r => ({
+          domain: r.domain,
+          score: r.domainScore,
+          facetScores: {
+            facet1: r.facet1Score,
+            facet2: r.facet2Score,
+            facet3: r.facet3Score,
+            facet4: r.facet4Score,
+            facet5: r.facet5Score,
+            facet6: r.facet6Score,
+          },
+        })),
+      };
+    };
+
+    const a = getAttemptWithResults(attemptA as string);
+    const b = getAttemptWithResults(attemptB as string);
+
+    if (!a || !b) {
+      res.status(404).json({ error: 'One or both assessment attempts not found or not completed' });
+      return;
+    }
+
+    // Calculate differences
+    const SIGNIFICANT_THRESHOLD = 0.5; // 10% of 5-point scale
+    const domainLabels: Record<string, string> = {
+      N: 'Neuroticism', E: 'Extraversion', O: 'Openness', A: 'Agreeableness', C: 'Conscientiousness',
+    };
+
+    const comparison = ['O', 'C', 'E', 'A', 'N'].map(domain => {
+      const scoreA = a.domainScores.find(d => d.domain === domain);
+      const scoreB = b.domainScores.find(d => d.domain === domain);
+
+      const domainScoreA = scoreA?.score ?? 0;
+      const domainScoreB = scoreB?.score ?? 0;
+      const diff = domainScoreB - domainScoreA;
+      const percentChange = domainScoreA > 0 ? (diff / domainScoreA) * 100 : 0;
+      const isSignificant = Math.abs(percentChange) >= 10;
+
+      // Facet comparison
+      const facetDiffs = [1, 2, 3, 4, 5, 6].map(f => {
+        const key = `facet${f}` as string;
+        const facetsA = scoreA?.facetScores as Record<string, number | null> | undefined;
+        const facetsB = scoreB?.facetScores as Record<string, number | null> | undefined;
+        const fA = facetsA?.[key] ?? 0;
+        const fB = facetsB?.[key] ?? 0;
+        const fDiff = (fB as number) - (fA as number);
+        return {
+          facet: f,
+          scoreA: fA,
+          scoreB: fB,
+          diff: fDiff,
+          isSignificant: Math.abs(fDiff) >= SIGNIFICANT_THRESHOLD,
+        };
+      });
+
+      return {
+        domain,
+        label: domainLabels[domain] || domain,
+        scoreA: domainScoreA,
+        scoreB: domainScoreB,
+        diff,
+        percentChange: Math.round(percentChange * 10) / 10,
+        isSignificant,
+        facets: facetDiffs,
+      };
+    });
+
+    const significantChanges = comparison.filter(c => c.isSignificant);
+
+    res.json({
+      attemptA: { attemptId: a.attemptId, completedAt: a.completedAt },
+      attemptB: { attemptId: b.attemptId, completedAt: b.completedAt },
+      comparison,
+      significantChanges: significantChanges.map(c => ({
+        domain: c.domain,
+        label: c.label,
+        from: c.scoreA,
+        to: c.scoreB,
+        percentChange: c.percentChange,
+      })),
+    });
+  } catch (err: any) {
+    console.error('[me.md:assessment] Error comparing attempts:', err.message);
+    res.status(500).json({ error: 'Failed to compare assessments' });
+  }
+});
+
+// ============================================
+// POST /api/assessment/change-insights
+// ============================================
+// Generate AI-powered change insights comparing two attempts.
+assessmentRouter.post('/change-insights', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string;
+    if (!userId) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { attemptIdOld, attemptIdNew } = req.body;
+    if (!attemptIdOld || !attemptIdNew) {
+      res.status(400).json({ error: 'Both attemptIdOld and attemptIdNew are required' });
+      return;
+    }
+
+    // Verify both belong to user, completed
+    const getAttemptScores = (attemptId: string) => {
+      const attempt = db.select()
+        .from(assessmentAttempts)
+        .where(and(
+          eq(assessmentAttempts.id, attemptId),
+          eq(assessmentAttempts.userId, userId),
+          eq(assessmentAttempts.status, 'completed'),
+        ))
+        .get();
+      if (!attempt) return null;
+
+      const results = db.select()
+        .from(assessmentResults)
+        .where(eq(assessmentResults.attemptId, attemptId))
+        .all();
+
+      return {
+        attemptId: attempt.id,
+        completedAt: attempt.completedAt,
+        scores: results.map(r => ({
+          domain: r.domain,
+          domainScore: r.domainScore,
+          facetScores: {
+            facet1: r.facet1Score,
+            facet2: r.facet2Score,
+            facet3: r.facet3Score,
+            facet4: r.facet4Score,
+            facet5: r.facet5Score,
+            facet6: r.facet6Score,
+          },
+        })),
+      };
+    };
+
+    const oldAttempt = getAttemptScores(attemptIdOld);
+    const newAttempt = getAttemptScores(attemptIdNew);
+
+    if (!oldAttempt || !newAttempt) {
+      res.status(404).json({ error: 'One or both attempts not found or not completed' });
+      return;
+    }
+
+    const changeInsights = await generateChangeInsights(
+      userId,
+      oldAttempt.scores,
+      newAttempt.scores,
+      oldAttempt.completedAt || '',
+      newAttempt.completedAt || '',
+    );
+
+    // Store change insights in the knowledge graph (notes + insights)
+    if (changeInsights.insights.length > 0) {
+      try {
+        // Find or create the Big Five assessment topic
+        let assessmentTopic = db.select()
+          .from(topics)
+          .where(and(
+            eq(topics.userId, userId),
+            eq(topics.title, 'Big Five Personality Assessment'),
+          ))
+          .get();
+
+        if (!assessmentTopic) {
+          const topicId = uuidv4();
+          assessmentTopic = db.insert(topics).values({
+            id: topicId,
+            userId,
+            title: 'Big Five Personality Assessment',
+            description: 'Personality insights generated from the Big Five (IPIP NEO-PI-R) assessment.',
+            tags: JSON.stringify(['personality', 'big-five', 'assessment', 'self-knowledge']),
+            status: 'extracted',
+            priority: 'medium',
+            intent: 'explore',
+            isPreset: false,
+            presetCategory: 'identity',
+          }).returning().get();
+        }
+
+        // Create a change analysis note with temporal context
+        const noteId = uuidv4();
+        const oldDateStr = oldAttempt.completedAt ? new Date(oldAttempt.completedAt).toLocaleDateString() : 'earlier';
+        const newDateStr = newAttempt.completedAt ? new Date(newAttempt.completedAt).toLocaleDateString() : 'recent';
+        const insightsList = changeInsights.insights.map((i: string) => `- ${i}`).join('\n');
+        const shiftsList = changeInsights.significantShifts.length > 0
+          ? `\n\n## Significant Shifts\n${changeInsights.significantShifts.map((s: { label: string; from: number; to: number; interpretation: string }) =>
+              `- **${s.label}**: ${s.from.toFixed(2)} → ${s.to.toFixed(2)} — ${s.interpretation}`
+            ).join('\n')}`
+          : '';
+
+        const fullAnalysis = `# Personality Change Analysis\n\nComparing assessments from ${oldDateStr} to ${newDateStr}.\n\n## Change Insights\n${insightsList}${shiftsList}`;
+
+        db.insert(notes).values({
+          id: noteId,
+          sessionId: attemptIdNew,
+          topicId: assessmentTopic.id,
+          userId,
+          title: `Personality Changes — ${oldDateStr} to ${newDateStr}`,
+          contentFullAnalysis: fullAnalysis,
+          contentBriefSummary: `Personality change analysis with ${changeInsights.insights.length} insights.`,
+          selectedFormat: 'full_analysis',
+        }).run();
+
+        // Store each change insight
+        for (const insight of changeInsights.insights) {
+          db.insert(insights).values({
+            id: uuidv4(),
+            noteId,
+            topicId: assessmentTopic.id,
+            userId,
+            content: insight,
+            confidenceScore: 75,
+            verificationStatus: 'unverified',
+            extractionMethod: changeInsights.generated ? 'ai' : 'rule_based',
+            sourceSessionId: null,
+          }).run();
+        }
+
+        console.log(`[me.md:assessment] Stored ${changeInsights.insights.length} change insights in knowledge graph`);
+      } catch (storeErr: any) {
+        console.warn('[me.md:assessment] Failed to store change insights in knowledge graph:', storeErr.message);
+      }
+    }
+
+    res.json(changeInsights);
+  } catch (err: any) {
+    console.error('[me.md:assessment] Error generating change insights:', err.message);
+    res.status(500).json({ error: 'Failed to generate change insights' });
   }
 });

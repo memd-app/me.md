@@ -419,17 +419,60 @@ export default function DashboardPage() {
                   );
                 })}
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   Last taken: {assessmentStatus.lastCompletedAt ? formatActivityDate(assessmentStatus.lastCompletedAt) : 'Unknown'}
                 </p>
-                <Link
-                  to="/app/assessment"
-                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
-                >
-                  Take again
-                </Link>
+                <div className="flex items-center gap-3">
+                  <Link
+                    to="/app/assessment/history"
+                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                  >
+                    View History
+                  </Link>
+                  <Link
+                    to="/app/assessment"
+                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                  >
+                    Take again
+                  </Link>
+                </div>
               </div>
+              {/* Retest suggestion widget */}
+              {assessmentStatus.lastCompletedAt && (() => {
+                const daysSinceLast = Math.floor((Date.now() - new Date(assessmentStatus.lastCompletedAt).getTime()) / (1000 * 60 * 60 * 24));
+                const MIN_RETEST_DAYS = 90;
+                const isOverdue = daysSinceLast >= MIN_RETEST_DAYS;
+                if (isOverdue) {
+                  return (
+                    <div className="mt-3 p-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 flex items-center gap-2">
+                      <span className="text-base">🔄</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-indigo-700 dark:text-indigo-300">
+                          Time for a retest!
+                        </p>
+                        <p className="text-[11px] text-indigo-600 dark:text-indigo-400">
+                          It&apos;s been {daysSinceLast} days since your last assessment. Retake to track personality changes.
+                        </p>
+                      </div>
+                      <Link
+                        to="/app/assessment"
+                        className="text-xs px-2.5 py-1 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 font-medium whitespace-nowrap flex-shrink-0"
+                      >
+                        Retake
+                      </Link>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="mt-2 flex items-center gap-1.5 text-[11px] text-gray-400 dark:text-gray-500">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Next retest recommended in {MIN_RETEST_DAYS - daysSinceLast} days
+                  </div>
+                );
+              })()}
             </>
           ) : (
             <div className="flex items-center gap-4">

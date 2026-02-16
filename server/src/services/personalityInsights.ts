@@ -366,3 +366,176 @@ export function storePersonalityInsights(
 
   return { noteId, insightIds };
 }
+
+// ============================================
+// Change Insights Generation
+// ============================================
+// Generates AI-powered analysis of how a user's personality scores have changed
+// between two assessments.
+
+export interface ChangeInsightsResult {
+  insights: string[];
+  significantShifts: Array<{
+    domain: string;
+    label: string;
+    from: number;
+    to: number;
+    interpretation: string;
+  }>;
+  generated: boolean;
+}
+
+/**
+ * Generate AI-powered change insights comparing two assessment attempts.
+ */
+export async function generateChangeInsights(
+  userId: string,
+  oldScores: Array<{ domain: string; domainScore: number; facetScores: Record<string, number | null> }>,
+  newScores: Array<{ domain: string; domainScore: number; facetScores: Record<string, number | null> }>,
+  oldDate: string,
+  newDate: string,
+): Promise<ChangeInsightsResult> {
+  if (!isAIAvailable()) {
+    console.log('[me.md:personality-insights] AI not available, generating rule-based change insights');
+    return generateRuleBasedChangeInsights(oldScores, newScores, oldDate, newDate);
+  }
+
+  try {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey || apiKey === 'your-anthropic-api-key' || apiKey.trim() === '') {
+      console.warn('[me.md:personality-insights] ANTHROPIC_API_KEY not configured');
+      return generateRuleBasedChangeInsights(oldScores, newScores, oldDate, newDate);
+    }
+
+    // Build a comparison summary for the prompt
+    const domainChanges: string[] = [];
+    for (const newD of newScores) {
+      const oldD = oldScores.find(o => o.domain === newD.domain);
+      if (!oldD) continue;
+      const domainLabel = DOMAIN_LABELS[newD.domain] || newD.domain;
+      const diff = newD.domainScore - oldD.domainScore;
+      const pctChange = oldD.domainScore > 0 ? ((diff / oldD.domainScore) * 100).toFixed(1) : '0';
+      domainChanges.push(`${domainLabel} (${newD.domain}): ${oldD.domainScore.toFixed(2)} → ${newD.domainScore.toFixed(2)} (${diff > 0 ? '+' : ''}${diff.toFixed(2)}, ${pctChange}%)`);
+
+      // Include facet changes
+      const facetLabels = FACET_LABELS[newD.domain] || [];
+      for (let i = 1; i <= 6; i++) {
+        const key = `facet${i}`;
+        const oldF = oldD.facetScores[key];
+        const newF = newD.facetScores[key];
+        if (oldF !== null && oldF !== undefined && newF !== null && newF !== undefined) {
+          const fDiff = (newF as number) - (oldF as number);
+          if (Math.abs(fDiff) >= 0.3) {
+            const fLabel = facetLabels[i - 1] || `Facet ${i}`;
+            domainChanges.push(`  - ${fLabel}: ${(oldF as number).toFixed(2)} → ${(newF as number).toFixed(2)} (${fDiff > 0 ? '+' : ''}${fDiff.toFixed(2)})`);
+          }
+        }
+      }
+    }
+
+    const client = new Anthropic({ apiKey });
+
+    const systemPrompt = `You are a personality psychologist analyzing how someone's Big Five personality scores have changed between two assessments. Output ONLY valid JSON with no markdown code fences.`;
+
+    const userPrompt = `Analyze the following changes in Big Five personality assessment scores between two time periods.
+
+Previous Assessment: ${oldDate ? new Date(oldDate).toLocaleDateString() : 'Earlier'}
+Current Assessment: ${newDate ? new Date(newDate).toLocaleDateString() : 'Recent'}
+
+## Score Changes
+${domainChanges.join('\n')}
+
+## Instructions
+Generate insights about the changes. Focus on:
+1. Domains with significant changes (>10% shift)
+2. What the changes might indicate about the person's growth or life circumstances
+3. Notable facet-level shifts within domains
+4. Cross-domain patterns in the changes
+
+Output JSON:
+{
+  "insights": ["Insight 1 about the changes...", "Insight 2...", "..."],
+  "significantShifts": [
+    {
+      "domain": "O",
+      "label": "Openness",
+      "from": 3.5,
+      "to": 4.0,
+      "interpretation": "Your Openness increased significantly, suggesting..."
+    }
+  ]
+}
+
+Keep insights concise (1-2 sentences each). Generate 2-5 insights.`;
+
+    console.log(`[me.md:personality-insights] Generating change insights via AI`);
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2048,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    });
+
+    const textBlocks = response.content.filter(block => block.type === 'text');
+    const responseText = textBlocks.map(block => block.text).join('\n\n');
+
+    let cleaned = responseText.trim();
+    if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
+    else if (cleaned.startsWith('```')) cleaned = cleaned.slice(3);
+    if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3);
+    cleaned = cleaned.trim();
+
+    const parsed = JSON.parse(cleaned);
+
+    return {
+      insights: Array.isArray(parsed.insights) ? parsed.insights.filter((i: unknown) => typeof i === 'string').slice(0, 5) : [],
+      significantShifts: Array.isArray(parsed.significantShifts) ? parsed.significantShifts.slice(0, 5) : [],
+      generated: true,
+    };
+  } catch (error: any) {
+    console.error(`[me.md:personality-insights] Error generating change insights: ${error.message}`);
+    return generateRuleBasedChangeInsights(oldScores, newScores, oldDate, newDate);
+  }
+}
+
+/**
+ * Rule-based fallback for change insights when AI is not available.
+ */
+function generateRuleBasedChangeInsights(
+  oldScores: Array<{ domain: string; domainScore: number; facetScores: Record<string, number | null> }>,
+  newScores: Array<{ domain: string; domainScore: number; facetScores: Record<string, number | null> }>,
+  oldDate: string,
+  newDate: string,
+): ChangeInsightsResult {
+  const insights: string[] = [];
+  const significantShifts: ChangeInsightsResult['significantShifts'] = [];
+
+  for (const newD of newScores) {
+    const oldD = oldScores.find(o => o.domain === newD.domain);
+    if (!oldD) continue;
+
+    const domainLabel = DOMAIN_LABELS[newD.domain] || newD.domain;
+    const diff = newD.domainScore - oldD.domainScore;
+    const pctChange = oldD.domainScore > 0 ? (diff / oldD.domainScore) * 100 : 0;
+
+    if (Math.abs(pctChange) >= 10) {
+      const direction = diff > 0 ? 'increased' : 'decreased';
+      insights.push(
+        `Your ${domainLabel} ${direction} significantly since your last test (${oldD.domainScore.toFixed(1)} → ${newD.domainScore.toFixed(1)}, ${Math.abs(pctChange).toFixed(0)}% change).`
+      );
+      significantShifts.push({
+        domain: newD.domain,
+        label: domainLabel,
+        from: oldD.domainScore,
+        to: newD.domainScore,
+        interpretation: `${domainLabel} ${direction} by ${Math.abs(pctChange).toFixed(0)}% since the previous assessment.`,
+      });
+    }
+  }
+
+  if (insights.length === 0) {
+    insights.push('Your personality scores have remained relatively stable since your last assessment. Small fluctuations are normal and expected.');
+  }
+
+  return { insights, significantShifts, generated: false };
+}
