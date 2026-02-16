@@ -5,6 +5,8 @@ import { eq, and, desc, ne, or } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { generateClaudeResponse, streamClaudeResponse, generateClaudeQuickReplies, checkUserAIRateLimit, isAIAvailable } from '../services/ai.js';
 import type { ProfileContext as AIProfileContext, InterviewMap as AIInterviewMap, AIResponseOptions } from '../services/ai.js';
+import { researchTopic } from '../services/research.js';
+import type { ResearchResult } from '../services/research.js';
 
 export const sessionsRouter = Router();
 
@@ -93,7 +95,7 @@ sessionsRouter.post('/', async (req, res) => {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
-    const { topicId, isMiniSession } = req.body;
+    const { topicId, isMiniSession, enableResearch } = req.body;
 
     if (!topicId) {
       return res.status(400).json({ error: 'topicId is required' });
@@ -118,9 +120,25 @@ sessionsRouter.post('/', async (req, res) => {
     const referenceUrls = parseJsonArray(topic.referenceUrls);
     const contextItems = parseJsonArray(topic.contextItems);
 
-    // Build research_data from reference URLs and context items
+    // Build research_data from reference URLs, context items, and/or AI research
     let researchData: Record<string, unknown> | null = null;
-    if (referenceUrls.length > 0 || contextItems.length > 0) {
+
+    if (enableResearch) {
+      // Research-driven mode: perform AI-powered topic research
+      console.log(`[me.md:sessions] Research mode enabled for topic "${topic.title}"`);
+      const researchResult = await researchTopic(
+        topic.title,
+        topic.description,
+        referenceUrls,
+        contextItems,
+      );
+
+      if (researchResult) {
+        researchData = researchResult as unknown as Record<string, unknown>;
+        console.log(`[me.md:sessions] Research completed: ${researchResult.keyFindings.length} findings, ${researchResult.suggestedAngles.length} angles`);
+      }
+    } else if (referenceUrls.length > 0 || contextItems.length > 0) {
+      // Legacy mode: just store reference URLs and context items
       researchData = {
         referenceUrls: referenceUrls,
         contextItems: contextItems,
@@ -161,8 +179,8 @@ sessionsRouter.post('/', async (req, res) => {
     // Gather profile context from previous sessions and verified insights
     const profileContext = gatherProfileContext(userId, topicId);
 
-    // Create an opening AI message (context-aware with profile context and URLs)
-    const openingMessageContent = generateOpeningMessage(topic.title, topic.description, topic.intent, referenceUrls, profileContext);
+    // Create an opening AI message (context-aware with profile context, URLs, and research)
+    const openingMessageContent = generateOpeningMessage(topic.title, topic.description, topic.intent, referenceUrls, profileContext, researchData as ResearchResult | null);
     const openingMessageId = uuidv4();
 
     const openingMessage = db.insert(messages).values({
@@ -256,6 +274,54 @@ sessionsRouter.post('/mini', async (req, res) => {
   } catch (error) {
     console.error('Create mini session error:', error);
     res.status(500).json({ error: 'Failed to create mini session. Please try again later.' });
+  }
+});
+
+// POST /api/sessions/research - Research a topic before creating a session
+// Returns research findings that will be used to create a research-driven session
+sessionsRouter.post('/research', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const { topicId } = req.body;
+
+    if (!topicId) {
+      return res.status(400).json({ error: 'topicId is required' });
+    }
+
+    // Verify the topic belongs to the user
+    const topic = db.select().from(topics).where(
+      and(eq(topics.id, topicId), eq(topics.userId, userId))
+    ).get();
+
+    if (!topic) {
+      return res.status(404).json({ error: 'Topic not found' });
+    }
+
+    // Parse reference URLs and context items from the topic
+    const referenceUrls = parseJsonArray(topic.referenceUrls);
+    const contextItems = parseJsonArray(topic.contextItems);
+
+    // Perform research
+    const researchResult = await researchTopic(
+      topic.title,
+      topic.description,
+      referenceUrls,
+      contextItems,
+    );
+
+    if (!researchResult) {
+      return res.status(503).json({ error: 'Research service unavailable. AI API may not be configured.' });
+    }
+
+    res.json({ research: researchResult });
+  } catch (error) {
+    console.error('Research topic error:', error);
+    res.status(500).json({ error: 'Failed to research topic. Please try again.' });
   }
 });
 
@@ -370,8 +436,9 @@ sessionsRouter.post('/:id/messages', async (req, res) => {
       .orderBy(messages.createdAt)
       .all();
 
-    // Check if session has research_data (from reference URLs)
+    // Check if session has research_data (from reference URLs or AI research)
     const hasResearchContext = !!session.researchData;
+    const sessionResearchData = parseResearchData(session.researchData as string | null);
 
     const historyForAI = conversationHistory.map(m => ({ role: m.role, content: m.content }));
     const userMessageCount = conversationHistory.filter(m => m.role === 'user').length;
@@ -438,6 +505,7 @@ sessionsRouter.post('/:id/messages', async (req, res) => {
             hasResearchContext,
             profileContext: msgProfileContext,
             interviewMap: sessionInterviewMap,
+            researchData: sessionResearchData,
           });
         } catch (_) { /* fall back to template */ }
       }
@@ -538,6 +606,7 @@ sessionsRouter.post('/:id/messages/retry', async (req, res) => {
     const topic = db.select().from(topics).where(eq(topics.id, session.topicId)).get();
 
     const hasResearchContext = !!session.researchData;
+    const retryResearchData = parseResearchData(session.researchData as string | null);
     const historyForAI = conversationHistory.map(m => ({ role: m.role, content: m.content }));
 
     // Gather profile context for personalized retry response
@@ -562,6 +631,7 @@ sessionsRouter.post('/:id/messages/retry', async (req, res) => {
           hasResearchContext,
           profileContext: retryProfileContext,
           interviewMap: retryInterviewMap,
+          researchData: retryResearchData,
         });
       } catch (_) { /* fall back to template */ }
     }
@@ -680,6 +750,7 @@ sessionsRouter.post('/:id/messages/stream', async (req, res) => {
       .all();
 
     const hasResearchContext = !!session.researchData;
+    const streamResearchData = parseResearchData(session.researchData as string | null);
     const historyForAI = conversationHistory.map(m => ({ role: m.role, content: m.content }));
     const userMessageCount = conversationHistory.filter(m => m.role === 'user').length;
 
@@ -697,6 +768,7 @@ sessionsRouter.post('/:id/messages/stream', async (req, res) => {
       conversationHistory: historyForAI,
       hasResearchContext,
       isMiniSession: !!session.isMiniSession,
+      researchData: streamResearchData,
     };
 
     if (!session.isMiniSession) {
@@ -1265,6 +1337,22 @@ function generateGapAwareGreeting(
   return greeting;
 }
 
+// Helper function to parse research data from session's researchData JSON field
+function parseResearchData(researchDataStr: string | null): ResearchResult | null {
+  if (!researchDataStr) return null;
+  try {
+    const parsed = JSON.parse(researchDataStr);
+    // Check if this is a full ResearchResult (has summary field from research service)
+    if (parsed && typeof parsed.summary === 'string' && parsed.topicTitle) {
+      return parsed as ResearchResult;
+    }
+    // Legacy format (just referenceUrls/contextItems) — not full research
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // Helper function to parse JSON arrays safely
 function parseJsonArray(jsonStr: string | null): string[] {
   if (!jsonStr) return [];
@@ -1447,7 +1535,7 @@ function buildProfileContextSummary(context: ProfileContext, topicTitle: string)
 }
 
 // Helper function to generate an opening message based on topic
-function generateOpeningMessage(title: string, description: string | null, intent: string | null, referenceUrls: string[] = [], profileContext?: ProfileContext): string {
+function generateOpeningMessage(title: string, description: string | null, intent: string | null, referenceUrls: string[] = [], profileContext?: ProfileContext, researchResult?: ResearchResult | null): string {
   const intentPhrases: Record<string, string> = {
     articulate: "help you articulate your thoughts on",
     explore: "explore and discover new perspectives about",
@@ -1529,8 +1617,37 @@ function generateOpeningMessage(title: string, description: string | null, inten
     }
   }
 
-  // If reference URLs are provided, acknowledge them and tailor the approach
-  if (referenceUrls.length > 0) {
+  // If research-driven mode, show research summary and tailored opening
+  if (researchResult && researchResult.summary) {
+    message += `\n\n**Research-Driven Mode** — I've researched **"${title}"** to help guide our conversation with more informed questions.`;
+
+    // Show key concepts from research
+    if (researchResult.relevantConcepts && researchResult.relevantConcepts.length > 0) {
+      const conceptList = researchResult.relevantConcepts.slice(0, 5).join(', ');
+      message += `\n\n**Key concepts I'll draw on:** ${conceptList}`;
+    }
+
+    // Show sources
+    if (researchResult.sources && researchResult.sources.length > 0) {
+      message += `\n\n**Research sources:**`;
+      for (const source of researchResult.sources.slice(0, 5)) {
+        if (source.url) {
+          message += `\n- [${source.title}](${source.url})`;
+        } else {
+          message += `\n- ${source.title}: ${source.snippet.substring(0, 100)}`;
+        }
+      }
+    }
+
+    // Use a research-informed opening question
+    if (researchResult.suggestedAngles && researchResult.suggestedAngles.length > 0) {
+      message += `\n\nBased on my research, I have several angles we can explore. Let me start with an informed question:`;
+      message += `\n\n**${researchResult.suggestedAngles[0]}** — How does this connect to your personal experience?`;
+    } else {
+      message += `\n\n**Based on what I've researched, what aspect of "${title}" resonates most with your personal experience?**`;
+    }
+  } else if (referenceUrls.length > 0) {
+    // Legacy: reference URLs without full research
     message += `\n\n**Pre-interview context:** I see you've provided ${referenceUrls.length} reference${referenceUrls.length > 1 ? 's' : ''} to help guide our conversation:`;
     referenceUrls.forEach((url, index) => {
       message += `\n- [Reference ${index + 1}](${url})`;

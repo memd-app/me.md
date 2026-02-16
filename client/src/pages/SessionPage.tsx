@@ -17,6 +17,23 @@ interface Message {
   createdAt: string;
 }
 
+interface ResearchSource {
+  type: 'ai_knowledge' | 'reference_url';
+  title: string;
+  url?: string;
+  snippet: string;
+}
+
+interface ResearchData {
+  topicTitle?: string;
+  summary?: string;
+  keyFindings?: string[];
+  suggestedAngles?: string[];
+  relevantConcepts?: string[];
+  sources?: ResearchSource[];
+  researchedAt?: string;
+}
+
 interface Session {
   id: string;
   topicId: string;
@@ -25,6 +42,7 @@ interface Session {
   isMiniSession: boolean;
   suggestedDurationMinutes: number | null;
   timeSpentSeconds: number;
+  researchData: string | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
@@ -203,6 +221,7 @@ export default function SessionPage() {
   const [noteInsights, setNoteInsights] = useState<Insight[]>([]);
   const [selectedFormat, setSelectedFormat] = useState<NoteFormat>('full_analysis');
   const [showDistillation, setShowDistillation] = useState(false);
+  const [showResearchPanel, setShowResearchPanel] = useState(false);
   const [isPausing, setIsPausing] = useState(false);
   const [isResuming, setIsResuming] = useState(false);
   const [failedMessageContent, setFailedMessageContent] = useState<string | null>(null);
@@ -1192,6 +1211,21 @@ export default function SessionPage() {
   };
 
   // Parse quick replies from JSON string
+  // Parse research data from session
+  const parseResearchData = (dataStr: string | null): ResearchData | null => {
+    if (!dataStr) return null;
+    try {
+      const parsed = JSON.parse(dataStr);
+      // Only return if it's a full research result (has summary field)
+      if (parsed && typeof parsed.summary === 'string' && parsed.topicTitle) {
+        return parsed as ResearchData;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
   const parseQuickReplies = (repliesStr: string | null): string[] => {
     if (!repliesStr) return [];
     try {
@@ -1734,6 +1768,19 @@ export default function SessionPage() {
           </div>
         </div>
         <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+          {/* Research mode badge */}
+          {session.researchData && parseResearchData(session.researchData) && (
+            <button
+              onClick={() => setShowResearchPanel(!showResearchPanel)}
+              className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-800/40 transition-colors cursor-pointer"
+              title="Research-driven session — click to view research sources"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              Research
+            </button>
+          )}
           {/* Suggested duration badge */}
           {session.suggestedDurationMinutes && (
             <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300" title={`Suggested duration: ${session.suggestedDurationMinutes} minutes`}>
@@ -1848,6 +1895,81 @@ export default function SessionPage() {
           )}
         </div>
       </div>
+
+      {/* Research sources panel (collapsible) */}
+      {showResearchPanel && session.researchData && (() => {
+        const research = parseResearchData(session.researchData);
+        if (!research) return null;
+        return (
+          <div className="px-4 sm:px-6 py-3 bg-purple-50 dark:bg-purple-900/10 border-b border-purple-200 dark:border-purple-800 shrink-0 overflow-y-auto max-h-64">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-purple-800 dark:text-purple-300 flex items-center gap-1.5">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                Research Sources
+              </h3>
+              <button
+                onClick={() => setShowResearchPanel(false)}
+                className="p-1 rounded hover:bg-purple-200 dark:hover:bg-purple-800/30 transition-colors"
+                title="Close research panel"
+              >
+                <svg className="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            {/* Research summary */}
+            {research.summary && (
+              <p className="text-xs text-purple-700 dark:text-purple-300 mb-2 line-clamp-3">
+                {research.summary}
+              </p>
+            )}
+            {/* Key concepts */}
+            {research.relevantConcepts && research.relevantConcepts.length > 0 && (
+              <div className="mb-2">
+                <span className="text-xs font-medium text-purple-600 dark:text-purple-400">Key concepts: </span>
+                <span className="text-xs text-purple-700 dark:text-purple-300">
+                  {research.relevantConcepts.join(', ')}
+                </span>
+              </div>
+            )}
+            {/* Sources list */}
+            {research.sources && research.sources.length > 0 && (
+              <div className="space-y-1.5">
+                {research.sources.map((source, idx) => (
+                  <div key={idx} className="flex items-start gap-2 text-xs">
+                    <span className={`mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                      source.type === 'reference_url'
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                        : 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+                    }`}>
+                      {source.type === 'reference_url' ? 'URL' : 'AI'}
+                    </span>
+                    <div className="min-w-0">
+                      {source.url ? (
+                        <a href={source.url} target="_blank" rel="noopener noreferrer" className="text-purple-700 dark:text-purple-300 hover:underline font-medium">
+                          {source.title}
+                        </a>
+                      ) : (
+                        <span className="text-purple-700 dark:text-purple-300 font-medium">{source.title}</span>
+                      )}
+                      {source.snippet && (
+                        <p className="text-purple-600/80 dark:text-purple-400/80 mt-0.5 line-clamp-2">{source.snippet}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {research.researchedAt && (
+              <p className="text-[10px] text-purple-500 dark:text-purple-500 mt-2">
+                Researched at {new Date(research.researchedAt).toLocaleString()}
+              </p>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Completion suggestion banner */}
       {isSessionActive && suggestsCompletion && !isDistilling && (

@@ -25,6 +25,8 @@ export default function NewSessionPage() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [isLoadingTopics, setIsLoadingTopics] = useState(true);
   const [topicLoadError, setTopicLoadError] = useState<string | null>(null);
+  const [researchEnabled, setResearchEnabled] = useState<Record<string, boolean>>({});
+  const [isResearching, setIsResearching] = useState<string | null>(null);
 
   // Fetch user topics
   useEffect(() => {
@@ -97,10 +99,23 @@ export default function NewSessionPage() {
     }
   };
 
-  // Start session from an existing topic
-  const handleStartTopicSession = async (topicId: string) => {
-    if (!user || isStartingTopic) return;
+  // Toggle research mode for a topic
+  const handleToggleResearch = (topicId: string) => {
+    setResearchEnabled(prev => ({
+      ...prev,
+      [topicId]: !prev[topicId],
+    }));
+  };
 
+  // Start session from an existing topic (with optional research)
+  const handleStartTopicSession = async (topicId: string) => {
+    if (!user || isStartingTopic || isResearching) return;
+
+    const enableResearch = researchEnabled[topicId] || false;
+
+    if (enableResearch) {
+      setIsResearching(topicId);
+    }
     setIsStartingTopic(topicId);
     setError(null);
 
@@ -111,7 +126,7 @@ export default function NewSessionPage() {
           'Content-Type': 'application/json',
           'x-user-id': user.id,
         },
-        body: JSON.stringify({ topicId }),
+        body: JSON.stringify({ topicId, enableResearch }),
       });
 
       if (!res.ok) {
@@ -122,6 +137,7 @@ export default function NewSessionPage() {
           setTopics(prev => prev.filter(t => t.id !== topicId));
           addToast('This topic was deleted or no longer exists. The list has been refreshed.', 'error', 5000);
           setIsStartingTopic(null);
+          setIsResearching(null);
           return;
         }
 
@@ -129,10 +145,14 @@ export default function NewSessionPage() {
       }
 
       const data = await res.json();
+      if (enableResearch) {
+        addToast('Research-driven session started! The AI has researched your topic for more informed questions.', 'success', 4000);
+      }
       navigate(`/app/sessions/${data.session.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start session. Please check your connection and try again.');
       setIsStartingTopic(null);
+      setIsResearching(null);
     }
   };
 
@@ -226,7 +246,7 @@ export default function NewSessionPage() {
           )}
         </div>
         <p className="text-gray-600 dark:text-gray-300 mb-4">
-          Select an existing topic to start an in-depth interview session.
+          Select an existing topic to start an in-depth interview session. Enable <strong>Research Mode</strong> for AI-researched, more informed questions.
         </p>
 
         {isLoadingTopics ? (
@@ -265,55 +285,105 @@ export default function NewSessionPage() {
             {topics.map((topic) => {
               const tags = parseTags(topic.tags);
               const isStarting = isStartingTopic === topic.id;
+              const isTopicResearching = isResearching === topic.id;
+              const researchOn = researchEnabled[topic.id] || false;
 
               return (
                 <div
                   key={topic.id}
-                  className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                  className={`p-4 rounded-lg border transition-colors ${
+                    researchOn
+                      ? 'border-purple-300 dark:border-purple-700 bg-purple-50/50 dark:bg-purple-900/10'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                  }`}
                 >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                        {topic.title}
-                      </h3>
-                      <span className={`px-1.5 py-0.5 text-xs rounded-full ${
-                        topic.status === 'backlog' ? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300' :
-                        topic.status === 'in_progress' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
-                        topic.status === 'extracted' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
-                        'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
-                      }`}>
-                        {topic.status}
-                      </span>
-                    </div>
-                    {topic.description && (
-                      <p className="text-xs text-gray-500 dark:text-gray-300 truncate">
-                        {topic.description}
-                      </p>
-                    )}
-                    {tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1.5">
-                        {tags.slice(0, 3).map((tag, i) => (
-                          <span key={i} className="px-1.5 py-0.5 text-xs rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300">
-                            {tag}
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {topic.title}
+                        </h3>
+                        <span className={`px-1.5 py-0.5 text-xs rounded-full ${
+                          topic.status === 'backlog' ? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300' :
+                          topic.status === 'in_progress' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
+                          topic.status === 'extracted' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                          'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+                        }`}>
+                          {topic.status}
+                        </span>
+                        {researchOn && (
+                          <span className="px-1.5 py-0.5 text-xs rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                            Research Mode
                           </span>
-                        ))}
+                        )}
                       </div>
-                    )}
+                      {topic.description && (
+                        <p className="text-xs text-gray-500 dark:text-gray-300 truncate">
+                          {topic.description}
+                        </p>
+                      )}
+                      {tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {tags.slice(0, 3).map((tag, i) => (
+                            <span key={i} className="px-1.5 py-0.5 text-xs rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="ml-4 flex items-center gap-2 shrink-0">
+                      {/* Research Mode Toggle */}
+                      <button
+                        onClick={() => handleToggleResearch(topic.id)}
+                        disabled={!!isStartingTopic}
+                        className={`p-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                          researchOn
+                            ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-800/40'
+                            : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                        }`}
+                        title={researchOn ? 'Disable research mode' : 'Enable research mode — AI researches the topic first for more informed questions'}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      </button>
+                      {/* Start Session Button */}
+                      <button
+                        onClick={() => handleStartTopicSession(topic.id)}
+                        disabled={!!isStartingTopic}
+                        className={`px-3 py-1.5 text-sm font-medium rounded-lg text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 ${
+                          researchOn
+                            ? 'bg-purple-600 hover:bg-purple-700'
+                            : 'bg-primary-600 hover:bg-primary-700'
+                        }`}
+                      >
+                        {isStarting ? (
+                          <>
+                            <div className="animate-spin w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full" />
+                            {isTopicResearching ? 'Researching...' : 'Starting...'}
+                          </>
+                        ) : researchOn ? (
+                          <>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                            Research & Start
+                          </>
+                        ) : (
+                          'Start Session'
+                        )}
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => handleStartTopicSession(topic.id)}
-                    disabled={!!isStartingTopic}
-                    className="ml-4 px-3 py-1.5 text-sm font-medium rounded-lg bg-primary-600 hover:bg-primary-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 flex items-center gap-1.5"
-                  >
-                    {isStarting ? (
-                      <>
-                        <div className="animate-spin w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full" />
-                        Starting...
-                      </>
-                    ) : (
-                      'Start Session'
-                    )}
-                  </button>
+                  {/* Research mode description */}
+                  {researchOn && (
+                    <div className="mt-2 pt-2 border-t border-purple-200 dark:border-purple-800">
+                      <p className="text-xs text-purple-600 dark:text-purple-400">
+                        The AI will research this topic before the interview begins, enabling more specific and knowledgeable questions based on relevant facts, frameworks, and perspectives.
+                      </p>
+                    </div>
+                  )}
                 </div>
               );
             })}

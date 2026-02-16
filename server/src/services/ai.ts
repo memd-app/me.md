@@ -1,4 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { buildResearchPromptSection } from './research.js';
+import type { ResearchResult } from './research.js';
 
 // ============================================
 // AI Service Layer - Claude API Integration
@@ -103,6 +105,7 @@ function buildSystemPrompt(
   profileContext: ProfileContext | undefined,
   interviewMap: InterviewMap | null,
   userMessageCount: number,
+  researchData?: ResearchResult | null,
 ): string {
   const parts: string[] = [];
 
@@ -141,6 +144,11 @@ function buildSystemPrompt(
     if (userMessageCount >= 3 && userMessageCount % 3 === 0) {
       parts.push(`This is a good moment to transition angles. Explicitly acknowledge the shift to the "${currentAngle.label}" perspective.`);
     }
+  }
+
+  // Research context injection (for research-driven sessions)
+  if (hasResearchContext && researchData) {
+    parts.push(buildResearchPromptSection(researchData));
   }
 
   // Profile context
@@ -326,6 +334,7 @@ export interface AIResponseOptions {
   profileContext?: ProfileContext;
   interviewMap?: InterviewMap | null;
   isMiniSession?: boolean;
+  researchData?: ResearchResult | null;
 }
 
 /**
@@ -348,6 +357,7 @@ export async function generateClaudeResponse(options: AIResponseOptions): Promis
     profileContext,
     interviewMap,
     isMiniSession,
+    researchData,
   } = options;
 
   const userMessages = conversationHistory.filter(m => m.role === 'user');
@@ -368,6 +378,7 @@ export async function generateClaudeResponse(options: AIResponseOptions): Promis
       profileContext,
       interviewMap || null,
       userMessageCount,
+      researchData,
     );
   }
 
@@ -453,6 +464,7 @@ export async function* streamClaudeResponse(options: AIResponseOptions): AsyncGe
     profileContext,
     interviewMap,
     isMiniSession,
+    researchData,
   } = options;
 
   const userMessages = conversationHistory.filter(m => m.role === 'user');
@@ -473,6 +485,7 @@ export async function* streamClaudeResponse(options: AIResponseOptions): AsyncGe
       profileContext,
       interviewMap || null,
       userMessageCount,
+      researchData,
     );
   }
 
