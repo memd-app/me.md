@@ -129,7 +129,7 @@ export default function CreateTopicPage() {
       <div className="card">
         <form onSubmit={handleSubmit} className="space-y-5">
           {error && (
-            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm">
+            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm" role="alert" aria-live="assertive">
               <div className="flex items-start gap-2">
                 {isNetworkError ? (
                   <svg className="w-5 h-5 text-red-500 dark:text-red-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

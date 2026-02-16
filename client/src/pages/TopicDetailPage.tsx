@@ -405,8 +405,8 @@ export default function TopicDetailPage() {
   if (error && !topic) {
     return (
       <div className="max-w-4xl mx-auto">
-        <div className="card text-center py-12">
-          <span className="text-4xl block mb-3">😕</span>
+        <div className="card text-center py-12" role="alert">
+          <span className="text-4xl block mb-3" aria-hidden="true">😕</span>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             Topic not found
           </h2>

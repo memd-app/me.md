@@ -686,7 +686,7 @@ export default function OnboardingPage() {
 
               <form onSubmit={handleProfileSubmit} className="space-y-5">
                 {serverError && (
-                  <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm">
+                  <div id="onboarding-server-error" className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm" role="alert" aria-live="assertive">
                     {serverError}
                   </div>
                 )}
@@ -704,9 +704,11 @@ export default function OnboardingPage() {
                     className={`input-field ${fieldErrors.name ? 'border-red-500 dark:border-red-500' : ''}`}
                     placeholder="Your full name"
                     autoComplete="name"
+                    aria-describedby={fieldErrors.name ? 'ob-name-error' : undefined}
+                    aria-invalid={fieldErrors.name ? true : undefined}
                   />
                   {fieldErrors.name && (
-                    <p className="mt-1 text-xs text-red-500">{fieldErrors.name}</p>
+                    <p id="ob-name-error" className="mt-1 text-xs text-red-500" role="alert">{fieldErrors.name}</p>
                   )}
                 </div>
 
@@ -722,9 +724,11 @@ export default function OnboardingPage() {
                     onChange={(e) => handleFieldChange('dateOfBirth', e.target.value)}
                     className={`input-field ${fieldErrors.dateOfBirth ? 'border-red-500 dark:border-red-500' : ''}`}
                     max={new Date().toISOString().split('T')[0]}
+                    aria-describedby={fieldErrors.dateOfBirth ? 'ob-dob-error' : undefined}
+                    aria-invalid={fieldErrors.dateOfBirth ? true : undefined}
                   />
                   {fieldErrors.dateOfBirth && (
-                    <p className="mt-1 text-xs text-red-500">{fieldErrors.dateOfBirth}</p>
+                    <p id="ob-dob-error" className="mt-1 text-xs text-red-500" role="alert">{fieldErrors.dateOfBirth}</p>
                   )}
                 </div>
 
@@ -741,9 +745,11 @@ export default function OnboardingPage() {
                     className={`input-field ${fieldErrors.location ? 'border-red-500 dark:border-red-500' : ''}`}
                     placeholder="City, Country"
                     autoComplete="address-level2"
+                    aria-describedby={fieldErrors.location ? 'ob-location-error' : undefined}
+                    aria-invalid={fieldErrors.location ? true : undefined}
                   />
                   {fieldErrors.location && (
-                    <p className="mt-1 text-xs text-red-500">{fieldErrors.location}</p>
+                    <p id="ob-location-error" className="mt-1 text-xs text-red-500" role="alert">{fieldErrors.location}</p>
                   )}
                 </div>
 
@@ -760,9 +766,11 @@ export default function OnboardingPage() {
                     className={`input-field ${fieldErrors.occupation ? 'border-red-500 dark:border-red-500' : ''}`}
                     placeholder="Your job title or role"
                     autoComplete="organization-title"
+                    aria-describedby={fieldErrors.occupation ? 'ob-occupation-error' : undefined}
+                    aria-invalid={fieldErrors.occupation ? true : undefined}
                   />
                   {fieldErrors.occupation && (
-                    <p className="mt-1 text-xs text-red-500">{fieldErrors.occupation}</p>
+                    <p id="ob-occupation-error" className="mt-1 text-xs text-red-500" role="alert">{fieldErrors.occupation}</p>
                   )}
                 </div>
 
@@ -776,6 +784,8 @@ export default function OnboardingPage() {
                     value={profileFields.gender}
                     onChange={(e) => handleFieldChange('gender', e.target.value)}
                     className={`input-field ${fieldErrors.gender ? 'border-red-500 dark:border-red-500' : ''}`}
+                    aria-describedby={fieldErrors.gender ? 'ob-gender-error' : undefined}
+                    aria-invalid={fieldErrors.gender ? true : undefined}
                   >
                     <option value="">Select gender</option>
                     {GENDER_OPTIONS.map((opt) => (
@@ -785,7 +795,7 @@ export default function OnboardingPage() {
                     ))}
                   </select>
                   {fieldErrors.gender && (
-                    <p className="mt-1 text-xs text-red-500">{fieldErrors.gender}</p>
+                    <p id="ob-gender-error" className="mt-1 text-xs text-red-500" role="alert">{fieldErrors.gender}</p>
                   )}
                 </div>
 
@@ -919,7 +929,7 @@ export default function OnboardingPage() {
                   </form>
 
                   {urlError && (
-                    <p className="mt-2 text-xs text-red-500">{urlError}</p>
+                    <p className="mt-2 text-xs text-red-500" role="alert">{urlError}</p>
                   )}
                 </div>
               )}
@@ -976,7 +986,7 @@ export default function OnboardingPage() {
                   </form>
 
                   {pasteError && (
-                    <p className="mt-2 text-xs text-red-500">{pasteError}</p>
+                    <p className="mt-2 text-xs text-red-500" role="alert">{pasteError}</p>
                   )}
                 </div>
               )}
@@ -1031,7 +1041,7 @@ export default function OnboardingPage() {
                   </div>
 
                   {fileError && (
-                    <p className="mt-2 text-xs text-red-500">{fileError}</p>
+                    <p className="mt-2 text-xs text-red-500" role="alert">{fileError}</p>
                   )}
                 </div>
               )}
@@ -1138,7 +1148,7 @@ export default function OnboardingPage() {
               </p>
 
               {presetError && (
-                <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm mb-4">
+                <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm mb-4" role="alert" aria-live="assertive">
                   {presetError}
                 </div>
               )}

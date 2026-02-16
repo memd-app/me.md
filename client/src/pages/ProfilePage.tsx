@@ -215,7 +215,7 @@ export default function ProfilePage() {
   if (error) {
     return (
       <div className="max-w-4xl mx-auto">
-        <div className="card bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+        <div className="card bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800" role="alert" aria-live="assertive">
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button onClick={() => fetchSummary()} className="btn-primary mt-3">
             Retry

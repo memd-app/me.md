@@ -1086,7 +1086,7 @@ export default function SessionPage() {
   if (error && !session) {
     return (
       <div className="max-w-4xl mx-auto">
-        <div className="card text-center py-12">
+        <div className="card text-center py-12" role="alert">
           <span className="text-4xl block mb-3">Not found</span>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             Session not found
@@ -1566,7 +1566,8 @@ export default function SessionPage() {
             <button
               onClick={handlePauseSession}
               disabled={isPausing || isSending || isDistilling}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+              aria-label="Pause session"
             >
               {isPausing ? (
                 <>
@@ -1588,7 +1589,8 @@ export default function SessionPage() {
             <button
               onClick={handleResumeSession}
               disabled={isResuming}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg bg-primary-600 hover:bg-primary-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg bg-primary-600 hover:bg-primary-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+              aria-label="Resume session"
             >
               {isResuming ? (
                 <>
@@ -1611,7 +1613,8 @@ export default function SessionPage() {
             <button
               onClick={handleFinishAndDistill}
               disabled={isDistilling}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+              aria-label="Finish session and distill notes"
             >
               {isDistilling ? (
                 <>
@@ -1632,7 +1635,8 @@ export default function SessionPage() {
           {isSessionCompleted && note && (
             <button
               onClick={() => setShowDistillation(true)}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg bg-primary-600 hover:bg-primary-700 text-white transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg bg-primary-600 hover:bg-primary-700 text-white transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+              aria-label="View distilled notes"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -1714,11 +1718,13 @@ export default function SessionPage() {
       )}
 
       {/* Messages area */}
-      <div className={`flex-1 overflow-y-auto px-3 sm:px-6 py-4 space-y-4 ${isFullscreen ? 'max-w-4xl mx-auto w-full' : ''}`}>
+      <div className={`flex-1 overflow-y-auto px-3 sm:px-6 py-4 space-y-4 ${isFullscreen ? 'max-w-4xl mx-auto w-full' : ''}`} role="log" aria-label="Chat messages" aria-live="polite">
         {messages.map((message) => (
           <div
             key={message.id}
             className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            role="article"
+            aria-label={`${message.role === 'user' ? 'Your' : 'AI Interviewer'} message`}
           >
             <div
               className={`max-w-[80%] ${
@@ -1766,7 +1772,7 @@ export default function SessionPage() {
                       e.stopPropagation();
                       toggleBookmark(message);
                     }}
-                    className={`ml-2 p-0.5 rounded transition-colors ${
+                    className={`ml-2 p-0.5 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-1 ${
                       message.isBookmarked
                         ? message.role === 'user'
                           ? 'text-yellow-300 hover:text-yellow-200'
@@ -1776,6 +1782,8 @@ export default function SessionPage() {
                           : 'text-gray-300 dark:text-gray-600 hover:text-yellow-500 dark:hover:text-yellow-400 opacity-60 hover:opacity-100'
                     }`}
                     title={message.isBookmarked ? 'Remove bookmark' : 'Bookmark this message'}
+                    aria-label={message.isBookmarked ? 'Remove bookmark from this message' : 'Bookmark this message'}
+                    aria-pressed={message.isBookmarked}
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill={message.isBookmarked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
@@ -1789,7 +1797,7 @@ export default function SessionPage() {
 
         {/* Streaming AI response bubble */}
         {isStreaming && streamingContent && (
-          <div className="flex justify-start">
+          <div className="flex justify-start" aria-live="polite" aria-label="AI is responding">
             <div className="max-w-[80%] bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-2xl rounded-bl-md px-4 py-3">
               <div className="text-xs font-medium text-gray-500 dark:text-gray-300 mb-1">
                 AI Interviewer
@@ -1838,13 +1846,14 @@ export default function SessionPage() {
 
       {/* Quick replies */}
       {quickReplies.length > 0 && isSessionActive && !isSending && !isDistilling && !isSessionPaused && (
-        <div className={`px-3 sm:px-6 py-2 flex flex-wrap gap-2 shrink-0 ${isFullscreen ? 'max-w-4xl mx-auto w-full' : ''}`}>
+        <div className={`px-3 sm:px-6 py-2 flex flex-wrap gap-2 shrink-0 ${isFullscreen ? 'max-w-4xl mx-auto w-full' : ''}`} role="group" aria-label="Quick reply options">
           {quickReplies.map((reply, index) => (
             <button
               key={index}
               onClick={() => handleQuickReply(reply)}
               disabled={isSending}
-              className="px-4 py-2.5 min-h-[44px] text-sm rounded-full border border-primary-300 dark:border-primary-700 text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/40 transition-colors disabled:opacity-50"
+              className="px-4 py-2.5 min-h-[44px] text-sm rounded-full border border-primary-300 dark:border-primary-700 text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/40 transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+              aria-label={`Quick reply: ${reply}`}
             >
               {reply}
             </button>
@@ -1865,8 +1874,9 @@ export default function SessionPage() {
               </div>
               <button
                 onClick={() => { setError(null); setFailedMessageContent(null); }}
-                className="text-red-400 hover:text-red-600 dark:hover:text-red-300 ml-2 shrink-0"
+                className="text-red-400 hover:text-red-600 dark:hover:text-red-300 ml-2 shrink-0 focus:outline-none focus:ring-2 focus:ring-red-500 rounded"
                 title="Dismiss"
+                aria-label="Dismiss error message"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1878,7 +1888,8 @@ export default function SessionPage() {
                 <button
                   onClick={handleRetry}
                   disabled={isRetrying || isSending}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                  aria-label="Retry sending message"
                 >
                   {isRetrying ? (
                     <>
@@ -1936,7 +1947,7 @@ export default function SessionPage() {
                 type="button"
                 onClick={toggleRecording}
                 disabled={isSending}
-                className={`flex items-center justify-center w-11 h-11 p-0 shrink-0 rounded-xl transition-all ${
+                className={`flex items-center justify-center w-11 h-11 p-0 shrink-0 rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${
                   isRecording
                     ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse shadow-lg shadow-red-500/25'
                     : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300'
@@ -1960,8 +1971,9 @@ export default function SessionPage() {
             <button
               type="submit"
               disabled={!inputValue.trim() || isSending}
-              className="btn-primary flex items-center justify-center w-11 h-11 p-0 shrink-0 rounded-xl"
+              className="btn-primary flex items-center justify-center w-11 h-11 p-0 shrink-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
               title="Send message"
+              aria-label="Send message"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />

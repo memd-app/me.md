@@ -523,8 +523,8 @@ export default function SearchPage() {
 
       {/* Error state */}
       {error && !isLoading && (
-        <div className="card border-red-200 dark:border-red-800 text-center py-8">
-          <span className="text-4xl block mb-3">⚠️</span>
+        <div className="card border-red-200 dark:border-red-800 text-center py-8" role="alert" aria-live="assertive">
+          <span className="text-4xl block mb-3" aria-hidden="true">⚠️</span>
           <p className="text-red-600 dark:text-red-400">{error}</p>
         </div>
       )}
