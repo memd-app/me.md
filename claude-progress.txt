@@ -1,3 +1,40 @@
+## Session - 2026-02-16 (Agent handling Feature #209)
+
+### Accomplished
+- Feature #209 (Default interview map used when no research provided): PASSING ✅
+
+### Changes Made
+- **server/src/routes/sessions.ts**: Implemented default interview map system
+  - Defined `InterviewMap` and `InterviewMapAngle` types
+  - Created `DEFAULT_INTERVIEW_MAP_ANGLES` constant with 5 angles: journey, principles, frameworks, examples, tensions
+  - `createDefaultInterviewMap()` function generates the map for sessions without research context
+  - Session creation (`POST /api/sessions`) stores the interview map as JSON in the `interview_map` column when no reference URLs or context items are provided
+  - `getCurrentInterviewAngle()` selects angle via breadth-first rotation (`messageCount % 5`)
+  - `generateAngleQuestion()` generates angle-specific questions (5 templates per angle, 25 total) that combine with the user's key phrases
+  - Updated `generateAIResponse()` to accept optional `InterviewMap` parameter and use angle-aware questioning when available
+  - Updated angle transitions to reference the specific angle name (e.g., "I'd like to approach this from the **examples** angle now")
+  - Updated opening message to list all 5 angles with descriptions when no research context is provided
+  - Updated all 3 call sites (messages, retry, stream) to parse and pass the interview map from the session
+
+### Verification
+- Created topic with no reference URLs or context
+- Session created with `interviewMap` JSON containing all 5 angles, `researchData: null`
+- Opening message lists all 5 angles and mentions breadth-first navigation
+- Sent 6 messages verifying breadth-first rotation:
+  - Msg 1 → Principles ("non-negotiables", "rules or values")
+  - Msg 2 → Frameworks ("what framework do you use", "walk me through your process")
+  - Msg 3 → Examples ("best example", "memorable") with angle transition label
+  - Msg 4 → Tensions ("incomplete or uncertain", "resolve that tension")
+  - Msg 5 → Journey (cycle complete: "journey", "first get involved", "evolved over time")
+- Data persists across server restart
+- No mock data patterns found in server/src or client/src
+- Client and server TypeScript compile without new errors
+- Test data cleaned up after verification
+
+### Current Status
+- 206/209 features passing (98.6%)
+- Feature #209 marked as passing
+
 ## Session - 2026-02-16 (Agent handling Feature #131)
 
 ### Accomplished
