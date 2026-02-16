@@ -13,6 +13,8 @@ const INTENT_OPTIONS = [
 ];
 
 const TITLE_MAX_LENGTH = 200;
+const TAG_MAX_LENGTH = 50;
+const MAX_TAGS = 20;
 
 export default function CreateTopicPage() {
   const { user } = useAuth();
@@ -129,15 +131,28 @@ export default function CreateTopicPage() {
   const handleAddTag = () => {
     const trimmed = tagInput.trim().toLowerCase();
     if (!trimmed) return;
-    if (tags.includes(trimmed)) {
-      setTagDuplicateHint(`Tag "${trimmed}" already exists.`);
+    // Check max tag count
+    if (tags.length >= MAX_TAGS) {
+      setTagDuplicateHint(`Maximum of ${MAX_TAGS} tags reached. Remove a tag before adding more.`);
+      setTagInput('');
+      setTimeout(() => setTagDuplicateHint(null), 3000);
+      return;
+    }
+    // Truncate long tags to TAG_MAX_LENGTH
+    const finalTag = trimmed.length > TAG_MAX_LENGTH ? trimmed.slice(0, TAG_MAX_LENGTH) : trimmed;
+    if (tags.includes(finalTag)) {
+      setTagDuplicateHint(`Tag "${finalTag}" already exists.`);
       setTagInput('');
       // Auto-clear the duplicate hint after 3 seconds
       setTimeout(() => setTagDuplicateHint(null), 3000);
       return;
     }
     setTagDuplicateHint(null);
-    setTags([...tags, trimmed]);
+    if (trimmed.length > TAG_MAX_LENGTH) {
+      setTagDuplicateHint(`Tag was truncated to ${TAG_MAX_LENGTH} characters.`);
+      setTimeout(() => setTagDuplicateHint(null), 3000);
+    }
+    setTags([...tags, finalTag]);
     setTagInput('');
   };
 
@@ -358,27 +373,36 @@ export default function CreateTopicPage() {
 
           {/* Tags */}
           <div>
-            <label htmlFor="tags" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Tags <span className="text-gray-400 dark:text-gray-500 font-normal">(optional)</span>
-            </label>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300"
-                >
-                  {tag}
-                  <button
-                    type="button"
-                    onClick={() => removeTag(tag)}
-                    className="ml-0.5 text-primary-500 hover:text-primary-700 dark:hover:text-primary-200"
-                    aria-label={`Remove tag ${tag}`}
-                  >
-                    &times;
-                  </button>
+            <div className="flex items-center justify-between mb-1">
+              <label htmlFor="tags" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Tags <span className="text-gray-400 dark:text-gray-500 font-normal">(optional)</span>
+              </label>
+              {tags.length > 0 && (
+                <span className={`text-xs ${tags.length >= MAX_TAGS ? 'text-red-600 dark:text-red-400 font-medium' : tags.length >= MAX_TAGS * 0.8 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                  {tags.length}/{MAX_TAGS}
                 </span>
-              ))}
+              )}
             </div>
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 max-w-full"
+                  >
+                    <span className="truncate">{tag}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeTag(tag)}
+                      className="ml-0.5 text-primary-500 hover:text-primary-700 dark:hover:text-primary-200 flex-shrink-0"
+                      aria-label={`Remove tag ${tag}`}
+                    >
+                      &times;
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="flex gap-2">
               <input
                 id="tags"
@@ -387,13 +411,15 @@ export default function CreateTopicPage() {
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={handleTagKeyDown}
                 className="input-field flex-1"
-                placeholder="Type a tag and press Enter"
+                placeholder={tags.length >= MAX_TAGS ? `Maximum of ${MAX_TAGS} tags reached` : 'Type a tag and press Enter'}
+                disabled={tags.length >= MAX_TAGS}
+                maxLength={TAG_MAX_LENGTH * 2}
               />
               <button
                 type="button"
                 onClick={handleAddTag}
                 className="btn-secondary"
-                disabled={!tagInput.trim()}
+                disabled={!tagInput.trim() || tags.length >= MAX_TAGS}
               >
                 Add
               </button>
@@ -404,7 +430,7 @@ export default function CreateTopicPage() {
               </p>
             ) : (
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-300">
-                Press Enter or comma to add a tag. Duplicates are prevented.
+                Press Enter or comma to add a tag. Max {TAG_MAX_LENGTH} chars per tag, up to {MAX_TAGS} tags.
               </p>
             )}
           </div>

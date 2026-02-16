@@ -350,6 +350,24 @@ topicsRouter.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Tags must be an array of strings' });
     }
 
+    // Validate tag count and individual tag lengths
+    if (Array.isArray(tags)) {
+      if (tags.length > 20) {
+        return res.status(400).json({ error: 'Too many tags. Maximum of 20 tags allowed.' });
+      }
+      for (const tag of tags) {
+        if (typeof tag !== 'string') {
+          return res.status(400).json({ error: 'Each tag must be a string.' });
+        }
+        if (tag.trim().length === 0) {
+          return res.status(400).json({ error: 'Tags cannot be empty strings.' });
+        }
+        if (tag.trim().length > 50) {
+          return res.status(400).json({ error: `Tag "${tag.trim().slice(0, 20)}..." is too long. Maximum 50 characters per tag.` });
+        }
+      }
+    }
+
     // Validate description length if provided
     if (description && typeof description === 'string' && description.length > 2000) {
       return res.status(400).json({ error: 'Description is too long. Please keep it under 2000 characters.' });
@@ -362,12 +380,17 @@ topicsRouter.post('/', async (req, res) => {
 
     const topicId = uuidv4();
 
+    // Sanitize tags: trim, lowercase, deduplicate
+    const sanitizedTags = Array.isArray(tags)
+      ? [...new Set(tags.map((t: string) => t.trim().toLowerCase()).filter((t: string) => t.length > 0))]
+      : null;
+
     const newTopic = db.insert(topics).values({
       id: topicId,
       userId,
       title,
       description: description || null,
-      tags: tags ? JSON.stringify(tags) : null,
+      tags: sanitizedTags ? JSON.stringify(sanitizedTags) : null,
       status: status || 'backlog',
       priority: priority || 'medium',
       intent: intent || null,
@@ -587,16 +610,39 @@ topicsRouter.put('/:id', async (req, res) => {
       return res.status(400).json({ error: 'Tags must be an array of strings' });
     }
 
+    // Validate tag count and individual tag lengths
+    if (Array.isArray(tags)) {
+      if (tags.length > 20) {
+        return res.status(400).json({ error: 'Too many tags. Maximum of 20 tags allowed.' });
+      }
+      for (const tag of tags) {
+        if (typeof tag !== 'string') {
+          return res.status(400).json({ error: 'Each tag must be a string.' });
+        }
+        if (tag.trim().length === 0) {
+          return res.status(400).json({ error: 'Tags cannot be empty strings.' });
+        }
+        if (tag.trim().length > 50) {
+          return res.status(400).json({ error: `Tag "${tag.trim().slice(0, 20)}..." is too long. Maximum 50 characters per tag.` });
+        }
+      }
+    }
+
     // Validate description length if provided
     if (description !== undefined && description !== null && typeof description === 'string' && description.length > 2000) {
       return res.status(400).json({ error: 'Description is too long. Please keep it under 2000 characters.' });
     }
 
+    // Sanitize tags: trim, lowercase, deduplicate
+    const sanitizedTags = Array.isArray(tags)
+      ? [...new Set(tags.map((t: string) => t.trim().toLowerCase()).filter((t: string) => t.length > 0))]
+      : undefined;
+
     const updated = db.update(topics)
       .set({
         title: title !== undefined ? title : existing.title,
         description: description !== undefined ? description : existing.description,
-        tags: tags !== undefined ? JSON.stringify(tags) : existing.tags,
+        tags: sanitizedTags !== undefined ? JSON.stringify(sanitizedTags) : (tags === null ? null : existing.tags),
         status: status !== undefined ? status : existing.status,
         priority: priority !== undefined ? priority : existing.priority,
         intent: intent !== undefined ? intent : existing.intent,
