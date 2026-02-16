@@ -5,6 +5,7 @@ import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import https from 'https';
 import http from 'http';
+import { extractInsights, type SourceType, type ExtractionContext } from '../services/insightExtraction.js';
 
 export const importRouter = Router();
 
@@ -879,23 +880,68 @@ importRouter.post('/:id/process', async (req, res) => {
       return res.status(400).json({ error: 'Could not parse import content. The stored data may be corrupted.' });
     }
 
-    // Extract insights based on file type
-    let extractedInsights: Array<{ content: string; confidenceScore: number; suggestedCategory: string }> = [];
+    // Map file type to unified extraction source type
+    const sourceTypeMap: Record<string, SourceType> = {
+      chatgpt: 'import_chatgpt',
+      url: 'import_url',
+      text: 'import_text',
+      file: 'import_file',
+    };
 
-    switch (importedFile.fileType) {
-      case 'chatgpt':
-        extractedInsights = extractInsightsFromChatgpt(processedContent as { sections?: Record<string, string>; extractedText?: string });
-        break;
-      case 'url':
-        extractedInsights = extractInsightsFromUrl(processedContent as { extractedText?: string; title?: string });
-        break;
-      case 'text':
-      case 'file':
-        extractedInsights = extractInsightsFromText(processedContent as { extractedText?: string; title?: string });
-        break;
-      default:
-        return res.status(400).json({ error: `Unsupported file type: ${importedFile.fileType}` });
+    const sourceType = sourceTypeMap[importedFile.fileType];
+    if (!sourceType) {
+      return res.status(400).json({ error: `Unsupported file type: ${importedFile.fileType}` });
     }
+
+    // Build content string from processedContent
+    let contentText = '';
+    const pc = processedContent as { extractedText?: string; sections?: Record<string, string>; title?: string };
+    if (pc.sections && Object.keys(pc.sections).length > 0) {
+      // Format structured sections (ChatGPT exports)
+      contentText = Object.entries(pc.sections)
+        .map(([section, content]) => `## ${section}\n${content}`)
+        .join('\n\n');
+    } else if (pc.extractedText) {
+      contentText = pc.extractedText;
+    }
+
+    if (!contentText || contentText.trim().length === 0) {
+      return res.json({
+        message: 'No personal insights could be extracted from this content',
+        importId,
+        insightsExtracted: 0,
+        insights: [],
+        topicCreated: null,
+      });
+    }
+
+    // Gather existing verified insights for deduplication
+    const existingVerified = db.select({
+      content: insights.content,
+      confidenceScore: insights.confidenceScore,
+    }).from(insights).where(
+      and(eq(insights.userId, userId), eq(insights.verificationStatus, 'verified'))
+    ).all().map(i => ({
+      content: i.content,
+      confidenceScore: i.confidenceScore ?? 50,
+    }));
+
+    // Extract insights using the unified extraction service
+    const extractionCtx: ExtractionContext = {
+      content: contentText,
+      sourceType,
+      topicTitle: pc.title || importedFile.filename || undefined,
+      existingVerifiedInsights: existingVerified,
+    };
+
+    const unifiedInsights = await extractInsights(extractionCtx);
+
+    // Map to the format expected downstream (with suggestedCategory)
+    const extractedInsights = unifiedInsights.map(i => ({
+      content: i.content,
+      confidenceScore: i.confidenceScore,
+      suggestedCategory: i.category,
+    }));
 
     if (extractedInsights.length === 0) {
       return res.json({

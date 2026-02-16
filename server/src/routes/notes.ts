@@ -8,9 +8,9 @@ import {
   generateBriefSummaryAI,
   generateDecisionFrameworkAI,
   generateJsonContentAI,
-  extractInsightsAI,
   type DistillationContext,
 } from '../services/ai.js';
+import { extractInsights, formatInterviewTranscript, type ExtractionContext } from '../services/insightExtraction.js';
 
 export const notesRouter = Router();
 
@@ -118,9 +118,31 @@ notesRouter.post('/sessions/:sessionId/distill', async (req, res) => {
       selectedFormat,
     }).returning().get();
 
-    // Extract insights from the session using AI with regex fallback
-    const aiInsights = await extractInsightsAI(distillCtx).catch(() => null);
-    const extractedInsights = aiInsights || extractInsightsFromSession(userMessages, topic.title, !!session.isMiniSession);
+    // Extract insights using the unified insight extraction service
+    // Gather existing verified insights for deduplication
+    const existingVerified = db.select({
+      content: insights.content,
+      confidenceScore: insights.confidenceScore,
+    }).from(insights).where(
+      and(eq(insights.userId, userId), eq(insights.verificationStatus, 'verified'))
+    ).all().map(i => ({
+      content: i.content,
+      confidenceScore: i.confidenceScore ?? 50,
+    }));
+
+    const transcript = formatInterviewTranscript(userMessages, assistantMessages);
+    const extractionCtx: ExtractionContext = {
+      content: transcript,
+      sourceType: 'interview',
+      topicTitle: topic.title,
+      topicDescription: topic.description || undefined,
+      userName: userProfile?.name || undefined,
+      occupation: userProfile?.occupation || undefined,
+      isMiniSession: !!session.isMiniSession,
+      existingVerifiedInsights: existingVerified,
+    };
+
+    const extractedInsights = await extractInsights(extractionCtx);
     const savedInsights = [];
 
     for (const insight of extractedInsights) {
