@@ -21,6 +21,7 @@ import { conflictsRouter } from './routes/conflicts.js';
 import { templatesRouter } from './routes/templates.js';
 import { sandboxRouter } from './routes/sandbox.js';
 import { waitlistRouter } from './routes/waitlist.js';
+import { assessmentRouter } from './routes/assessment.js';
 import { authMiddleware, cleanupExpiredTokens } from './middleware/auth.js';
 import { apiRateLimiter, authRateLimiter } from './middleware/rateLimit.js';
 
@@ -73,6 +74,9 @@ app.use('/api/conflicts', authMiddleware, conflictsRouter);
 
 // Templates route (before catch-all notesRouter)
 app.use('/api/templates', authMiddleware, templatesRouter);
+
+// Assessment route (Big Five personality test)
+app.use('/api/assessment', authMiddleware, assessmentRouter);
 
 // Distillation routes (mounted under /api AFTER all more specific routes to prevent /:id catch-all conflicts)
 app.use('/api', authMiddleware, notesRouter);
