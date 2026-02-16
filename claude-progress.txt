@@ -1,3 +1,61 @@
+## Session - 2026-02-16 (Agent handling Features #115, #116, #117)
+
+### Accomplished
+- Feature #115 (Tab navigation through main interface elements): PASSING
+  - Added skip-to-content link as first focusable element in AppLayout
+  - Skip link targets id="main-content" on the main content area
+  - All interactive elements (NavLink, button, input, select, textarea) are natively focusable
+  - Tab order follows DOM/visual layout: skip-link -> sidebar nav items -> logout -> main content
+  - Escape key closes mobile sidebar menu (useEffect keyboard handler in Sidebar)
+  - No custom tabIndex needed - standard HTML elements provide correct tab behavior
+
+- Feature #116 (Focus rings visible on interactive elements): PASSING
+  - Added global CSS focus-visible rules for a, button, input, select, textarea, [tabindex], [role]
+  - Focus ring: 2px solid indigo (#6366f1) with 2px offset
+  - Dark mode: lighter indigo (#818cf8) for better contrast
+  - Mouse clicks don't show focus ring via :focus:not(:focus-visible) rule
+  - Existing .btn-primary, .btn-secondary, .btn-danger retain their focus:ring-2 Tailwind styles
+  - .input-field retains its focus:ring-2 focus:ring-primary-500 styles
+
+- Feature #117 (Screen reader compatible ARIA labels): PASSING
+  - Navigation: role="navigation" aria-label="Main navigation" on <nav> in Sidebar
+  - Main content: role="main" aria-label="Page content" on <main> in AppLayout
+  - Buttons: descriptive aria-labels on all icon-only buttons (Open/Close menu, Sign out, Refresh, Retry)
+  - Form inputs: already had proper htmlFor/label associations in LoginPage, RegisterPage
+  - Status badges: VerifiedBadge has role="status" and aria-label per status type
+  - Knowledge graph: SVG has role="img" with descriptive aria-label showing topic/concept/connection counts
+  - Modal dialogs: 5 dialogs updated with role="dialog" aria-modal="true" aria-labelledby:
+    - SettingsPage: confirm-add-dialog, confirm-toggle-dialog, confirm-delete-dialog
+    - ExportPage: verify-dialog
+    - TopicDetailPage: delete-topic-dialog
+  - Decorative elements: aria-hidden="true" on emoji icons, SVG icons, spacers
+  - Google Sign-In button: added aria-label="Sign in with Google"
+  - Mobile overlay: aria-hidden="true" on sidebar backdrop
+
+### Additional Fixes
+- Removed unused `isPending` variable in TopicDetailPage.tsx (pre-existing TypeScript error)
+
+### Files Modified (9 files)
+- client/src/styles/index.css - Global focus-visible CSS, sr-only utility, skip-to-content
+- client/src/components/layout/AppLayout.tsx - Skip link, ARIA landmarks, aria-expanded
+- client/src/components/layout/Sidebar.tsx - role, aria-label, aria-hidden, Escape key handler
+- client/src/components/VerifiedBadge.tsx - role="status", aria-label per status
+- client/src/pages/SettingsPage.tsx - 3 dialogs with role="dialog" aria-modal
+- client/src/pages/ExportPage.tsx - Verify dialog with role="dialog" aria-modal
+- client/src/pages/TopicDetailPage.tsx - Delete dialog with role="dialog" aria-modal
+- client/src/pages/KnowledgeGraphPage.tsx - region role, SVG role="img" with label
+- client/src/pages/LoginPage.tsx - aria-labels on buttons, aria-hidden on SVGs
+
+### Verification
+- TypeScript compiles clean (zero errors)
+- Vite build succeeds (644 modules, 772 kB JS + 74.93 kB CSS)
+- No mock data patterns found in client/src or server/src
+- All 3 features marked passing
+
+### Current Status
+- 129/209 features passing (61.7%)
+- Commit: 8f5d15f
+
 ## Session - 2026-02-16 (Agent handling Features #106, #180, #181)
 
 ### Accomplished
