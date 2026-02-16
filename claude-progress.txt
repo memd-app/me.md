@@ -1,3 +1,24 @@
+## Session - 2026-02-16 (Agent handling Feature #156 - Forms have sensible default values)
+
+### Accomplished
+- Feature #156 (Forms have sensible default values): PASSING
+  - Verified Create Topic form defaults:
+    - Status defaults to 'backlog' (backend: `status || 'backlog'` in POST /api/topics, DB schema default)
+    - Priority defaults to 'medium' (backend: `priority || 'medium'` in POST /api/topics, DB schema default)
+    - Intent field: added placeholder text "Select what you want to achieve with this topic (optional)"
+    - Intent is optional, stored as null when not selected
+  - Verified Settings page defaults:
+    - Session length: 15 minutes (useState(15), DB schema `.default(15)`, select options 15/30/45/60)
+    - Theme: 'light' (ThemeContext defaults to 'light', DB `.default('light')`, localStorage fallback)
+    - Notification preferences: sessionReminders=true, verificationAlerts=true, insightUpdates=false
+  - Settings syncs preferences from server on load (useEffect watches user.sessionLengthDefault, user.notificationPreferences)
+  - No mock data patterns found in client/src or server/src
+  - TypeScript compiles clean, Vite build succeeds (646 modules)
+
+### Current Status
+- Feature #156 passing
+- 168/209 features passing (79.9% → ~80.4%)
+
 ## Session - 2026-02-16 (Agent handling Feature #155 - URL updates correctly during navigation)
 
 ### Accomplished
