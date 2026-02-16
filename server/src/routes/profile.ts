@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../config/database.js';
-import { insights, topics, users, notes } from '../models/schema.js';
+import { insights, topics, users, notes, topicConnections } from '../models/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
 
 export const profileRouter = Router();
@@ -66,6 +66,21 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
     'witty', 'dry', 'encouraging', 'supportive', 'critical',
   ],
 };
+
+// Safely parse JSON fields that may be double-encoded (string containing JSON string)
+function safeParseJsonArray(value: string | null): unknown[] {
+  if (!value) return [];
+  try {
+    let parsed = JSON.parse(value);
+    // Handle double-encoded: if result is still a string, parse again
+    if (typeof parsed === 'string') {
+      parsed = JSON.parse(parsed);
+    }
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 function categorizeInsight(content: string, topicTitle: string): string[] {
   const lowerContent = content.toLowerCase();
@@ -425,8 +440,8 @@ profileRouter.get('/export/json', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Get only exportable verified insights
-    const verifiedInsights = db.select({
+    // Get only exportable verified insights with full metadata for round-trip
+    const verifiedInsightsForSummary = db.select({
       content: insights.content,
       topicTitle: topics.title,
       confidenceScore: insights.confidenceScore,
@@ -443,13 +458,79 @@ profileRouter.get('/export/json', async (req, res) => {
       .orderBy(desc(insights.confidenceScore))
       .all();
 
+    // Get all verified exportable insights with FULL metadata for round-trip re-import
+    const verifiedInsightsFull = db.select({
+      id: insights.id,
+      content: insights.content,
+      confidenceScore: insights.confidenceScore,
+      verificationStatus: insights.verificationStatus,
+      agreementScore: insights.agreementScore,
+      privacyTier: insights.privacyTier,
+      topicId: insights.topicId,
+      noteId: insights.noteId,
+      sourceSessionId: insights.sourceSessionId,
+      verifiedAt: insights.verifiedAt,
+      reVerifyAt: insights.reVerifyAt,
+      reVerifyInterval: insights.reVerifyInterval,
+      createdAt: insights.createdAt,
+      updatedAt: insights.updatedAt,
+      topicTitle: topics.title,
+    }).from(insights)
+      .leftJoin(topics, eq(insights.topicId, topics.id))
+      .where(
+        and(
+          eq(insights.userId, userId),
+          eq(insights.verificationStatus, 'verified'),
+          eq(insights.privacyTier, 'exportable')
+        )
+      )
+      .orderBy(desc(insights.confidenceScore))
+      .all();
+
+    // Get all user topics with full details
     const userTopics = db.select().from(topics).where(eq(topics.userId, userId)).all();
 
-    const summary = buildProfileSummary(user, verifiedInsights, userTopics.length);
+    // Parse JSON fields in topics for export (handles double-encoded strings)
+    const topicsWithParsedFields = userTopics.map(t => ({
+      ...t,
+      tags: safeParseJsonArray(t.tags),
+      referenceUrls: safeParseJsonArray(t.referenceUrls),
+      contextItems: safeParseJsonArray(t.contextItems),
+    }));
+
+    // Get topic connections/relationships for this user's topics
+    const topicIds = userTopics.map(t => t.id);
+    let connections: Array<typeof topicConnections.$inferSelect> = [];
+    if (topicIds.length > 0) {
+      // Get all connections where either source or target is one of the user's topics
+      const allConnections = db.select().from(topicConnections).all();
+      connections = allConnections.filter(c =>
+        topicIds.includes(c.sourceTopicId) || topicIds.includes(c.targetTopicId)
+      );
+    }
+
+    const summary = buildProfileSummary(user, verifiedInsightsForSummary, userTopics.length);
+
+    const exportData = {
+      exportVersion: '1.0',
+      exportedAt: new Date().toISOString(),
+      source: 'me.md',
+      profile: summary,
+      rawData: {
+        insights: verifiedInsightsFull,
+        topics: topicsWithParsedFields,
+        topicConnections: connections,
+      },
+      metadata: {
+        totalVerifiedInsights: verifiedInsightsFull.length,
+        totalTopics: userTopics.length,
+        totalTopicConnections: connections.length,
+      },
+    };
 
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${user.name.replace(/[^a-zA-Z0-9]/g, '_')}_profile.json"`);
-    res.json({ profile: summary });
+    res.json(exportData);
   } catch (error) {
     console.error('Export JSON error:', error);
     res.status(500).json({ error: 'Failed to export profile as JSON' });
