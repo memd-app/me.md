@@ -1,3 +1,24 @@
+## Session - 2026-02-16 (Agent handling Feature #165)
+
+### Accomplished
+- Feature #165 (Refresh mid-form preserves data or warns user): PASSING
+  - Created reusable `useUnsavedChangesWarning` hook at client/src/hooks/useUnsavedChangesWarning.ts
+  - Hook listens to `beforeunload` event when form has unsaved changes (isDirty=true)
+  - Applied to CreateTopicPage: warns when title, description, tags, intent, or trigger have been modified
+  - Applied to SettingsPage: warns when inline editing fields, changing password, or adding MCP agents
+  - Applied to OnboardingPage: warns when profile fields, imports, or topic selections exist
+  - Applied to ImportPage: warns when ChatGPT output, URL input, or paste text has content
+  - Disables warning after successful form submission (e.g., CreateTopicPage sets hasSubmitted=true)
+  - TypeScript compiles with zero errors, Vite build succeeds (650 modules)
+  - No mock data patterns found in client/src
+
+### Current Status
+- 176/209 features passing (84.2%)
+- Feature #165 marked as passing
+
+### What to Work on Next
+- Continue with next assigned features from orchestrator
+
 ## Session - 2026-02-16 (Agent handling Feature #164)
 
 ### Accomplished
