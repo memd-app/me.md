@@ -340,6 +340,102 @@ importRouter.post('/text', async (req, res) => {
   }
 });
 
+// POST /api/import/chatgpt - Import ChatGPT memory extraction output
+importRouter.post('/chatgpt', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string;
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const { text, title } = req.body;
+
+    if (!text || text.trim().length === 0) {
+      return res.status(400).json({ error: 'ChatGPT response text is required' });
+    }
+
+    const trimmedText = text.trim();
+
+    if (trimmedText.length < 20) {
+      return res.status(400).json({ error: 'The response seems too short. Please paste the full ChatGPT output.' });
+    }
+
+    const fileId = uuidv4();
+    const displayTitle = title || 'ChatGPT Memory Extraction';
+    const summary = generateSummary(trimmedText);
+
+    // Parse sections from the ChatGPT output for structured storage
+    const sections: Record<string, string> = {};
+    const sectionRegex = /\*\*([^*]+)\*\*[:\s]*([\s\S]*?)(?=\*\*[^*]+\*\*|$)/g;
+    let match;
+    while ((match = sectionRegex.exec(trimmedText)) !== null) {
+      const sectionName = match[1].trim();
+      const sectionContent = match[2].trim();
+      if (sectionContent.length > 0) {
+        sections[sectionName] = sectionContent;
+      }
+    }
+
+    db.insert(importedFiles).values({
+      id: fileId,
+      userId,
+      filename: displayTitle,
+      fileType: 'chatgpt',
+      processedContent: JSON.stringify({
+        title: displayTitle,
+        summary,
+        textLength: trimmedText.length,
+        extractedText: trimmedText.substring(0, 10000),
+        sections: Object.keys(sections).length > 0 ? sections : null,
+        sectionCount: Object.keys(sections).length,
+        source: 'chatgpt_memory',
+        processedAt: new Date().toISOString(),
+      }),
+    }).run();
+
+    // Update user's imported_context with reference
+    const user = db.select().from(users).where(eq(users.id, userId)).get();
+    if (user) {
+      let existingContext: Array<{ type: string; title: string; importedFileId: string }> = [];
+      try {
+        if (user.importedContext) {
+          existingContext = JSON.parse(user.importedContext);
+        }
+      } catch {
+        existingContext = [];
+      }
+
+      const newContext = [
+        ...existingContext,
+        {
+          type: 'chatgpt',
+          title: displayTitle,
+          importedFileId: fileId,
+        },
+      ];
+
+      db.update(users)
+        .set({
+          importedContext: JSON.stringify(newContext),
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(users.id, userId))
+        .run();
+    }
+
+    res.json({
+      message: 'ChatGPT context imported successfully',
+      id: fileId,
+      title: displayTitle,
+      summary,
+      sectionCount: Object.keys(sections).length,
+    });
+  } catch (error) {
+    console.error('Import ChatGPT error:', error);
+    res.status(500).json({ error: 'Failed to import ChatGPT context' });
+  }
+});
+
 // POST /api/import/file - Upload and import a file
 importRouter.post('/file', async (req, res) => {
   try {
