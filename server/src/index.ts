@@ -21,6 +21,7 @@ import { conflictsRouter } from './routes/conflicts.js';
 import { templatesRouter } from './routes/templates.js';
 import { sandboxRouter } from './routes/sandbox.js';
 import { authMiddleware, cleanupExpiredTokens } from './middleware/auth.js';
+import { apiRateLimiter, authRateLimiter } from './middleware/rateLimit.js';
 
 dotenv.config();
 
@@ -34,6 +35,12 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
+
+// Rate limiting - apply to all API routes
+app.use('/api', apiRateLimiter);
+
+// Stricter rate limiting for auth endpoints
+app.use('/api/auth', authRateLimiter);
 
 // Public routes (no auth required)
 app.use('/api/health', healthRouter);
