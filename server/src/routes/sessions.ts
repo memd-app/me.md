@@ -2078,55 +2078,154 @@ function generateQuickReplies(
 // ============================================
 
 // High-impact question areas for quick-win mini sessions
-const MINI_SESSION_QUESTIONS: Array<{ area: string; question: string; quickReplies: string[] }> = [
+// These serve as the base template; when Claude API is available, contextual questions replace these
+const MINI_SESSION_AREAS = [
+  'Career/Work Identity',
+  'Core Values',
+  'Communication Style',
+  'Decision-Making',
+  'Strengths & Uniqueness',
+  'Goals & Aspirations',
+  'Relationships & Community',
+];
+
+// Base questions per area (used when contextual generation isn't possible)
+const MINI_SESSION_BASE_QUESTIONS: Array<{ area: string; questions: string[]; quickReplies: string[] }> = [
   {
     area: 'Career/Work Identity',
-    question: '**What do you do for work, and what\'s the most interesting aspect of it?**',
+    questions: [
+      '**What do you do for work, and what\'s the most interesting aspect of it?**',
+    ],
     quickReplies: ["I'll share my work story", "I'd rather talk about my passions first", "Ask me about what drives me"],
   },
   {
     area: 'Core Values',
-    question: '**What matters most to you in life right now, and why?**',
+    questions: [
+      '**What matters most to you in life right now, and why?**',
+    ],
     quickReplies: ["Family and relationships come first", "Growth and learning drive me", "Making an impact is what counts"],
   },
   {
     area: 'Communication Style',
-    question: '**How do you prefer to communicate with others -- are you more direct, collaborative, or reflective?**',
+    questions: [
+      '**How do you prefer to communicate with others -- are you more direct, collaborative, or reflective?**',
+    ],
     quickReplies: ["I'm pretty direct and to the point", "I like to collaborate and brainstorm", "I tend to listen first, then respond"],
   },
   {
     area: 'Decision-Making',
-    question: '**When you face a tough decision, what\'s your go-to approach?**',
+    questions: [
+      '**When you face a tough decision, what\'s your go-to approach?**',
+    ],
     quickReplies: ["I go with my gut instinct", "I research and analyze thoroughly", "I talk it through with people I trust"],
   },
   {
     area: 'Strengths & Uniqueness',
-    question: '**What do people most often come to you for -- what\'s your superpower?**',
+    questions: [
+      '**What do people most often come to you for -- what\'s your superpower?**',
+    ],
     quickReplies: ["I'm great at solving problems", "People come to me for advice", "I bring energy and ideas to the table"],
   },
   {
     area: 'Goals & Aspirations',
-    question: '**What\'s one goal or aspiration that excites you right now?**',
+    questions: [
+      '**What\'s one goal or aspiration that excites you right now?**',
+    ],
     quickReplies: ["I want to grow in my career", "I'm focused on personal development", "I have a creative project in mind"],
   },
   {
     area: 'Relationships & Community',
-    question: '**Who are the most important people in your life, and what role do they play?**',
+    questions: [
+      '**Who are the most important people in your life, and what role do they play?**',
+    ],
     quickReplies: ["My family is everything", "I have a tight circle of close friends", "My professional network shapes me a lot"],
   },
 ];
 
-// Generate a concise mini-session AI response (2-3 sentences reflection + 1 bold question)
+// Contextual question bridges: given what the user shared, generate a bridging phrase
+// connecting their previous answer to the next area
+function buildContextualBridge(
+  previousAnswers: Array<{ area: string; keyPhrase: string }>,
+  nextArea: string,
+): string | null {
+  if (previousAnswers.length === 0) return null;
+
+  const lastAnswer = previousAnswers[previousAnswers.length - 1];
+  if (!lastAnswer.keyPhrase) return null;
+
+  // Create a connection between the last thing they shared and the next area
+  const bridges: Record<string, string[]> = {
+    'Core Values': [
+      `You mentioned **${lastAnswer.keyPhrase}** in your work — I'm curious how that connects to`,
+      `That's interesting about **${lastAnswer.keyPhrase}**. Building on that,`,
+    ],
+    'Communication Style': [
+      `Given what you shared about **${lastAnswer.keyPhrase}**, I'd love to know about`,
+      `**${lastAnswer.keyPhrase}** tells me a lot. Now thinking about`,
+    ],
+    'Decision-Making': [
+      `It sounds like **${lastAnswer.keyPhrase}** matters to you. When it comes to`,
+      `With **${lastAnswer.keyPhrase}** as a core part of who you are,`,
+    ],
+    'Strengths & Uniqueness': [
+      `Your perspective on **${lastAnswer.keyPhrase}** is really clear. Speaking of strengths,`,
+      `**${lastAnswer.keyPhrase}** shapes how you see things. On the topic of strengths,`,
+    ],
+    'Goals & Aspirations': [
+      `I can see **${lastAnswer.keyPhrase}** drives you. Looking forward,`,
+      `With **${lastAnswer.keyPhrase}** as a foundation,`,
+    ],
+    'Relationships & Community': [
+      `**${lastAnswer.keyPhrase}** clearly matters to you. Thinking about the people in your life,`,
+      `Your take on **${lastAnswer.keyPhrase}** is illuminating. When it comes to relationships,`,
+    ],
+  };
+
+  const areaOptions = bridges[nextArea];
+  if (!areaOptions) return null;
+
+  return areaOptions[previousAnswers.length % areaOptions.length];
+}
+
+// Generate contextual quick replies based on user's conversation themes
+function generateContextualQuickReplies(
+  area: string,
+  previousAnswers: Array<{ area: string; keyPhrase: string }>,
+  baseReplies: string[],
+): string[] {
+  // If we have enough context, generate more specific quick replies
+  if (previousAnswers.length >= 2) {
+    const themes = previousAnswers.map(a => a.keyPhrase).filter(Boolean);
+    if (themes.length > 0) {
+      const theme = themes[themes.length - 1];
+      // Add a contextual reply option that connects back to what they shared
+      const contextualReply = `It connects to ${theme}`;
+      return [baseReplies[0], contextualReply, baseReplies[baseReplies.length - 1]];
+    }
+  }
+  return baseReplies;
+}
+
+// Generate a concise mini-session AI response with contextual follow-ups
+// Analyzes user's previous answers to build connected, adaptive questions
 function generateMiniSessionAIResponse(
   userMessageCount: number,
   lastUserMessage: string,
   conversationHistory: Array<{ role: string; content: string }>
 ): { content: string; quickReplies: string[] } {
   // Pick the next question area based on how many user messages we've received
-  const questionIndex = Math.min(userMessageCount, MINI_SESSION_QUESTIONS.length - 1);
-  const nextQ = MINI_SESSION_QUESTIONS[questionIndex];
+  const questionIndex = Math.min(userMessageCount, MINI_SESSION_BASE_QUESTIONS.length - 1);
+  const nextQ = MINI_SESSION_BASE_QUESTIONS[questionIndex];
 
-  // Build a short reflection on what the user just said
+  // Analyze previous user messages to build context
+  const userMessages = conversationHistory.filter(m => m.role === 'user');
+  const previousAnswers: Array<{ area: string; keyPhrase: string }> = userMessages.map((msg, idx) => {
+    const area = idx < MINI_SESSION_AREAS.length ? MINI_SESSION_AREAS[idx] : 'General';
+    const phrases = extractKeyPhrases(msg.content);
+    return { area, keyPhrase: phrases.length > 0 ? phrases[0] : '' };
+  });
+
+  // Build a contextual reflection on the user's latest message
   const keyPhrases = extractKeyPhrases(lastUserMessage);
   const keyPhrase = keyPhrases.length > 0 ? keyPhrases[0] : '';
 
@@ -2134,17 +2233,35 @@ function generateMiniSessionAIResponse(
   if (userMessageCount === 0) {
     reflection = `Thanks for sharing that!`;
   } else if (keyPhrase) {
-    const reflections = [
-      `That's a great insight about **${keyPhrase}** -- it says a lot about what drives you.`,
-      `I can see **${keyPhrase}** is meaningful to you. That's really helpful context.`,
-      `Interesting -- **${keyPhrase}** clearly shapes how you see things. Noted!`,
-      `Love that perspective on **${keyPhrase}**. It paints a clear picture.`,
-      `**${keyPhrase}** stands out as significant for you. That's valuable.`,
-    ];
-    reflection = reflections[userMessageCount % reflections.length];
+    // Contextual reflections that reference both the current answer and past themes
+    const previousThemes = previousAnswers
+      .slice(0, -1) // all except current
+      .filter(a => a.keyPhrase)
+      .map(a => a.keyPhrase);
+
+    if (previousThemes.length > 0 && userMessageCount >= 2) {
+      // Create a cross-reference reflection connecting current and past answers
+      const pastTheme = previousThemes[previousThemes.length - 1];
+      const crossRefReflections = [
+        `That's a great insight about **${keyPhrase}** — and I notice it connects to what you said about **${pastTheme}** earlier. There's a clear thread here.`,
+        `Interesting — **${keyPhrase}** clearly shapes how you see things. I can see echoes of **${pastTheme}** in this too.`,
+        `Love that perspective on **${keyPhrase}**. Combined with **${pastTheme}**, I'm getting a really rich picture of who you are.`,
+        `**${keyPhrase}** stands out as significant. Together with **${pastTheme}**, it reveals a consistent pattern in your thinking.`,
+      ];
+      reflection = crossRefReflections[userMessageCount % crossRefReflections.length];
+    } else {
+      const reflections = [
+        `That's a great insight about **${keyPhrase}** — it says a lot about what drives you.`,
+        `I can see **${keyPhrase}** is meaningful to you. That's really helpful context.`,
+        `Interesting — **${keyPhrase}** clearly shapes how you see things. Noted!`,
+        `Love that perspective on **${keyPhrase}**. It paints a clear picture.`,
+        `**${keyPhrase}** stands out as significant for you. That's valuable.`,
+      ];
+      reflection = reflections[userMessageCount % reflections.length];
+    }
   } else {
     const genericReflections = [
-      `Thanks for sharing that -- it gives me a clearer picture of who you are.`,
+      `Thanks for sharing that — it gives me a clearer picture of who you are.`,
       `That's really insightful. I can see how that shapes your perspective.`,
       `Great answer! That tells me a lot about how you think.`,
       `I appreciate the honesty there. It's really helpful for your profile.`,
@@ -2153,6 +2270,19 @@ function generateMiniSessionAIResponse(
     reflection = genericReflections[userMessageCount % genericReflections.length];
   }
 
-  const content = `${reflection}\n\n${nextQ.question}`;
-  return { content, quickReplies: nextQ.quickReplies };
+  // Build the question with contextual bridge if possible
+  let question: string;
+  const bridge = buildContextualBridge(previousAnswers, nextQ.area);
+  if (bridge && userMessageCount >= 1) {
+    // Use a contextual bridge to connect the question to previous answers
+    question = `${bridge} ${nextQ.questions[0].replace(/^\*\*/, '**').toLowerCase()}`;
+  } else {
+    question = nextQ.questions[0];
+  }
+
+  // Generate contextual quick replies
+  const quickReplies = generateContextualQuickReplies(nextQ.area, previousAnswers, nextQ.quickReplies);
+
+  const content = `${reflection}\n\n${question}`;
+  return { content, quickReplies };
 }

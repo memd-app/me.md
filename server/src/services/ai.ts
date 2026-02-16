@@ -197,8 +197,13 @@ function buildSystemPrompt(
 
 /**
  * Build the system prompt for a mini (quick-win) session.
+ * Includes conversation history context so Claude can generate contextual follow-up questions
+ * that adapt to what the user has already shared.
  */
-function buildMiniSessionSystemPrompt(userMessageCount: number): string {
+function buildMiniSessionSystemPrompt(
+  userMessageCount: number,
+  conversationHistory?: Array<{ role: string; content: string }>,
+): string {
   const MINI_AREAS = [
     'Career/Work Identity',
     'Core Values',
@@ -209,30 +214,53 @@ function buildMiniSessionSystemPrompt(userMessageCount: number): string {
     'Relationships & Community',
   ];
 
+  // Determine which areas have already been covered based on conversation progress
+  const coveredAreas = MINI_AREAS.slice(0, Math.min(userMessageCount, MINI_AREAS.length));
   const currentArea = MINI_AREAS[Math.min(userMessageCount, MINI_AREAS.length - 1)];
-  const nextArea = userMessageCount + 1 < MINI_AREAS.length
-    ? MINI_AREAS[userMessageCount + 1]
-    : null;
+  const remainingAreas = MINI_AREAS.slice(Math.min(userMessageCount + 1, MINI_AREAS.length));
 
   const parts: string[] = [];
   parts.push(`You are conducting a Quick Win session for me.md — a short 5-minute interview to build a starter profile.`);
   parts.push(`You are asking high-impact questions across key life areas to quickly establish the user's personal context.`);
   parts.push(`\nCurrent focus area: ${currentArea} (question ${userMessageCount + 1} of ~7).`);
-  if (nextArea) {
-    parts.push(`Next area: ${nextArea}.`);
+
+  if (coveredAreas.length > 0 && userMessageCount > 0) {
+    parts.push(`\nAreas already explored: ${coveredAreas.join(', ')}.`);
   }
+  if (remainingAreas.length > 0) {
+    parts.push(`Areas still to cover: ${remainingAreas.join(', ')}.`);
+  }
+
+  // Include summary of what the user has shared so far for contextual follow-ups
+  if (conversationHistory && conversationHistory.length > 0) {
+    const userMessages = conversationHistory.filter(m => m.role === 'user');
+    if (userMessages.length > 0) {
+      parts.push(`\n## What the User Has Shared So Far`);
+      parts.push(`Use these previous answers to ask CONTEXTUAL follow-up questions that build on what the user has already revealed. Reference their specific words and themes. Do NOT repeat questions about topics they've already answered.`);
+      userMessages.forEach((msg, idx) => {
+        const area = idx < MINI_AREAS.length ? MINI_AREAS[idx] : 'General';
+        // Truncate very long messages to keep prompt size manageable
+        const truncated = msg.content.length > 300 ? msg.content.substring(0, 300) + '...' : msg.content;
+        parts.push(`\n**${area}:** "${truncated}"`);
+      });
+      parts.push(`\nBased on these answers, your next question about "${currentArea}" should connect to themes, values, or patterns already expressed. For example, if the user mentioned valuing collaboration in their career answer, ask about how that collaborative nature shows up in their ${currentArea.toLowerCase()}.`);
+    }
+  }
+
   parts.push(`\n## Response Guidelines`);
-  parts.push(`1. Start with a brief, energetic acknowledgment of what they shared (1-2 sentences). Reference their specific words.`);
-  parts.push(`2. Ask ONE clear, bold question about the current focus area.`);
-  parts.push(`3. Keep it quick and focused — this is a rapid-fire session.`);
-  parts.push(`4. Use **bold** for the main question.`);
-  parts.push(`5. Be warm and encouraging — help them feel good about sharing.`);
+  parts.push(`1. Start with a brief, energetic acknowledgment of what they shared (1-2 sentences). Reference their SPECIFIC words — quote them or paraphrase closely.`);
+  parts.push(`2. Create a brief connection to something they mentioned earlier if relevant (optional, 1 sentence).`);
+  parts.push(`3. Ask ONE clear, bold question about the current focus area that is CONTEXTUAL — it should feel like a natural follow-up to what they've shared, not a generic question from a list.`);
+  parts.push(`4. Keep it quick and focused — this is a rapid-fire session, 3-5 sentences total.`);
+  parts.push(`5. Use **bold** for the main question.`);
+  parts.push(`6. Be warm and encouraging — help them feel good about sharing.`);
+  parts.push(`7. NEVER ask a question they've already answered. If they already covered an area, skip to the next or go deeper.`);
 
   if (userMessageCount >= 5) {
-    parts.push(`\nNote: We're near the end of the quick win session. Start wrapping up warmly.`);
+    parts.push(`\nNote: We're near the end of the quick win session. Start wrapping up warmly. Weave together themes from their earlier answers.`);
   }
   if (userMessageCount >= 7) {
-    parts.push(`\nThe session is complete. Thank the user and encourage them to click "Finish & Distill" to generate their starter profile.`);
+    parts.push(`\nThe session is complete. Thank the user warmly, summarize 2-3 key themes you noticed across their answers, and encourage them to click "Finish & Distill" to generate their starter profile.`);
   }
 
   return parts.join('\n');
@@ -328,7 +356,7 @@ export async function generateClaudeResponse(options: AIResponseOptions): Promis
   // Build the system prompt
   let systemPrompt: string;
   if (isMiniSession) {
-    systemPrompt = buildMiniSessionSystemPrompt(userMessageCount);
+    systemPrompt = buildMiniSessionSystemPrompt(userMessageCount, conversationHistory);
   } else {
     const methodology = selectMethodology(userMessageCount, topicIntent || 'explore');
     systemPrompt = buildSystemPrompt(
@@ -433,7 +461,7 @@ export async function* streamClaudeResponse(options: AIResponseOptions): AsyncGe
   // Build the system prompt
   let systemPrompt: string;
   if (isMiniSession) {
-    systemPrompt = buildMiniSessionSystemPrompt(userMessageCount);
+    systemPrompt = buildMiniSessionSystemPrompt(userMessageCount, conversationHistory);
   } else {
     const methodology = selectMethodology(userMessageCount, topicIntent || 'explore');
     systemPrompt = buildSystemPrompt(
