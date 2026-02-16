@@ -852,6 +852,7 @@ importRouter.post('/:id/process', async (req, res) => {
           userId,
           content: extracted.content,
           confidenceScore: extracted.confidenceScore,
+          extractionMethod: extracted.extractionMethod || 'ai',
           verificationStatus: 'unverified',
           sourceSessionId: sessionId,
         }).run();

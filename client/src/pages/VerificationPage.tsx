@@ -16,6 +16,7 @@ interface Insight {
   verificationStatus: string;
   agreementScore: number | null;
   privacyTier: string | null;
+  extractionMethod: string | null; // 'ai' | 'fallback'
   sourceSessionId: string | null;
   verifiedAt: string | null;
   reVerifyAt: string | null;
