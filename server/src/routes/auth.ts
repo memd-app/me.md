@@ -151,7 +151,7 @@ authRouter.post('/login', async (req, res) => {
   }
 });
 
-// GET /api/auth/me - Get current user (uses authMiddleware to validate Bearer token or x-user-id)
+// GET /api/auth/me - Get current user (uses authMiddleware to validate Bearer token)
 authRouter.get('/me', authMiddleware, async (req, res) => {
   try {
     const userId = req.headers['x-user-id'] as string;
@@ -348,7 +348,7 @@ authRouter.post('/logout', async (req, res) => {
 // POST /api/auth/verify-password - Verify user's password
 authRouter.post('/verify-password', authMiddleware, async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -575,7 +575,7 @@ authRouter.post('/reset-password', async (req, res) => {
 // DELETE /api/auth/account - Delete account (requires password confirmation)
 authRouter.delete('/account', authMiddleware, async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });

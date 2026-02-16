@@ -154,7 +154,7 @@ seedTemplatesIfNeeded();
 // GET /api/templates - List all use case templates
 templatesRouter.get('/', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -172,7 +172,7 @@ templatesRouter.get('/', async (req, res) => {
 // GET /api/templates/:id - Get template detail
 templatesRouter.get('/:id', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
     const templateId = req.params.id;
 
     if (!userId) {
@@ -197,7 +197,7 @@ templatesRouter.get('/:id', async (req, res) => {
 // POST /api/topics/from-template/:templateId - Create a topic from a use case template
 templatesRouter.post('/:id/create-topic', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
     const templateId = req.params.id;
 
     if (!userId) {

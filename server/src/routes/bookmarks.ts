@@ -9,7 +9,7 @@ export const bookmarksRouter = Router();
 // POST /api/bookmarks - Create a bookmark for a message
 bookmarksRouter.post('/', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -72,7 +72,7 @@ bookmarksRouter.post('/', async (req, res) => {
 // DELETE /api/bookmarks/:messageId - Remove a bookmark by message ID
 bookmarksRouter.delete('/:messageId', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
     const messageId = req.params.messageId;
 
     if (!userId) {
@@ -105,7 +105,7 @@ bookmarksRouter.delete('/:messageId', async (req, res) => {
 // GET /api/bookmarks - Get all bookmarks for a user (with message content and session context)
 bookmarksRouter.get('/', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });

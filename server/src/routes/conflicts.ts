@@ -89,7 +89,7 @@ function detectContradiction(contentA: string, contentB: string): { isConflict: 
 // ============================================
 conflictsRouter.post('/detect', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -184,7 +184,7 @@ conflictsRouter.post('/detect', async (req, res) => {
 // ============================================
 conflictsRouter.get('/', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
     const status = req.query.status as string | undefined;
 
     if (!userId) {
@@ -242,7 +242,7 @@ conflictsRouter.get('/', async (req, res) => {
 // ============================================
 conflictsRouter.get('/stats', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -267,7 +267,7 @@ conflictsRouter.get('/stats', async (req, res) => {
 // ============================================
 conflictsRouter.get('/:id', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
     const conflictId = req.params.id;
 
     if (!userId) {
@@ -316,7 +316,7 @@ conflictsRouter.get('/:id', async (req, res) => {
 // ============================================
 conflictsRouter.post('/:id/resolve', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
     const conflictId = req.params.id;
     const { resolution, resolutionNote } = req.body;
 

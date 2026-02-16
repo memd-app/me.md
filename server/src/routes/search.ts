@@ -23,7 +23,7 @@ interface SearchResult {
 // GET /api/search?q=<query>&filter=<type>&verificationStatus=<status>&dateFrom=<date>&dateTo=<date>&minConfidence=<num>&maxConfidence=<num>&page=<num>&limit=<num>
 searchRouter.get('/', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });

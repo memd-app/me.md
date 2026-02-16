@@ -9,7 +9,7 @@ export const graphRouter = Router();
 // GET /api/graph - Get full knowledge graph data for a user
 graphRouter.get('/', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -326,7 +326,7 @@ graphRouter.get('/', async (req, res) => {
 // GET /api/graph/topic/:id - Get sub-graph for a specific topic
 graphRouter.get('/topic/:id', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
     const topicId = req.params.id;
 
     if (!userId) {
@@ -390,7 +390,7 @@ graphRouter.get('/topic/:id', async (req, res) => {
 // POST /api/graph/concept-nodes - Create a concept node
 graphRouter.post('/concept-nodes', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
     const { topicId, insightId, label, weight } = req.body;
 
     if (!userId) {
@@ -440,7 +440,7 @@ graphRouter.post('/concept-nodes', async (req, res) => {
 // POST /api/graph/concept-edges - Create a concept edge
 graphRouter.post('/concept-edges', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
     const { sourceNodeId, targetNodeId, relationship, weight } = req.body;
 
     if (!userId) {

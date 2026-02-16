@@ -151,7 +151,7 @@ const PRESET_TOPICS = [
 // GET /api/topics/presets - Get available preset topics
 topicsRouter.get('/presets', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -194,7 +194,7 @@ topicsRouter.get('/presets', async (req, res) => {
 // POST /api/topics/presets/select - Create selected preset topics for the user
 topicsRouter.post('/presets/select', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -254,7 +254,7 @@ topicsRouter.post('/presets/select', async (req, res) => {
 // GET /api/topics/check-title - Check if a topic with this title already exists for the user
 topicsRouter.get('/check-title', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -290,7 +290,7 @@ topicsRouter.get('/check-title', async (req, res) => {
 // GET /api/topics - List all topics for a user
 topicsRouter.get('/', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -308,7 +308,7 @@ topicsRouter.get('/', async (req, res) => {
 // POST /api/topics - Create a new topic
 topicsRouter.post('/', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -425,7 +425,7 @@ topicsRouter.post('/', async (req, res) => {
 // GET /api/topics/:id - Get a specific topic
 topicsRouter.get('/:id', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
     const topicId = req.params.id;
 
     if (!userId) {
@@ -483,7 +483,7 @@ topicsRouter.get('/:id', async (req, res) => {
 // POST /api/topics/:id/connections - Create cross-topic connections (multi-bucket)
 topicsRouter.post('/:id/connections', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
     const sourceTopicId = req.params.id;
     const { connections } = req.body; // Array of { targetTopicId, relevanceScore }
 
@@ -556,7 +556,7 @@ topicsRouter.post('/:id/connections', async (req, res) => {
 // PUT /api/topics/:id - Update a topic
 topicsRouter.put('/:id', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
     const topicId = req.params.id;
 
     if (!userId) {
@@ -678,7 +678,7 @@ topicsRouter.put('/:id', async (req, res) => {
 // DELETE /api/topics/:id - Delete a topic (cascades to sessions, messages, notes, insights, connections, concept nodes)
 topicsRouter.delete('/:id', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
     const topicId = req.params.id;
 
     if (!userId) {

@@ -101,7 +101,8 @@ export function revokeToken(token: string): void {
  * Express middleware that authenticates requests using Bearer tokens.
  *
  * Checks the Authorization header for a Bearer token.
- * Falls back to x-user-id header for backward compatibility during transition.
+ * In development mode only, falls back to x-user-id header for convenience.
+ * In production, only Bearer token authentication is accepted.
  *
  * On success, sets req.userId (and keeps x-user-id header populated for route handlers).
  * On failure, returns 401.
@@ -140,19 +141,24 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     return;
   }
 
-  // Fallback: check x-user-id header (backward compatibility)
-  const headerUserId = req.headers['x-user-id'] as string || req.query.userId as string;
-  if (headerUserId) {
-    // Verify user exists
-    const user = db.select({ id: users.id }).from(users).where(eq(users.id, headerUserId)).get();
-    if (!user) {
-      res.status(401).json({ error: 'User not found' });
+  // Fallback: check x-user-id header (DEVELOPMENT ONLY - disabled in production)
+  // WARNING: This fallback bypasses Bearer token authentication entirely.
+  // It exists only for local development convenience and must NEVER be enabled in production.
+  if (process.env.NODE_ENV === 'development') {
+    const headerUserId = req.headers['x-user-id'] as string;
+    if (headerUserId) {
+      // Verify user exists
+      const user = db.select({ id: users.id }).from(users).where(eq(users.id, headerUserId)).get();
+      if (!user) {
+        res.status(401).json({ error: 'User not found' });
+        return;
+      }
+      console.warn(`[me.md:auth] WARNING: x-user-id header fallback used for user ${headerUserId}. This is only allowed in development mode.`);
+      (req as any).userId = headerUserId;
+      req.headers['x-user-id'] = headerUserId;
+      next();
       return;
     }
-    (req as any).userId = headerUserId;
-    req.headers['x-user-id'] = headerUserId;
-    next();
-    return;
   }
 
   res.status(401).json({ error: 'Not authenticated' });

@@ -13,7 +13,7 @@ export const mcpRouter = Router();
 // GET /api/mcp/permissions - List all MCP access permissions for a user
 mcpRouter.get('/permissions', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -35,7 +35,7 @@ mcpRouter.get('/permissions', async (req, res) => {
 // POST /api/mcp/permissions - Add a new MCP agent connection
 mcpRouter.post('/permissions', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -89,7 +89,7 @@ mcpRouter.post('/permissions', async (req, res) => {
 // PUT /api/mcp/permissions/:id - Update a permission (enable/disable)
 mcpRouter.put('/permissions/:id', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -139,7 +139,7 @@ mcpRouter.put('/permissions/:id', async (req, res) => {
 // DELETE /api/mcp/permissions/:id - Revoke/delete an MCP agent connection
 mcpRouter.delete('/permissions/:id', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -204,7 +204,7 @@ function checkAgentAccess(userId: string, agentName?: string): boolean {
 // Serves verified profile context as structured data
 mcpRouter.get('/resources/profile', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
     const agentName = req.headers['x-agent-name'] as string || req.query.agentName as string;
 
     if (!userId) {
@@ -304,7 +304,7 @@ mcpRouter.get('/resources/profile', async (req, res) => {
 // Serves topic-level knowledge and insights
 mcpRouter.get('/resources/knowledge/:topicId', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
     const agentName = req.headers['x-agent-name'] as string || req.query.agentName as string;
 
     if (!userId) {
@@ -420,7 +420,7 @@ mcpRouter.get('/resources/knowledge/:topicId', async (req, res) => {
 // Semantic search across verified insights
 mcpRouter.get('/tools/search', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
     const agentName = req.headers['x-agent-name'] as string || req.query.agentName as string;
     const query = req.query.q as string;
 
@@ -484,7 +484,7 @@ mcpRouter.get('/tools/search', async (req, res) => {
 // Returns portable me.md context as markdown
 mcpRouter.get('/tools/context-summary', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
     const agentName = req.headers['x-agent-name'] as string || req.query.agentName as string;
 
     if (!userId) {

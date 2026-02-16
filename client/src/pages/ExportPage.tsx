@@ -215,7 +215,7 @@ export default function ExportPage() {
       value: 'json',
       label: 'JSON',
       icon: '\uD83D\uDCE6',
-      description: 'Structured data for AI tools and APIs',
+      description: 'Complete data export: insights, topics, notes, and sessions',
     },
     {
       value: 'both',

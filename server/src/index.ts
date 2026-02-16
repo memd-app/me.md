@@ -48,7 +48,7 @@ app.use('/api/health', healthRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/waitlist', waitlistRouter);
 
-// Protected routes (auth middleware validates Bearer token or x-user-id)
+// Protected routes (auth middleware validates Bearer token; x-user-id fallback only in development)
 app.use('/api/topics', authMiddleware, topicsRouter);
 app.use('/api/users', authMiddleware, usersRouter);
 app.use('/api/import', authMiddleware, importRouter);

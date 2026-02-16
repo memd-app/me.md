@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../config/database.js';
-import { insights, topics, users, notes, topicConnections, importedFiles } from '../models/schema.js';
+import { insights, topics, users, notes, sessions, messages, topicConnections, importedFiles } from '../models/schema.js';
+import { count } from 'drizzle-orm';
 import { eq, and, desc } from 'drizzle-orm';
 
 export const profileRouter = Router();
@@ -291,7 +292,7 @@ function generateMarkdown(summary: ProfileSummary): string {
 // GET /api/profile/export/status - Check if there is verified exportable data available
 profileRouter.get('/export/status', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -331,7 +332,7 @@ profileRouter.get('/export/status', async (req, res) => {
 // GET /api/profile/summary - Get auto-generated profile summary from verified insights
 profileRouter.get('/summary', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -378,7 +379,7 @@ profileRouter.get('/summary', async (req, res) => {
 // POST /api/profile/regenerate - Force regenerate profile summary
 profileRouter.post('/regenerate', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -423,7 +424,7 @@ profileRouter.post('/regenerate', async (req, res) => {
 // GET /api/profile/export/markdown - Export profile as me.md markdown file
 profileRouter.get('/export/markdown', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -505,7 +506,7 @@ profileRouter.get('/export/markdown', async (req, res) => {
 // GET /api/profile/export/json - Export profile as JSON
 profileRouter.get('/export/json', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -587,6 +588,101 @@ profileRouter.get('/export/json', async (req, res) => {
 
     const summary = buildProfileSummary(user, verifiedInsightsForSummary, userTopics.length);
 
+    // Get all user notes (distilled session summaries)
+    const userNotes = db.select({
+      id: notes.id,
+      sessionId: notes.sessionId,
+      topicId: notes.topicId,
+      title: notes.title,
+      contentFullAnalysis: notes.contentFullAnalysis,
+      contentBriefSummary: notes.contentBriefSummary,
+      contentDecisionFramework: notes.contentDecisionFramework,
+      contentJson: notes.contentJson,
+      selectedFormat: notes.selectedFormat,
+      createdAt: notes.createdAt,
+      updatedAt: notes.updatedAt,
+      topicTitle: topics.title,
+    }).from(notes)
+      .leftJoin(topics, eq(notes.topicId, topics.id))
+      .where(eq(notes.userId, userId))
+      .orderBy(desc(notes.createdAt))
+      .all();
+
+    // Parse contentJson for notes (handles double-encoded strings)
+    const notesForExport = userNotes.map(n => {
+      let parsedContentJson: unknown = null;
+      if (n.contentJson) {
+        try {
+          let parsed = JSON.parse(n.contentJson);
+          if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+          parsedContentJson = parsed;
+        } catch {
+          parsedContentJson = null;
+        }
+      }
+      return {
+        id: n.id,
+        sessionId: n.sessionId,
+        topicId: n.topicId,
+        topicTitle: n.topicTitle,
+        title: n.title,
+        contentFullAnalysis: n.contentFullAnalysis,
+        contentBriefSummary: n.contentBriefSummary,
+        contentDecisionFramework: n.contentDecisionFramework,
+        contentJson: parsedContentJson,
+        selectedFormat: n.selectedFormat,
+        createdAt: n.createdAt,
+        updatedAt: n.updatedAt,
+      };
+    });
+
+    // Get all user sessions with metadata (title from topic, message count)
+    const userSessions = db.select({
+      id: sessions.id,
+      topicId: sessions.topicId,
+      status: sessions.status,
+      isMiniSession: sessions.isMiniSession,
+      suggestedDurationMinutes: sessions.suggestedDurationMinutes,
+      timeSpentSeconds: sessions.timeSpentSeconds,
+      createdAt: sessions.createdAt,
+      updatedAt: sessions.updatedAt,
+      completedAt: sessions.completedAt,
+      topicTitle: topics.title,
+    }).from(sessions)
+      .leftJoin(topics, eq(sessions.topicId, topics.id))
+      .where(eq(sessions.userId, userId))
+      .orderBy(desc(sessions.createdAt))
+      .all();
+
+    // Get message counts per session
+    const sessionMessageCounts: Record<string, number> = {};
+    if (userSessions.length > 0) {
+      const allMsgCounts = db.select({
+        sessionId: messages.sessionId,
+        msgCount: count(),
+      }).from(messages)
+        .groupBy(messages.sessionId)
+        .all();
+
+      for (const row of allMsgCounts) {
+        sessionMessageCounts[row.sessionId] = row.msgCount;
+      }
+    }
+
+    const sessionsForExport = userSessions.map(s => ({
+      id: s.id,
+      topicId: s.topicId,
+      topicTitle: s.topicTitle,
+      status: s.status,
+      isMiniSession: s.isMiniSession,
+      suggestedDurationMinutes: s.suggestedDurationMinutes,
+      timeSpentSeconds: s.timeSpentSeconds,
+      messageCount: sessionMessageCounts[s.id] || 0,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+      completedAt: s.completedAt,
+    }));
+
     // Get imported source materials for reference
     const userImports = db.select({
       id: importedFiles.id,
@@ -616,7 +712,7 @@ profileRouter.get('/export/json', async (req, res) => {
     });
 
     const exportData = {
-      exportVersion: '1.0',
+      exportVersion: '1.1',
       exportedAt: new Date().toISOString(),
       source: 'me.md',
       profile: summary,
@@ -624,12 +720,17 @@ profileRouter.get('/export/json', async (req, res) => {
         insights: verifiedInsightsFull,
         topics: topicsWithParsedFields,
         topicConnections: connections,
+        notes: notesForExport,
+        sessions: sessionsForExport,
         importedSources: importSources,
       },
       metadata: {
         totalVerifiedInsights: verifiedInsightsFull.length,
         totalTopics: userTopics.length,
         totalTopicConnections: connections.length,
+        totalNotes: notesForExport.length,
+        totalSessions: sessionsForExport.length,
+        completedSessions: sessionsForExport.filter(s => s.status === 'completed').length,
         totalImportedSources: importSources.length,
         processedImports: importSources.filter(s => s.isProcessed).length,
       },

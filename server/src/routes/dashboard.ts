@@ -11,7 +11,7 @@ const KNOWLEDGE_CATEGORIES = ['identity', 'skills', 'experiences', 'perspectives
 // GET /api/dashboard/stats - Get dashboard statistics for a user
 dashboardRouter.get('/stats', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -109,7 +109,7 @@ dashboardRouter.get('/stats', async (req, res) => {
 // GET /api/dashboard/activity - Get recent activity for a user (aggregated from multiple sources)
 dashboardRouter.get('/activity', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });

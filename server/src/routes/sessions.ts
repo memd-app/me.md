@@ -87,7 +87,7 @@ function getCurrentInterviewAngle(interviewMap: InterviewMap, userMessageCount: 
 // POST /api/sessions - Create a new session
 sessionsRouter.post('/', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -194,7 +194,7 @@ sessionsRouter.post('/', async (req, res) => {
 // POST /api/sessions/mini - Create a mini (quick-win) session with auto-created topic
 sessionsRouter.post('/mini', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -262,7 +262,7 @@ sessionsRouter.post('/mini', async (req, res) => {
 // GET /api/sessions/:id - Get a specific session with messages
 sessionsRouter.get('/:id', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
     const sessionId = req.params.id;
 
     if (!userId) {
@@ -300,7 +300,7 @@ sessionsRouter.get('/:id', async (req, res) => {
 // GET /api/sessions - List all sessions for a user (optionally filtered by topicId)
 sessionsRouter.get('/', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
     const topicId = req.query.topicId as string;
 
     if (!userId) {
@@ -328,7 +328,7 @@ sessionsRouter.get('/', async (req, res) => {
 // POST /api/sessions/:id/messages - Send a message in a session
 sessionsRouter.post('/:id/messages', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
     const sessionId = req.params.id;
 
     if (!userId) {
@@ -506,7 +506,7 @@ sessionsRouter.post('/:id/messages/retry', async (req, res) => {
   }, AI_OPERATION_TIMEOUT_MS);
 
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
     const sessionId = req.params.id;
 
     if (!userId) {
@@ -635,7 +635,7 @@ sessionsRouter.post('/:id/messages/stream', async (req, res) => {
   res.on('close', () => clearTimeout(requestTimeout));
 
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
     const sessionId = req.params.id;
 
     if (!userId) {
@@ -938,7 +938,7 @@ function splitIntoStreamChunks(text: string): string[] {
 // PUT /api/sessions/:id - Update session status
 sessionsRouter.put('/:id', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
     const sessionId = req.params.id;
 
     if (!userId) {
@@ -972,7 +972,7 @@ sessionsRouter.put('/:id', async (req, res) => {
 // DELETE /api/sessions/:id - Delete a session and all related data (messages, bookmarks, notes, insights)
 sessionsRouter.delete('/:id', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
     const sessionId = req.params.id;
 
     if (!userId) {
@@ -1034,7 +1034,7 @@ sessionsRouter.delete('/:id', async (req, res) => {
 // POST /api/sessions/:id/pause - Pause an active session
 sessionsRouter.post('/:id/pause', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
     const sessionId = req.params.id;
 
     if (!userId) {
@@ -1068,7 +1068,7 @@ sessionsRouter.post('/:id/pause', async (req, res) => {
 // POST /api/sessions/:id/resume - Resume a paused session with gap-aware greeting
 sessionsRouter.post('/:id/resume', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
     const sessionId = req.params.id;
 
     if (!userId) {
@@ -1162,7 +1162,7 @@ sessionsRouter.post('/:id/resume', async (req, res) => {
 // GET /api/sessions/:id/multi-bucket - Get cross-topic relevance suggestions for a session
 sessionsRouter.get('/:id/multi-bucket', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
     const sessionId = req.params.id;
 
     if (!userId) {
@@ -1276,7 +1276,7 @@ sessionsRouter.get('/:id/multi-bucket', async (req, res) => {
 // POST /api/sessions/:id/multi-bucket - Save selected cross-topic connections
 sessionsRouter.post('/:id/multi-bucket', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
     const sessionId = req.params.id;
     const { selectedConnections } = req.body;
 

@@ -134,7 +134,7 @@ export function checkReVerificationDue(asOfDate?: string): number {
 // GET /api/insights/stats - Get verification queue statistics
 insightsRouter.get('/stats', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -160,7 +160,7 @@ insightsRouter.get('/stats', async (req, res) => {
 // GET /api/insights/pending - Get pending verification insights
 insightsRouter.get('/pending', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -198,7 +198,7 @@ insightsRouter.get('/pending', async (req, res) => {
 // GET /api/insights - List all insights for a user (with optional status filter)
 insightsRouter.get('/', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
     const status = req.query.status as string | undefined;
 
     if (!userId) {
@@ -234,7 +234,7 @@ insightsRouter.get('/', async (req, res) => {
 // GET /api/insights/:id - Get a single insight
 insightsRouter.get('/:id', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
     const insightId = req.params.id;
 
     if (!userId) {
@@ -275,7 +275,7 @@ insightsRouter.get('/:id', async (req, res) => {
 // POST /api/insights/:id/verify - Approve an insight (mark as verified)
 insightsRouter.post('/:id/verify', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
     const insightId = req.params.id;
 
     if (!userId) {
@@ -393,7 +393,7 @@ insightsRouter.post('/:id/verify', async (req, res) => {
 // POST /api/insights/:id/reject - Reject an insight
 insightsRouter.post('/:id/reject', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
     const insightId = req.params.id;
     const { reason } = req.body;
 
@@ -483,7 +483,7 @@ insightsRouter.post('/:id/reject', async (req, res) => {
 // PUT /api/insights/:id/re-verify-interval - Set re-verification interval for an insight
 insightsRouter.put('/:id/re-verify-interval', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
     const insightId = req.params.id;
     const { interval } = req.body;
 
@@ -537,7 +537,7 @@ insightsRouter.post('/check-reverification', async (req, res) => {
 // Supports optimistic concurrency control via expectedUpdatedAt parameter
 insightsRouter.put('/:id', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
     const insightId = req.params.id;
     const { content, agreementScore, privacyTier, expectedUpdatedAt } = req.body;
 
@@ -622,7 +622,7 @@ insightsRouter.put('/:id', async (req, res) => {
 // DELETE /api/insights/:id - Delete an insight and its related data
 insightsRouter.delete('/:id', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
     const insightId = req.params.id;
 
     if (!userId) {

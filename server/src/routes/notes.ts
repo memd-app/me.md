@@ -9,7 +9,7 @@ export const notesRouter = Router();
 // POST /api/sessions/:sessionId/distill - Generate distilled note from session
 notesRouter.post('/sessions/:sessionId/distill', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
     const sessionId = req.params.sessionId;
 
     if (!userId) {
@@ -238,7 +238,7 @@ notesRouter.post('/sessions/:sessionId/distill', async (req, res) => {
 // POST /api/sessions/:sessionId/distill/regenerate - Regenerate note in different format
 notesRouter.post('/sessions/:sessionId/distill/regenerate', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
     const sessionId = req.params.sessionId;
     const { format, regenerateContent } = req.body;
 
@@ -323,7 +323,7 @@ notesRouter.post('/sessions/:sessionId/distill/regenerate', async (req, res) => 
 // GET /api/notes - List all notes for a user
 notesRouter.get('/', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -353,7 +353,7 @@ notesRouter.get('/', async (req, res) => {
 // GET /api/notes/:id - Get a specific note
 notesRouter.get('/:id', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
     const noteId = req.params.id;
 
     if (!userId) {
@@ -383,7 +383,7 @@ notesRouter.get('/:id', async (req, res) => {
 // PUT /api/notes/:id - Edit note content
 notesRouter.put('/:id', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.body.userId;
+    const userId = req.headers['x-user-id'] as string;
     const noteId = req.params.id;
 
     if (!userId) {
@@ -420,7 +420,7 @@ notesRouter.put('/:id', async (req, res) => {
 // GET /api/notes/:id/export/markdown - Export a single note as markdown file
 notesRouter.get('/:id/export/markdown', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
     const noteId = req.params.id;
     const format = (req.query.format as string) || 'full_analysis';
 
@@ -488,7 +488,7 @@ notesRouter.get('/:id/export/markdown', async (req, res) => {
 // GET /api/notes/session/:sessionId - Get note for a specific session
 notesRouter.get('/session/:sessionId', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
     const sessionId = req.params.sessionId;
 
     if (!userId) {
