@@ -219,14 +219,16 @@ export default function KnowledgeGraphPage() {
     // Create zoom group
     const g = svg.append('g');
 
-    // Setup zoom behavior
+    // Setup zoom behavior (supports mouse wheel, touch pinch-to-zoom, and touch pan)
     const zoom = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.1, 4])
+      .touchable(() => true) // Explicitly enable touch support
       .on('zoom', (event) => {
         g.attr('transform', event.transform);
       });
 
-    svg.call(zoom);
+    svg.call(zoom)
+      .on('dblclick.zoom', null); // Disable double-click zoom (interferes with touch)
 
     // Center the initial view
     svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8));
@@ -450,7 +452,7 @@ export default function KnowledgeGraphPage() {
         return label.length > 16 ? label.substring(0, 14) + '...' : label;
       });
 
-    // Mouse events for tooltips
+    // Mouse/touch events for tooltips
     node.on('mouseenter', (event: MouseEvent, d: GraphNode) => {
       const svgRect = svgRef.current?.getBoundingClientRect();
       if (svgRect) {
@@ -474,6 +476,25 @@ export default function KnowledgeGraphPage() {
 
     node.on('mouseleave', () => {
       setHoveredNode(null);
+    });
+
+    // Touch support: show tooltip on long press, tap to navigate
+    node.on('touchstart', (event: TouchEvent, d: GraphNode) => {
+      // Show tooltip for touch devices
+      const touch = event.touches[0];
+      const svgRect = svgRef.current?.getBoundingClientRect();
+      if (svgRect && touch) {
+        setHoveredNode(d);
+        setTooltipPos({
+          x: touch.clientX - svgRect.left + 15,
+          y: touch.clientY - svgRect.top - 40,
+        });
+      }
+    }, { passive: true });
+
+    node.on('touchend', () => {
+      // Clear tooltip after a delay to allow reading
+      setTimeout(() => setHoveredNode(null), 2000);
     });
 
     // Click to navigate
@@ -543,39 +564,39 @@ export default function KnowledgeGraphPage() {
   }
 
   return (
-    <div className="max-w-full mx-auto px-2" role="region" aria-label="Knowledge Graph visualization">
+    <div className="max-w-full mx-auto px-1 sm:px-2" role="region" aria-label="Knowledge Graph visualization">
       {/* Header */}
-      <div className="mb-4 flex items-center justify-between flex-wrap gap-2">
+      <div className="mb-3 sm:mb-4 flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Knowledge Graph</h1>
-          <p className="mt-1 text-gray-600 dark:text-gray-400">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Knowledge Graph</h1>
+          <p className="mt-0.5 sm:mt-1 text-sm text-gray-600 dark:text-gray-400 hidden sm:block">
             Visualize connections between your topics and insights
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           {/* Toggle gap nodes */}
-          <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
+          <label className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
             <input
               type="checkbox"
               checked={showGaps}
               onChange={(e) => setShowGaps(e.target.checked)}
               className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
             />
-            Show Gaps
+            <span className="hidden sm:inline">Show </span>Gaps
           </label>
           {/* Toggle concepts */}
-          <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
+          <label className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
             <input
               type="checkbox"
               checked={showConcepts}
               onChange={(e) => setShowConcepts(e.target.checked)}
               className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
             />
-            Show Concepts
+            <span className="hidden sm:inline">Show </span>Concepts
           </label>
           <button
             onClick={fetchGraph}
-            className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            className="px-3 py-1.5 text-xs sm:text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors min-h-[36px]"
             aria-label="Refresh knowledge graph"
           >
             Refresh
@@ -585,7 +606,7 @@ export default function KnowledgeGraphPage() {
 
       {/* Stats bar */}
       {graphData && graphData.stats && (
-        <div className="mb-3 flex gap-4 flex-wrap text-sm text-gray-600 dark:text-gray-400">
+        <div className="mb-3 flex gap-2 sm:gap-4 flex-wrap text-xs sm:text-sm text-gray-600 dark:text-gray-400">
           <span>{graphData.stats.topicCount} topics</span>
           <span>{graphData.stats.conceptCount} concepts</span>
           <span>{graphData.stats.insightCount} insights</span>
@@ -622,12 +643,12 @@ export default function KnowledgeGraphPage() {
         <div
           ref={containerRef}
           className="relative bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
-          style={{ height: 'calc(100vh - 220px)', minHeight: '500px' }}
+          style={{ height: 'calc(100vh - 220px)', minHeight: '300px', touchAction: 'none' }}
         >
           <svg
             ref={svgRef}
             className="w-full h-full"
-            style={{ width: '100%', height: '100%' }}
+            style={{ width: '100%', height: '100%', touchAction: 'none' }}
             role="img"
             aria-label={`Knowledge graph with ${graphData?.stats?.topicCount || 0} topics, ${graphData?.stats?.conceptCount || 0} concepts, and ${graphData?.stats?.edgeCount || 0} connections`}
           />
@@ -745,8 +766,8 @@ export default function KnowledgeGraphPage() {
             </div>
           )}
 
-          {/* Legend */}
-          <div className="absolute bottom-3 left-3 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-lg border border-gray-200 dark:border-gray-700 p-2 text-xs">
+          {/* Legend - collapsible on mobile */}
+          <div className="absolute bottom-3 left-3 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-lg border border-gray-200 dark:border-gray-700 p-2 text-xs max-w-[160px] sm:max-w-none">
             <div className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Legend</div>
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-1.5">
@@ -776,8 +797,8 @@ export default function KnowledgeGraphPage() {
             </div>
           </div>
 
-          {/* Zoom controls */}
-          <div className="absolute top-3 right-3 flex flex-col gap-1">
+          {/* Zoom controls - touch-friendly 44px buttons on mobile */}
+          <div className="absolute top-3 right-3 flex flex-col gap-1.5">
             <button
               onClick={() => {
                 const svg = d3.select(svgRef.current!);
@@ -786,7 +807,8 @@ export default function KnowledgeGraphPage() {
                   1.3
                 );
               }}
-              className="w-8 h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg flex items-center justify-center text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 text-lg font-bold"
+              className="w-11 h-11 sm:w-8 sm:h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg flex items-center justify-center text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 text-lg font-bold shadow-sm"
+              aria-label="Zoom in"
             >
               +
             </button>
@@ -798,7 +820,8 @@ export default function KnowledgeGraphPage() {
                   0.7
                 );
               }}
-              className="w-8 h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg flex items-center justify-center text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 text-lg font-bold"
+              className="w-11 h-11 sm:w-8 sm:h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg flex items-center justify-center text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 text-lg font-bold shadow-sm"
+              aria-label="Zoom out"
             >
               -
             </button>
@@ -814,8 +837,9 @@ export default function KnowledgeGraphPage() {
                   d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8)
                 );
               }}
-              className="w-8 h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg flex items-center justify-center text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 text-xs"
+              className="w-11 h-11 sm:w-8 sm:h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg flex items-center justify-center text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm shadow-sm"
               title="Reset view"
+              aria-label="Reset graph view"
             >
               ↺
             </button>
