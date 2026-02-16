@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { db } from '../config/database.js';
-import { importedFiles, users } from '../models/schema.js';
+import { db, sqlite } from '../config/database.js';
+import { importedFiles, users, topics, insights, notes, sessions } from '../models/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import https from 'https';
@@ -92,6 +92,29 @@ function generateSummary(text: string, maxLength: number = 500): string {
   return summary.trim() || text.substring(0, maxLength);
 }
 
+// Helper: safely parse importedContext JSON from user record with proper error logging
+function parseImportedContext(importedContextJson: string | null, userId: string): unknown[] {
+  if (!importedContextJson) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(importedContextJson);
+    if (!Array.isArray(parsed)) {
+      console.error(`[me.md] User ${userId} importedContext is not an array, preserving as-is in wrapper array`);
+      return [parsed];
+    }
+    return parsed;
+  } catch (parseErr) {
+    // IMPORTANT: Do NOT silently reset to [] - this would corrupt existing data.
+    // Instead, log the error and throw to prevent the import from proceeding
+    // with corrupted context data.
+    console.error(`[me.md] CRITICAL: Failed to parse importedContext for user ${userId}. ` +
+      `Raw value (first 200 chars): "${importedContextJson.substring(0, 200)}". ` +
+      `Error: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`);
+    throw new Error(`User's existing import context is corrupted and cannot be parsed. Please contact support.`);
+  }
+}
+
 // POST /api/import/urls - Submit URLs for processing
 importRouter.post('/urls', async (req, res) => {
   try {
@@ -126,6 +149,12 @@ importRouter.post('/urls', async (req, res) => {
       return res.status(400).json({ error: 'No valid URLs provided', errors });
     }
 
+    // Verify user exists BEFORE processing any URLs (fail early)
+    const user = db.select().from(users).where(eq(users.id, userId)).get();
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
     // Process each URL
     const results: Array<{
       id: string;
@@ -145,21 +174,52 @@ importRouter.post('/urls', async (req, res) => {
 
         const fileId = uuidv4();
 
-        // Store in imported_files
-        db.insert(importedFiles).values({
-          id: fileId,
-          userId,
-          filename: url,
-          fileType: 'url',
-          processedContent: JSON.stringify({
-            url,
-            title,
-            summary,
-            textLength: text.length,
-            extractedText: text,
-            processedAt: new Date().toISOString(),
-          }),
-        }).run();
+        // Use a transaction to atomically insert the file and update user context
+        const insertAndUpdateContext = sqlite.transaction(() => {
+          // Insert the imported file
+          db.insert(importedFiles).values({
+            id: fileId,
+            userId,
+            filename: url,
+            fileType: 'url',
+            processedContent: JSON.stringify({
+              url,
+              title,
+              summary,
+              textLength: text.length,
+              extractedText: text,
+              processedAt: new Date().toISOString(),
+            }),
+          }).run();
+
+          // Re-fetch user inside transaction for consistent read
+          const currentUser = db.select().from(users).where(eq(users.id, userId)).get();
+          if (!currentUser) {
+            throw new Error('User not found during transaction');
+          }
+
+          const existingContext = parseImportedContext(currentUser.importedContext, userId);
+
+          const newContext = [
+            ...existingContext,
+            {
+              type: 'url',
+              url,
+              title: title || 'Untitled',
+              importedFileId: fileId,
+            },
+          ];
+
+          db.update(users)
+            .set({
+              importedContext: JSON.stringify(newContext),
+              updatedAt: new Date().toISOString(),
+            })
+            .where(eq(users.id, userId))
+            .run();
+        });
+
+        insertAndUpdateContext();
 
         results.push({
           id: fileId,
@@ -169,6 +229,7 @@ importRouter.post('/urls', async (req, res) => {
           summary,
         });
       } catch (err) {
+        console.error(`[me.md] Failed to import URL "${url}":`, err);
         results.push({
           url,
           id: '',
@@ -176,39 +237,6 @@ importRouter.post('/urls', async (req, res) => {
           error: err instanceof Error ? err.message : 'Failed to process URL',
         });
       }
-    }
-
-    // Update user's imported_context with a reference to the imported URLs
-    const user = db.select().from(users).where(eq(users.id, userId)).get();
-    if (user) {
-      let existingContext: Array<{ type: string; url: string; title: string; importedFileId: string }> = [];
-      try {
-        if (user.importedContext) {
-          existingContext = JSON.parse(user.importedContext);
-        }
-      } catch {
-        existingContext = [];
-      }
-
-      const newContext = [
-        ...existingContext,
-        ...results
-          .filter((r) => r.status === 'success')
-          .map((r) => ({
-            type: 'url',
-            url: r.url,
-            title: r.title || 'Untitled',
-            importedFileId: r.id,
-          })),
-      ];
-
-      db.update(users)
-        .set({
-          importedContext: JSON.stringify(newContext),
-          updatedAt: new Date().toISOString(),
-        })
-        .where(eq(users.id, userId))
-        .run();
     }
 
     const successCount = results.filter((r) => r.status === 'success').length;
@@ -279,36 +307,40 @@ importRouter.post('/text', async (req, res) => {
       return res.status(400).json({ error: 'Text content is required' });
     }
 
+    // Verify user exists BEFORE inserting (fail early)
+    const user = db.select().from(users).where(eq(users.id, userId)).get();
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
     const trimmedText = text.trim();
     const fileId = uuidv4();
     const displayTitle = title || 'Pasted text';
     const summary = generateSummary(trimmedText);
 
-    db.insert(importedFiles).values({
-      id: fileId,
-      userId,
-      filename: displayTitle,
-      fileType: 'text',
-      processedContent: JSON.stringify({
-        title: displayTitle,
-        summary,
-        textLength: trimmedText.length,
-        extractedText: trimmedText.substring(0, 10000),
-        processedAt: new Date().toISOString(),
-      }),
-    }).run();
+    // Use a transaction to atomically insert file and update user context
+    const insertAndUpdateContext = sqlite.transaction(() => {
+      db.insert(importedFiles).values({
+        id: fileId,
+        userId,
+        filename: displayTitle,
+        fileType: 'text',
+        processedContent: JSON.stringify({
+          title: displayTitle,
+          summary,
+          textLength: trimmedText.length,
+          extractedText: trimmedText.substring(0, 10000),
+          processedAt: new Date().toISOString(),
+        }),
+      }).run();
 
-    // Update user's imported_context with reference to the imported text
-    const user = db.select().from(users).where(eq(users.id, userId)).get();
-    if (user) {
-      let existingContext: Array<{ type: string; title: string; importedFileId: string }> = [];
-      try {
-        if (user.importedContext) {
-          existingContext = JSON.parse(user.importedContext);
-        }
-      } catch {
-        existingContext = [];
+      // Re-fetch user inside transaction for consistent read
+      const currentUser = db.select().from(users).where(eq(users.id, userId)).get();
+      if (!currentUser) {
+        throw new Error('User not found during transaction');
       }
+
+      const existingContext = parseImportedContext(currentUser.importedContext, userId);
 
       const newContext = [
         ...existingContext,
@@ -326,7 +358,9 @@ importRouter.post('/text', async (req, res) => {
         })
         .where(eq(users.id, userId))
         .run();
-    }
+    });
+
+    insertAndUpdateContext();
 
     res.json({
       message: 'Text imported successfully',
@@ -336,6 +370,11 @@ importRouter.post('/text', async (req, res) => {
     });
   } catch (error) {
     console.error('Import text error:', error);
+    const message = error instanceof Error ? error.message : 'Failed to import text';
+    // If this was a context corruption error, return 500 with the specific message
+    if (message.includes('corrupted')) {
+      return res.status(500).json({ error: message });
+    }
     res.status(500).json({ error: 'Failed to import text' });
   }
 });
@@ -360,6 +399,12 @@ importRouter.post('/chatgpt', async (req, res) => {
       return res.status(400).json({ error: 'The response seems too short. Please paste the full ChatGPT output.' });
     }
 
+    // Verify user exists BEFORE inserting (fail early)
+    const user = db.select().from(users).where(eq(users.id, userId)).get();
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
     const fileId = uuidv4();
     const displayTitle = title || 'ChatGPT Memory Extraction';
     const summary = generateSummary(trimmedText);
@@ -376,34 +421,32 @@ importRouter.post('/chatgpt', async (req, res) => {
       }
     }
 
-    db.insert(importedFiles).values({
-      id: fileId,
-      userId,
-      filename: displayTitle,
-      fileType: 'chatgpt',
-      processedContent: JSON.stringify({
-        title: displayTitle,
-        summary,
-        textLength: trimmedText.length,
-        extractedText: trimmedText.substring(0, 10000),
-        sections: Object.keys(sections).length > 0 ? sections : null,
-        sectionCount: Object.keys(sections).length,
-        source: 'chatgpt_memory',
-        processedAt: new Date().toISOString(),
-      }),
-    }).run();
+    // Use a transaction to atomically insert file and update user context
+    const insertAndUpdateContext = sqlite.transaction(() => {
+      db.insert(importedFiles).values({
+        id: fileId,
+        userId,
+        filename: displayTitle,
+        fileType: 'chatgpt',
+        processedContent: JSON.stringify({
+          title: displayTitle,
+          summary,
+          textLength: trimmedText.length,
+          extractedText: trimmedText.substring(0, 10000),
+          sections: Object.keys(sections).length > 0 ? sections : null,
+          sectionCount: Object.keys(sections).length,
+          source: 'chatgpt_memory',
+          processedAt: new Date().toISOString(),
+        }),
+      }).run();
 
-    // Update user's imported_context with reference
-    const user = db.select().from(users).where(eq(users.id, userId)).get();
-    if (user) {
-      let existingContext: Array<{ type: string; title: string; importedFileId: string }> = [];
-      try {
-        if (user.importedContext) {
-          existingContext = JSON.parse(user.importedContext);
-        }
-      } catch {
-        existingContext = [];
+      // Re-fetch user inside transaction for consistent read
+      const currentUser = db.select().from(users).where(eq(users.id, userId)).get();
+      if (!currentUser) {
+        throw new Error('User not found during transaction');
       }
+
+      const existingContext = parseImportedContext(currentUser.importedContext, userId);
 
       const newContext = [
         ...existingContext,
@@ -421,7 +464,9 @@ importRouter.post('/chatgpt', async (req, res) => {
         })
         .where(eq(users.id, userId))
         .run();
-    }
+    });
+
+    insertAndUpdateContext();
 
     res.json({
       message: 'ChatGPT context imported successfully',
@@ -432,6 +477,10 @@ importRouter.post('/chatgpt', async (req, res) => {
     });
   } catch (error) {
     console.error('Import ChatGPT error:', error);
+    const message = error instanceof Error ? error.message : 'Failed to import ChatGPT context';
+    if (message.includes('corrupted')) {
+      return res.status(500).json({ error: message });
+    }
     res.status(500).json({ error: 'Failed to import ChatGPT context' });
   }
 });
@@ -448,6 +497,12 @@ importRouter.post('/file', async (req, res) => {
     const contentType = req.headers['content-type'] || '';
     if (!contentType.includes('multipart/form-data')) {
       return res.status(400).json({ error: 'File upload requires multipart/form-data' });
+    }
+
+    // Verify user exists BEFORE processing file upload (fail early)
+    const user = db.select().from(users).where(eq(users.id, userId)).get();
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
     // Use dynamic import for multer to handle file upload
@@ -532,33 +587,31 @@ importRouter.post('/file', async (req, res) => {
         const fileId = uuidv4();
         const summary = generateSummary(extractedText);
 
-        db.insert(importedFiles).values({
-          id: fileId,
-          userId,
-          filename,
-          fileType: 'file',
-          processedContent: JSON.stringify({
-            title: filename,
-            summary,
-            textLength: extractedText.length,
-            extractedText,
-            originalSize: file.size,
-            mimeType: file.mimetype,
-            processedAt: new Date().toISOString(),
-          }),
-        }).run();
+        // Use a transaction to atomically insert file and update user context
+        const insertAndUpdateContext = sqlite.transaction(() => {
+          db.insert(importedFiles).values({
+            id: fileId,
+            userId,
+            filename,
+            fileType: 'file',
+            processedContent: JSON.stringify({
+              title: filename,
+              summary,
+              textLength: extractedText.length,
+              extractedText,
+              originalSize: file.size,
+              mimeType: file.mimetype,
+              processedAt: new Date().toISOString(),
+            }),
+          }).run();
 
-        // Update user's imported_context
-        const user = db.select().from(users).where(eq(users.id, userId)).get();
-        if (user) {
-          let existingContext: Array<{ type: string; title: string; importedFileId: string }> = [];
-          try {
-            if (user.importedContext) {
-              existingContext = JSON.parse(user.importedContext);
-            }
-          } catch {
-            existingContext = [];
+          // Re-fetch user inside transaction for consistent read
+          const currentUser = db.select().from(users).where(eq(users.id, userId)).get();
+          if (!currentUser) {
+            throw new Error('User not found during transaction');
           }
+
+          const existingContext = parseImportedContext(currentUser.importedContext, userId);
 
           const newContext = [
             ...existingContext,
@@ -576,7 +629,9 @@ importRouter.post('/file', async (req, res) => {
             })
             .where(eq(users.id, userId))
             .run();
-        }
+        });
+
+        insertAndUpdateContext();
 
         res.json({
           message: 'File imported successfully',
@@ -588,11 +643,458 @@ importRouter.post('/file', async (req, res) => {
         });
       } catch (innerErr) {
         console.error('File processing error:', innerErr);
+        const message = innerErr instanceof Error ? innerErr.message : 'Failed to process uploaded file';
+        if (message.includes('corrupted')) {
+          return res.status(500).json({ error: message });
+        }
         res.status(500).json({ error: 'Failed to process uploaded file' });
       }
     });
   } catch (error) {
     console.error('Import file error:', error);
     res.status(500).json({ error: 'Failed to upload file' });
+  }
+});
+
+// ============================================
+// Import Processing Pipeline
+// ============================================
+
+// Score an extracted statement to determine if it's insight-worthy
+function scoreExtractedInsight(statement: string): number {
+  let score = 40; // base score for import-derived insights (lower than session-derived)
+
+  const lowerStatement = statement.toLowerCase();
+
+  // Strong personal statements
+  if (/\b(i am|i believe|i value|i always|i never|i think|i feel|my|i prefer|i tend to)\b/i.test(lowerStatement)) {
+    score += 15;
+  }
+
+  // Reasoning/understanding markers
+  if (/\b(because|reason|learned|realized|understand|important|matters)\b/i.test(lowerStatement)) {
+    score += 10;
+  }
+
+  // Core trait indicators
+  if (/\b(core|fundamental|deeply|who i am|trait|personality|character|principle|philosophy)\b/i.test(lowerStatement)) {
+    score += 10;
+  }
+
+  // Preference indicators
+  if (/\b(prefer|like|enjoy|love|dislike|hate|comfortable|style|approach)\b/i.test(lowerStatement)) {
+    score += 8;
+  }
+
+  // Length bonus
+  if (statement.length > 60) {
+    score += 5;
+  }
+
+  return Math.min(score, 90);
+}
+
+// Extract insights from ChatGPT Memory import (structured sections)
+function extractInsightsFromChatgpt(
+  content: { sections?: Record<string, string>; extractedText?: string },
+): Array<{ content: string; confidenceScore: number; suggestedCategory: string }> {
+  const results: Array<{ content: string; confidenceScore: number; suggestedCategory: string }> = [];
+
+  // Map ChatGPT sections to me.md categories
+  const sectionCategoryMap: Record<string, string> = {
+    'Personal Background': 'identity',
+    'Communication Style': 'perspectives',
+    'Values & Beliefs': 'identity',
+    'Interests & Hobbies': 'experiences',
+    'Professional Life': 'skills',
+    'Decision-Making Style': 'perspectives',
+    'Strengths & Weaknesses': 'skills',
+    'Goals & Aspirations': 'goals',
+    'Preferences': 'perspectives',
+    'Personality Traits': 'identity',
+  };
+
+  if (content.sections && Object.keys(content.sections).length > 0) {
+    // Process each section
+    for (const [sectionName, sectionContent] of Object.entries(content.sections)) {
+      const category = sectionCategoryMap[sectionName] || 'identity';
+
+      // Split section into individual statements
+      const statements = sectionContent
+        .split(/[.!?\n]+/)
+        .map(s => s.replace(/^[-*•]\s*/, '').trim())
+        .filter(s => s.length > 20 && s.length < 500);
+
+      for (const statement of statements) {
+        const score = scoreExtractedInsight(statement);
+        if (score >= 45) {
+          results.push({
+            content: statement,
+            confidenceScore: score,
+            suggestedCategory: category,
+          });
+        }
+      }
+    }
+  } else if (content.extractedText) {
+    // Fallback: process as plain text
+    const statements = content.extractedText
+      .split(/[.!?\n]+/)
+      .map(s => s.replace(/^[-*•]\s*/, '').trim())
+      .filter(s => s.length > 20 && s.length < 500);
+
+    for (const statement of statements) {
+      const score = scoreExtractedInsight(statement);
+      if (score >= 50) {
+        results.push({
+          content: statement,
+          confidenceScore: score,
+          suggestedCategory: 'identity',
+        });
+      }
+    }
+  }
+
+  // Deduplicate by content
+  const unique = results.filter((item, index, self) =>
+    index === self.findIndex(t => t.content.toLowerCase() === item.content.toLowerCase())
+  );
+
+  return unique.slice(0, 30); // Limit to 30 insights per import
+}
+
+// Extract insights from URL import
+function extractInsightsFromUrl(
+  content: { extractedText?: string; title?: string },
+): Array<{ content: string; confidenceScore: number; suggestedCategory: string }> {
+  const results: Array<{ content: string; confidenceScore: number; suggestedCategory: string }> = [];
+
+  if (!content.extractedText) return results;
+
+  // Split into sentences
+  const statements = content.extractedText
+    .split(/[.!?\n]+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 25 && s.length < 500);
+
+  // Extract statements that contain personal pronouns or self-describing language
+  for (const statement of statements) {
+    const score = scoreExtractedInsight(statement);
+    // Higher threshold for URLs since content may not be personal
+    if (score >= 55) {
+      // Try to categorize by content
+      let category = 'identity';
+      const lower = statement.toLowerCase();
+      if (/\b(skill|expert|experience|professional|work|career|project)\b/.test(lower)) category = 'skills';
+      else if (/\b(goal|aspir|dream|plan|future|want to)\b/.test(lower)) category = 'goals';
+      else if (/\b(learn|grew|journey|story|memory|remember)\b/.test(lower)) category = 'experiences';
+      else if (/\b(think|believe|approach|perspective|opinion|view)\b/.test(lower)) category = 'perspectives';
+
+      results.push({
+        content: statement,
+        confidenceScore: score,
+        suggestedCategory: category,
+      });
+    }
+  }
+
+  const unique = results.filter((item, index, self) =>
+    index === self.findIndex(t => t.content.toLowerCase() === item.content.toLowerCase())
+  );
+
+  return unique.slice(0, 20);
+}
+
+// Extract insights from plain text or file import
+function extractInsightsFromText(
+  content: { extractedText?: string; title?: string },
+): Array<{ content: string; confidenceScore: number; suggestedCategory: string }> {
+  const results: Array<{ content: string; confidenceScore: number; suggestedCategory: string }> = [];
+
+  if (!content.extractedText) return results;
+
+  const statements = content.extractedText
+    .split(/[.!?\n]+/)
+    .map(s => s.replace(/^[-*•]\s*/, '').trim())
+    .filter(s => s.length > 20 && s.length < 500);
+
+  for (const statement of statements) {
+    const score = scoreExtractedInsight(statement);
+    if (score >= 48) {
+      let category = 'identity';
+      const lower = statement.toLowerCase();
+      if (/\b(skill|expert|experience|professional|work|career|project)\b/.test(lower)) category = 'skills';
+      else if (/\b(goal|aspir|dream|plan|future|want to)\b/.test(lower)) category = 'goals';
+      else if (/\b(learn|grew|journey|story|memory|remember)\b/.test(lower)) category = 'experiences';
+      else if (/\b(think|believe|approach|perspective|opinion|view)\b/.test(lower)) category = 'perspectives';
+
+      results.push({
+        content: statement,
+        confidenceScore: score,
+        suggestedCategory: category,
+      });
+    }
+  }
+
+  const unique = results.filter((item, index, self) =>
+    index === self.findIndex(t => t.content.toLowerCase() === item.content.toLowerCase())
+  );
+
+  return unique.slice(0, 25);
+}
+
+// POST /api/import/:id/process - Process an imported file and extract insights
+importRouter.post('/:id/process', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string;
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    // Verify user exists (fail early)
+    const user = db.select().from(users).where(eq(users.id, userId)).get();
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const importId = req.params.id;
+
+    // Get the imported file
+    const importedFile = db.select().from(importedFiles).where(
+      and(eq(importedFiles.id, importId), eq(importedFiles.userId, userId))
+    ).get();
+
+    if (!importedFile) {
+      return res.status(404).json({ error: 'Imported file not found' });
+    }
+
+    // Parse processed content
+    let processedContent: Record<string, unknown> = {};
+    try {
+      if (importedFile.processedContent) {
+        processedContent = JSON.parse(importedFile.processedContent);
+      }
+    } catch (parseErr) {
+      console.error(`[me.md] Failed to parse processedContent for import ${importId}:`, parseErr);
+      return res.status(400).json({ error: 'Could not parse import content. The stored data may be corrupted.' });
+    }
+
+    // Extract insights based on file type
+    let extractedInsights: Array<{ content: string; confidenceScore: number; suggestedCategory: string }> = [];
+
+    switch (importedFile.fileType) {
+      case 'chatgpt':
+        extractedInsights = extractInsightsFromChatgpt(processedContent as { sections?: Record<string, string>; extractedText?: string });
+        break;
+      case 'url':
+        extractedInsights = extractInsightsFromUrl(processedContent as { extractedText?: string; title?: string });
+        break;
+      case 'text':
+      case 'file':
+        extractedInsights = extractInsightsFromText(processedContent as { extractedText?: string; title?: string });
+        break;
+      default:
+        return res.status(400).json({ error: `Unsupported file type: ${importedFile.fileType}` });
+    }
+
+    if (extractedInsights.length === 0) {
+      return res.json({
+        message: 'No personal insights could be extracted from this content',
+        importId,
+        insightsExtracted: 0,
+        insights: [],
+        topicCreated: null,
+      });
+    }
+
+    // Create a topic for this import to group the insights
+    const topicTitle = `Import: ${importedFile.filename || 'Untitled'}`.substring(0, 200);
+    const topicId = uuidv4();
+
+    // Map category to preset category
+    const categoryCounts: Record<string, number> = {};
+    for (const ins of extractedInsights) {
+      categoryCounts[ins.suggestedCategory] = (categoryCounts[ins.suggestedCategory] || 0) + 1;
+    }
+    const dominantCategory = Object.entries(categoryCounts)
+      .sort((a, b) => b[1] - a[1])[0]?.[0] || 'identity';
+
+    const sessionId = uuidv4();
+    const noteId = uuidv4();
+    const noteTitle = `Import Notes: ${importedFile.filename || 'Untitled'}`;
+    const noteSummary = `Insights extracted from ${importedFile.fileType} import "${importedFile.filename || 'Untitled'}". ` +
+      `${extractedInsights.length} insights were identified and added to the verification queue.`;
+
+    // Use a transaction to atomically create all related records
+    const savedInsights: Array<{
+      id: string;
+      content: string;
+      confidenceScore: number;
+      verificationStatus: string;
+      suggestedCategory: string;
+    }> = [];
+
+    const processImportTransaction = sqlite.transaction(() => {
+      // 1. Create topic
+      db.insert(topics).values({
+        id: topicId,
+        userId,
+        title: topicTitle,
+        description: `Insights automatically extracted from imported ${importedFile.fileType} content: "${importedFile.filename || 'Untitled'}"`,
+        tags: JSON.stringify(['imported', importedFile.fileType]),
+        status: 'extracted',
+        priority: 'medium',
+        intent: 'document',
+        isPreset: false,
+        presetCategory: dominantCategory as 'identity' | 'skills' | 'experiences' | 'perspectives' | 'goals',
+      }).run();
+
+      // 2. Create placeholder session
+      db.insert(sessions).values({
+        id: sessionId,
+        topicId,
+        userId,
+        status: 'completed',
+        isMiniSession: false,
+        completedAt: new Date().toISOString(),
+      }).run();
+
+      // 3. Create note
+      db.insert(notes).values({
+        id: noteId,
+        sessionId,
+        topicId,
+        userId,
+        title: noteTitle,
+        contentFullAnalysis: noteSummary,
+        contentBriefSummary: noteSummary,
+        selectedFormat: 'brief_summary',
+      }).run();
+
+      // 4. Create all insights
+      for (const extracted of extractedInsights) {
+        const insightId = uuidv4();
+        db.insert(insights).values({
+          id: insightId,
+          noteId,
+          topicId,
+          userId,
+          content: extracted.content,
+          confidenceScore: extracted.confidenceScore,
+          verificationStatus: 'unverified',
+          sourceSessionId: sessionId,
+        }).run();
+
+        savedInsights.push({
+          id: insightId,
+          content: extracted.content,
+          confidenceScore: extracted.confidenceScore,
+          verificationStatus: 'unverified',
+          suggestedCategory: extracted.suggestedCategory,
+        });
+      }
+
+      // 5. Update the imported file's processedContent to mark it as processed
+      const updatedContent = {
+        ...processedContent,
+        processingStatus: 'processed',
+        processedInsightCount: savedInsights.length,
+        processedTopicId: topicId,
+        processedNoteId: noteId,
+        processedAt: new Date().toISOString(),
+      };
+
+      db.update(importedFiles).set({
+        processedContent: JSON.stringify(updatedContent),
+      }).where(eq(importedFiles.id, importId)).run();
+    });
+
+    processImportTransaction();
+
+    console.log(`[me.md] Processed import "${importedFile.filename}" (${importedFile.fileType}): extracted ${savedInsights.length} insights for verification`);
+
+    res.json({
+      message: `Successfully extracted ${savedInsights.length} insight(s) from imported content`,
+      importId,
+      insightsExtracted: savedInsights.length,
+      insights: savedInsights,
+      topicCreated: {
+        id: topicId,
+        title: topicTitle,
+      },
+      noteCreated: {
+        id: noteId,
+        title: noteTitle,
+      },
+    });
+  } catch (error) {
+    console.error('Process import error:', error);
+    const message = error instanceof Error ? error.message : 'Failed to process imported content';
+    res.status(500).json({ error: message.includes('corrupted') ? message : 'Failed to process imported content' });
+  }
+});
+
+// GET /api/import/:id/insights - Get insights extracted from an import
+importRouter.get('/:id/insights', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string;
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const importId = req.params.id;
+
+    // Get the imported file
+    const importedFile = db.select().from(importedFiles).where(
+      and(eq(importedFiles.id, importId), eq(importedFiles.userId, userId))
+    ).get();
+
+    if (!importedFile) {
+      return res.status(404).json({ error: 'Imported file not found' });
+    }
+
+    // Parse processed content to find the topic
+    let processedContent: Record<string, unknown> = {};
+    try {
+      if (importedFile.processedContent) {
+        processedContent = JSON.parse(importedFile.processedContent);
+      }
+    } catch (parseErr) {
+      console.error(`[me.md] Failed to parse processedContent for import ${importId}:`, parseErr);
+      processedContent = {};
+    }
+
+    const topicId = processedContent.processedTopicId as string | undefined;
+    const isProcessed = processedContent.processingStatus === 'processed';
+
+    if (!isProcessed || !topicId) {
+      return res.json({
+        importId,
+        isProcessed: false,
+        insights: [],
+        count: 0,
+      });
+    }
+
+    // Get insights associated with this topic
+    const importInsights = db.select().from(insights)
+      .where(and(eq(insights.topicId, topicId), eq(insights.userId, userId)))
+      .all();
+
+    res.json({
+      importId,
+      isProcessed: true,
+      topicId,
+      insights: importInsights,
+      count: importInsights.length,
+      verificationStats: {
+        unverified: importInsights.filter(i => i.verificationStatus === 'unverified').length,
+        verified: importInsights.filter(i => i.verificationStatus === 'verified').length,
+        rejected: importInsights.filter(i => i.verificationStatus === 'rejected').length,
+      },
+    });
+  } catch (error) {
+    console.error('Get import insights error:', error);
+    res.status(500).json({ error: 'Failed to get import insights' });
   }
 });

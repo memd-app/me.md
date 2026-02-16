@@ -1,8 +1,17 @@
 import { useState, useMemo, FormEvent } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
+import { Link } from 'react-router-dom';
 
 type ImportMethod = 'chatgpt' | 'url' | 'text' | 'file';
+
+interface ExtractedInsight {
+  id: string;
+  content: string;
+  confidenceScore: number;
+  verificationStatus: string;
+  suggestedCategory: string;
+}
 
 interface ImportResult {
   id: string;
@@ -12,6 +21,12 @@ interface ImportResult {
   summary?: string;
   error?: string;
   sectionCount?: number;
+  // Processing state
+  isProcessing?: boolean;
+  isProcessed?: boolean;
+  extractedInsights?: ExtractedInsight[];
+  topicCreated?: { id: string; title: string };
+  processError?: string;
 }
 
 const CHATGPT_EXTRACTION_PROMPT = `I'd like you to help me extract a comprehensive summary of everything you know about me from our conversation history. Please organize your response using the following sections, using **bold headers** for each:
@@ -77,6 +92,59 @@ export default function ImportPage() {
   }, [chatgptOutput, chatgptTitle, urlInput, pasteText, pasteTitle]);
 
   useUnsavedChangesWarning(isImportDirty);
+
+  // Process an imported file to extract insights
+  const handleProcessImport = async (resultIdx: number) => {
+    const result = importResults[resultIdx];
+    if (!result || !result.id || result.isProcessed || result.isProcessing) return;
+
+    const userId = user?.id;
+    if (!userId) return;
+
+    // Mark as processing
+    setImportResults((prev) =>
+      prev.map((r, i) => (i === resultIdx ? { ...r, isProcessing: true, processError: undefined } : r))
+    );
+
+    try {
+      const res = await fetch(`/api/import/${result.id}/process`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': userId,
+        },
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to process import');
+      }
+
+      const data = await res.json();
+
+      setImportResults((prev) =>
+        prev.map((r, i) =>
+          i === resultIdx
+            ? {
+                ...r,
+                isProcessing: false,
+                isProcessed: true,
+                extractedInsights: data.insights || [],
+                topicCreated: data.topicCreated,
+              }
+            : r
+        )
+      );
+    } catch (err) {
+      setImportResults((prev) =>
+        prev.map((r, i) =>
+          i === resultIdx
+            ? { ...r, isProcessing: false, processError: err instanceof Error ? err.message : 'Failed to process' }
+            : r
+        )
+      );
+    }
+  };
 
   const handleCopyPrompt = async () => {
     try {
@@ -703,56 +771,171 @@ export default function ImportPage() {
 
       {/* Import Results */}
       {importResults.length > 0 && (
-        <div className="mt-6 space-y-3">
+        <div className="mt-6 space-y-4">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             Imported Content ({importResults.length})
           </h3>
           {importResults.map((result, idx) => (
             <div
               key={result.id || idx}
-              className={`rounded-xl p-4 border ${
+              className={`rounded-xl border ${
                 result.status === 'success'
-                  ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800'
+                  ? result.isProcessed
+                    ? 'bg-purple-50 dark:bg-purple-900/10 border-purple-200 dark:border-purple-800'
+                    : 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800'
                   : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800'
               }`}
             >
-              {result.status === 'success' ? (
-                <>
-                  <div className="flex items-center gap-2 mb-1">
-                    <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span className="font-medium text-sm text-gray-900 dark:text-white">
-                      {result.title || 'Untitled'}
-                    </span>
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300">
-                      {result.source === 'chatgpt' ? 'ChatGPT' : result.source === 'url' ? 'URL' : result.source === 'text' ? 'Text' : 'File'}
-                    </span>
-                    {result.sectionCount != null && result.sectionCount > 0 && (
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300">
-                        {result.sectionCount} sections
+              <div className="p-4">
+                {result.status === 'success' ? (
+                  <>
+                    <div className="flex items-center gap-2 mb-1">
+                      <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className="font-medium text-sm text-gray-900 dark:text-white">
+                        {result.title || 'Untitled'}
                       </span>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300">
+                        {result.source === 'chatgpt' ? 'ChatGPT' : result.source === 'url' ? 'URL' : result.source === 'text' ? 'Text' : 'File'}
+                      </span>
+                      {result.sectionCount != null && result.sectionCount > 0 && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300">
+                          {result.sectionCount} sections
+                        </span>
+                      )}
+                      {result.isProcessed && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300">
+                          {result.extractedInsights?.length || 0} insights extracted
+                        </span>
+                      )}
+                    </div>
+                    {result.summary && !result.isProcessed && (
+                      <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-3 mt-1">
+                        {result.summary}
+                      </p>
                     )}
+
+                    {/* Process button - shown when not yet processed */}
+                    {!result.isProcessed && !result.isProcessing && (
+                      <button
+                        onClick={() => handleProcessImport(idx)}
+                        className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-primary-600 text-white hover:bg-primary-700 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        Extract Insights for Verification
+                      </button>
+                    )}
+
+                    {/* Processing spinner */}
+                    {result.isProcessing && (
+                      <div className="mt-3 flex items-center gap-2 text-sm text-primary-600 dark:text-primary-400">
+                        <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        Extracting personal insights...
+                      </div>
+                    )}
+
+                    {/* Process error */}
+                    {result.processError && (
+                      <p className="mt-2 text-sm text-red-500">{result.processError}</p>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    <div>
+                      <span className="text-sm text-red-700 dark:text-red-400">
+                        Failed: {result.title || 'Unknown'}
+                      </span>
+                      {result.error && (
+                        <p className="text-xs text-red-500 mt-0.5">{result.error}</p>
+                      )}
+                    </div>
                   </div>
-                  {result.summary && (
-                    <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-3 mt-1">
-                      {result.summary}
+                )}
+              </div>
+
+              {/* Extracted Insights Panel */}
+              {result.isProcessed && result.extractedInsights && result.extractedInsights.length > 0 && (
+                <div className="border-t border-purple-200 dark:border-purple-800 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
+                      Extracted Insights ({result.extractedInsights.length})
+                    </h4>
+                    <div className="flex gap-2">
+                      {result.topicCreated && (
+                        <Link
+                          to={`/app/topics`}
+                          className="text-xs px-2 py-1 rounded bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 hover:bg-primary-200 dark:hover:bg-primary-900/50 transition-colors"
+                        >
+                          View Topic
+                        </Link>
+                      )}
+                      <Link
+                        to="/app/verify"
+                        className="text-xs px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors"
+                      >
+                        Go to Verification Queue
+                      </Link>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                    {result.extractedInsights.map((insight, iIdx) => (
+                      <div
+                        key={insight.id || iIdx}
+                        className="flex items-start gap-2 p-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
+                      >
+                        <div className="flex-shrink-0 mt-0.5">
+                          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-[10px] font-bold">
+                            ?
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-800 dark:text-gray-200 leading-snug">
+                            {insight.content}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                              Confidence: {insight.confidenceScore}%
+                            </span>
+                            <span className="text-[10px] px-1 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400">
+                              Pending verification
+                            </span>
+                            <span className="text-[10px] px-1 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 capitalize">
+                              {insight.suggestedCategory}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                    <p className="text-xs text-amber-800 dark:text-amber-200">
+                      <strong>Next step:</strong> These insights are now in your{' '}
+                      <Link to="/app/verify" className="underline hover:text-amber-900 dark:hover:text-amber-100">
+                        verification queue
+                      </Link>
+                      . Review each one to confirm, edit, or reject it. Only verified insights will appear in your profile export.
                     </p>
-                  )}
-                </>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                  <div>
-                    <span className="text-sm text-red-700 dark:text-red-400">
-                      Failed: {result.title || 'Unknown'}
-                    </span>
-                    {result.error && (
-                      <p className="text-xs text-red-500 mt-0.5">{result.error}</p>
-                    )}
                   </div>
+                </div>
+              )}
+
+              {/* No insights extracted message */}
+              {result.isProcessed && (!result.extractedInsights || result.extractedInsights.length === 0) && (
+                <div className="border-t border-gray-200 dark:border-gray-700 p-4">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    No personal insights could be extracted from this content. Try importing content that contains personal statements, beliefs, preferences, or experiences.
+                  </p>
                 </div>
               )}
             </div>

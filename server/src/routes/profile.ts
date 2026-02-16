@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../config/database.js';
-import { insights, topics, users, notes, topicConnections } from '../models/schema.js';
+import { insights, topics, users, notes, topicConnections, importedFiles } from '../models/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
 
 export const profileRouter = Router();
@@ -455,7 +455,43 @@ profileRouter.get('/export/markdown', async (req, res) => {
     const userTopics = db.select().from(topics).where(eq(topics.userId, userId)).all();
 
     const summary = buildProfileSummary(user, verifiedInsights, userTopics.length);
-    const markdown = generateMarkdown(summary);
+
+    // Get imported sources for markdown appendix
+    const userImports = db.select({
+      filename: importedFiles.filename,
+      fileType: importedFiles.fileType,
+      processedContent: importedFiles.processedContent,
+      createdAt: importedFiles.createdAt,
+    }).from(importedFiles)
+      .where(eq(importedFiles.userId, userId))
+      .all();
+
+    const importSourcesList = userImports.map(imp => {
+      let content: Record<string, unknown> = {};
+      try {
+        if (imp.processedContent) content = JSON.parse(imp.processedContent);
+      } catch { content = {}; }
+      return {
+        title: (content.title as string) || imp.filename,
+        type: imp.fileType,
+        isProcessed: content.processingStatus === 'processed',
+        insightCount: (content.processedInsightCount as number) || 0,
+      };
+    });
+
+    let markdown = generateMarkdown(summary);
+
+    // Append imported sources section if any exist
+    if (importSourcesList.length > 0) {
+      markdown += '\n## Imported Sources\n\n';
+      markdown += '*The following external sources were imported and processed to extract insights:*\n\n';
+      for (const source of importSourcesList) {
+        const typeLabel = source.type === 'chatgpt' ? 'ChatGPT Memory' : source.type === 'url' ? 'URL' : source.type === 'text' ? 'Text' : 'File';
+        const processedLabel = source.isProcessed ? ` (${source.insightCount} insights extracted)` : ' (not yet processed)';
+        markdown += `- **${source.title}** — ${typeLabel}${processedLabel}\n`;
+      }
+      markdown += '\n';
+    }
 
     res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${user.name.replace(/[^a-zA-Z0-9]/g, '_')}_me.md"`);
@@ -551,6 +587,34 @@ profileRouter.get('/export/json', async (req, res) => {
 
     const summary = buildProfileSummary(user, verifiedInsightsForSummary, userTopics.length);
 
+    // Get imported source materials for reference
+    const userImports = db.select({
+      id: importedFiles.id,
+      filename: importedFiles.filename,
+      fileType: importedFiles.fileType,
+      createdAt: importedFiles.createdAt,
+      processedContent: importedFiles.processedContent,
+    }).from(importedFiles)
+      .where(eq(importedFiles.userId, userId))
+      .all();
+
+    const importSources = userImports.map(imp => {
+      let content: Record<string, unknown> = {};
+      try {
+        if (imp.processedContent) content = JSON.parse(imp.processedContent);
+      } catch { content = {}; }
+      return {
+        id: imp.id,
+        filename: imp.filename,
+        fileType: imp.fileType,
+        title: (content.title as string) || imp.filename,
+        summary: (content.summary as string) || null,
+        isProcessed: content.processingStatus === 'processed',
+        processedInsightCount: (content.processedInsightCount as number) || 0,
+        importedAt: imp.createdAt,
+      };
+    });
+
     const exportData = {
       exportVersion: '1.0',
       exportedAt: new Date().toISOString(),
@@ -560,11 +624,14 @@ profileRouter.get('/export/json', async (req, res) => {
         insights: verifiedInsightsFull,
         topics: topicsWithParsedFields,
         topicConnections: connections,
+        importedSources: importSources,
       },
       metadata: {
         totalVerifiedInsights: verifiedInsightsFull.length,
         totalTopics: userTopics.length,
         totalTopicConnections: connections.length,
+        totalImportedSources: importSources.length,
+        processedImports: importSources.filter(s => s.isProcessed).length,
       },
     };
 
