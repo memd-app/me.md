@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 
@@ -20,6 +21,7 @@ interface AssessmentAttempt {
   attemptId: string;
   status: string;
   startedAt?: string;
+  completedAt?: string;
   answeredQuestions: number;
 }
 
@@ -78,6 +80,7 @@ type Phase = 'loading' | 'landing' | 'test' | 'completing' | 'completed';
 export default function AssessmentPage() {
   const { user } = useAuth();
   const { addToast } = useToast();
+  const navigate = useNavigate();
 
   // Phase management
   const [phase, setPhase] = useState<Phase>('loading');
@@ -85,6 +88,7 @@ export default function AssessmentPage() {
 
   // Landing state
   const [inProgressAttempt, setInProgressAttempt] = useState<AssessmentAttempt | null>(null);
+  const [completedAttempts, setCompletedAttempts] = useState<AssessmentAttempt[]>([]);
 
   // Test state
   const [attemptId, setAttemptId] = useState<string | null>(null);
@@ -131,11 +135,13 @@ export default function AssessmentPage() {
 
         // Check for in-progress attempt
         const inProgress = history.find((a: AssessmentAttempt) => a.status === 'in_progress');
+        const completed = history.filter((a: AssessmentAttempt) => a.status === 'completed');
 
         if (!cancelled) {
           if (inProgress) {
             setInProgressAttempt(inProgress);
           }
+          setCompletedAttempts(completed);
           setPhase('landing');
         }
       } catch (err: any) {
@@ -355,15 +361,14 @@ export default function AssessmentPage() {
       const data = await res.json();
       setCompletionResults(data.scores || []);
 
-      // Animated transition
-      setPhase('completed');
-      setTimeout(() => setShowResults(true), 500);
+      // Navigate to the dedicated results page
+      navigate(`/app/assessment/${attemptId}/results`);
     } catch (err: any) {
       setError(err.message);
       setPhase('test');
       addToast(err.message, 'error');
     }
-  }, [attemptId, user, answers, saveAnswers, headers, addToast]);
+  }, [attemptId, user, answers, saveAnswers, headers, addToast, navigate]);
 
   // ============================================
   // Keyboard navigation
@@ -494,6 +499,49 @@ export default function AssessmentPage() {
           </div>
         )}
 
+        {/* Previous Results */}
+        {completedAttempts.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Previous Results</h2>
+            <div className="space-y-2">
+              {completedAttempts.slice(0, 5).map((attempt) => (
+                <Link
+                  key={attempt.attemptId}
+                  to={`/app/assessment/${attempt.attemptId}/results`}
+                  className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        Completed Assessment
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {attempt.completedAt
+                          ? new Date(attempt.completedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                          : attempt.startedAt
+                            ? new Date(attempt.startedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                            : 'Unknown date'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                  <span className="inline-flex items-center gap-1 text-sm text-primary-600 dark:text-primary-400 group-hover:text-primary-700 dark:group-hover:text-primary-300 font-medium">
+                    View Results
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Start Button */}
         <div className="text-center">
           <button
@@ -503,7 +551,7 @@ export default function AssessmentPage() {
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-            Start Test
+            {completedAttempts.length > 0 ? 'Take Again' : 'Start Test'}
           </button>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
             Your progress is saved automatically. You can leave and come back anytime.
