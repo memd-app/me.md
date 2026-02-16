@@ -84,6 +84,8 @@ function App() {
             <Route path="import" element={<ImportPage />} />
             <Route path="export" element={<ExportPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            {/* Catch-all for unknown /app/* routes */}
+            <Route path="*" element={<NotFoundPage />} />
           </Route>
 
           {/* 404 */}
