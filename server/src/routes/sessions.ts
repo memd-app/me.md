@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../config/database.js';
-import { sessions, messages, topics, conceptNodes, topicConnections } from '../models/schema.js';
+import { sessions, messages, topics, conceptNodes, topicConnections, insights, users, notes } from '../models/schema.js';
 import { eq, and, desc, ne, or } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -67,8 +67,11 @@ sessionsRouter.post('/', async (req, res) => {
       }).where(eq(topics.id, topicId)).run();
     }
 
-    // Create an opening AI message (context-aware if URLs provided)
-    const openingMessageContent = generateOpeningMessage(topic.title, topic.description, topic.intent, referenceUrls);
+    // Gather profile context from previous sessions and verified insights
+    const profileContext = gatherProfileContext(userId, topicId);
+
+    // Create an opening AI message (context-aware with profile context and URLs)
+    const openingMessageContent = generateOpeningMessage(topic.title, topic.description, topic.intent, referenceUrls, profileContext);
     const openingMessageId = uuidv4();
 
     const openingMessage = db.insert(messages).values({
@@ -295,13 +298,17 @@ sessionsRouter.post('/:id/messages', async (req, res) => {
         aiResponseContent += '\n\n---\n\n*Great work! We\'ve gathered enough for your **starter profile**. Click **Finish & Distill** to generate your initial insights and knowledge graph.*';
       }
     } else {
-      // Standard session: use methodology-based questioning
+      // Gather profile context for personalized responses
+      const msgProfileContext = gatherProfileContext(userId, session.topicId);
+
+      // Standard session: use methodology-based questioning with profile context
       aiResponseContent = generateAIResponse(
         topic?.title || 'Unknown Topic',
         topic?.description || '',
         topic?.intent || '',
         historyForAI,
-        hasResearchContext
+        hasResearchContext,
+        msgProfileContext
       );
       quickRepliesArr = generateQuickReplies(userMessageCount, aiResponseContent, historyForAI);
 
@@ -376,12 +383,17 @@ sessionsRouter.post('/:id/messages/retry', async (req, res) => {
 
     const hasResearchContext = !!session.researchData;
     const historyForAI = conversationHistory.map(m => ({ role: m.role, content: m.content }));
+
+    // Gather profile context for personalized retry response
+    const retryProfileContext = gatherProfileContext(userId, session.topicId);
+
     const aiResponseContent = generateAIResponse(
       topic?.title || 'Unknown Topic',
       topic?.description || '',
       topic?.intent || '',
       historyForAI,
-      hasResearchContext
+      hasResearchContext,
+      retryProfileContext
     );
 
     // Generate context-aware quick replies
@@ -483,13 +495,17 @@ sessionsRouter.post('/:id/messages/stream', async (req, res) => {
         aiResponseContent += '\n\n---\n\n*Great work! We\'ve gathered enough for your **starter profile**. Click **Finish & Distill** to generate your initial insights and knowledge graph.*';
       }
     } else {
-      // Standard session: use methodology-based questioning
+      // Gather profile context for personalized streaming responses
+      const streamProfileContext = gatherProfileContext(userId, session.topicId);
+
+      // Standard session: use methodology-based questioning with profile context
       aiResponseContent = generateAIResponse(
         topic?.title || 'Unknown Topic',
         topic?.description || '',
         topic?.intent || '',
         historyForAI,
-        hasResearchContext
+        hasResearchContext,
+        streamProfileContext
       );
       quickRepliesArr = generateQuickReplies(userMessageCount, aiResponseContent, historyForAI);
 
@@ -982,8 +998,166 @@ function buildContextSummary(referenceUrls: string[], contextItems: string[]): s
   return parts.join('; ');
 }
 
+// ============================================
+// Profile Context Injection
+// ============================================
+
+// Gather verified insights, previous sessions, and user profile for context-aware AI responses
+interface ProfileContext {
+  userName: string;
+  occupation: string;
+  verifiedInsights: Array<{ content: string; topicTitle: string; confidenceScore: number }>;
+  previousSessionTopics: Array<{ title: string; sessionCount: number; status: string }>;
+  relatedInsights: Array<{ content: string; topicTitle: string }>;
+}
+
+function gatherProfileContext(userId: string, currentTopicId: string): ProfileContext {
+  // Get user profile
+  const user = db.select().from(users).where(eq(users.id, userId)).get();
+
+  // Get all verified insights for this user (across all topics)
+  const allVerifiedInsights = db.select({
+    content: insights.content,
+    topicId: insights.topicId,
+    confidenceScore: insights.confidenceScore,
+  }).from(insights).where(
+    and(
+      eq(insights.userId, userId),
+      eq(insights.verificationStatus, 'verified')
+    )
+  ).all();
+
+  // Get topic titles for the insights
+  const topicIds = [...new Set(allVerifiedInsights.map(i => i.topicId))];
+  const topicMap = new Map<string, string>();
+  if (topicIds.length > 0) {
+    const topicRows = db.select({ id: topics.id, title: topics.title })
+      .from(topics)
+      .where(eq(topics.userId, userId))
+      .all();
+    for (const t of topicRows) {
+      topicMap.set(t.id, t.title);
+    }
+  }
+
+  // Map insights with topic titles
+  const verifiedInsights = allVerifiedInsights.map(i => ({
+    content: i.content,
+    topicTitle: topicMap.get(i.topicId) || 'Unknown Topic',
+    confidenceScore: i.confidenceScore || 50,
+  }));
+
+  // Get previous sessions (completed) grouped by topic
+  const completedSessions = db.select({
+    topicId: sessions.topicId,
+  }).from(sessions).where(
+    and(
+      eq(sessions.userId, userId),
+      eq(sessions.status, 'completed')
+    )
+  ).all();
+
+  // Count sessions per topic
+  const sessionCountByTopic = new Map<string, number>();
+  for (const s of completedSessions) {
+    sessionCountByTopic.set(s.topicId, (sessionCountByTopic.get(s.topicId) || 0) + 1);
+  }
+
+  // Get topic info for previous sessions
+  const previousSessionTopics: Array<{ title: string; sessionCount: number; status: string }> = [];
+  const allUserTopics = db.select({ id: topics.id, title: topics.title, status: topics.status })
+    .from(topics)
+    .where(eq(topics.userId, userId))
+    .all();
+
+  for (const t of allUserTopics) {
+    const count = sessionCountByTopic.get(t.id) || 0;
+    if (count > 0 && t.id !== currentTopicId) {
+      previousSessionTopics.push({
+        title: t.title,
+        sessionCount: count,
+        status: t.status || 'backlog',
+      });
+    }
+  }
+
+  // Get insights specifically related to the current topic (from connected topics)
+  const currentTopicConnections = db.select().from(topicConnections).where(
+    or(
+      eq(topicConnections.sourceTopicId, currentTopicId),
+      eq(topicConnections.targetTopicId, currentTopicId)
+    )
+  ).all();
+
+  const connectedTopicIds = new Set<string>();
+  for (const c of currentTopicConnections) {
+    if (c.sourceTopicId !== currentTopicId) connectedTopicIds.add(c.sourceTopicId);
+    if (c.targetTopicId !== currentTopicId) connectedTopicIds.add(c.targetTopicId);
+  }
+
+  // Also include insights from the current topic itself (from previous sessions)
+  connectedTopicIds.add(currentTopicId);
+
+  const relatedInsights = verifiedInsights
+    .filter(i => {
+      const topicId = allVerifiedInsights.find(vi => vi.content === i.content)?.topicId;
+      return topicId && connectedTopicIds.has(topicId);
+    })
+    .sort((a, b) => b.confidenceScore - a.confidenceScore)
+    .slice(0, 10);
+
+  return {
+    userName: user?.name || '',
+    occupation: user?.occupation || '',
+    verifiedInsights: verifiedInsights.sort((a, b) => b.confidenceScore - a.confidenceScore).slice(0, 15),
+    previousSessionTopics: previousSessionTopics.slice(0, 10),
+    relatedInsights,
+  };
+}
+
+// Build a profile context summary string for injection into AI responses
+function buildProfileContextSummary(context: ProfileContext, topicTitle: string): string {
+  const parts: string[] = [];
+
+  // Add user profile basics
+  if (context.userName) {
+    parts.push(`The user's name is ${context.userName}${context.occupation ? ` and they work as ${context.occupation}` : ''}.`);
+  }
+
+  // Add previous session context
+  if (context.previousSessionTopics.length > 0) {
+    const topicList = context.previousSessionTopics
+      .slice(0, 5)
+      .map(t => `"${t.title}" (${t.sessionCount} session${t.sessionCount > 1 ? 's' : ''})`)
+      .join(', ');
+    parts.push(`They have previously explored: ${topicList}.`);
+  }
+
+  // Add related insights from connected or same topics (most relevant)
+  if (context.relatedInsights.length > 0) {
+    parts.push('Directly relevant verified insights from related topics:');
+    for (const insight of context.relatedInsights.slice(0, 5)) {
+      parts.push(`- [From "${insight.topicTitle}"]: "${insight.content}"`);
+    }
+  }
+
+  // Add high-confidence insights from other topics
+  const otherInsights = context.verifiedInsights.filter(
+    i => !context.relatedInsights.some(r => r.content === i.content)
+  ).slice(0, 5);
+
+  if (otherInsights.length > 0) {
+    parts.push('Other verified self-knowledge:');
+    for (const insight of otherInsights) {
+      parts.push(`- [From "${insight.topicTitle}"]: "${insight.content}"`);
+    }
+  }
+
+  return parts.join('\n');
+}
+
 // Helper function to generate an opening message based on topic
-function generateOpeningMessage(title: string, description: string | null, intent: string | null, referenceUrls: string[] = []): string {
+function generateOpeningMessage(title: string, description: string | null, intent: string | null, referenceUrls: string[] = [], profileContext?: ProfileContext): string {
   const intentPhrases: Record<string, string> = {
     articulate: "help you articulate your thoughts on",
     explore: "explore and discover new perspectives about",
@@ -999,6 +1173,43 @@ function generateOpeningMessage(title: string, description: string | null, inten
 
   if (description) {
     message += `\n\n${description}`;
+  }
+
+  // Inject profile context: reference previous sessions and verified insights
+  if (profileContext) {
+    const hasVerifiedInsights = profileContext.verifiedInsights.length > 0;
+    const hasPreviousTopics = profileContext.previousSessionTopics.length > 0;
+    const hasRelatedInsights = profileContext.relatedInsights.length > 0;
+
+    if (hasVerifiedInsights || hasPreviousTopics) {
+      message += `\n\n**Building on what I know about you:**`;
+
+      // Reference previous topics the user has explored
+      if (hasPreviousTopics) {
+        const topicNames = profileContext.previousSessionTopics.slice(0, 3).map(t => `"${t.title}"`).join(', ');
+        message += ` I see you've already explored topics like ${topicNames}.`;
+      }
+
+      // Reference directly related insights from connected topics
+      if (hasRelatedInsights) {
+        const topInsight = profileContext.relatedInsights[0];
+        message += ` From your work on **"${topInsight.topicTitle}"**, you've established that *"${topInsight.content.length > 120 ? topInsight.content.substring(0, 120) + '...' : topInsight.content}"*`;
+        if (profileContext.relatedInsights.length > 1) {
+          message += ` — along with ${profileContext.relatedInsights.length - 1} other verified insight${profileContext.relatedInsights.length > 2 ? 's' : ''} from related areas`;
+        }
+        message += '.';
+      } else if (hasVerifiedInsights) {
+        // Reference highest-confidence insight from any topic
+        const topInsight = profileContext.verifiedInsights[0];
+        message += ` From your exploration of **"${topInsight.topicTitle}"**, you've verified that *"${topInsight.content.length > 120 ? topInsight.content.substring(0, 120) + '...' : topInsight.content}"*`;
+        if (profileContext.verifiedInsights.length > 1) {
+          message += ` — and you have ${profileContext.verifiedInsights.length - 1} other verified insight${profileContext.verifiedInsights.length > 2 ? 's' : ''} across your knowledge base`;
+        }
+        message += '.';
+      }
+
+      message += ` I'll weave this existing knowledge into our conversation about **${title}**.`;
+    }
   }
 
   // If reference URLs are provided, acknowledge them and tailor the approach
@@ -1208,7 +1419,8 @@ function generateAIResponse(
   topicDescription: string,
   topicIntent: string,
   conversationHistory: Array<{ role: string; content: string }>,
-  hasResearchContext: boolean = false
+  hasResearchContext: boolean = false,
+  profileContext?: ProfileContext
 ): string {
   const userMessages = conversationHistory.filter(m => m.role === 'user');
   const messageCount = userMessages.length;
@@ -1240,8 +1452,22 @@ function generateAIResponse(
   // Add methodology label as subtle context
   const methodLabel = METHODOLOGY_LABELS[methodology];
 
+  // Generate profile context bridge: connect current discussion to verified insights
+  let profileBridge = '';
+  if (profileContext && profileContext.verifiedInsights.length > 0) {
+    profileBridge = generateProfileContextBridge(
+      lastUserMessage,
+      profileContext,
+      topicTitle,
+      messageCount
+    );
+  }
+
   if (messageCount === 0) {
-    return `I appreciate you getting started! Let me reflect on what you've shared.\n\n${reflection}\n\n${question}`;
+    const base = `I appreciate you getting started! Let me reflect on what you've shared.\n\n${reflection}`;
+    return profileBridge
+      ? `${base}\n\n${profileBridge}\n\n${question}`
+      : `${base}\n\n${question}`;
   }
 
   // For later exchanges, include a subtle methodology indicator
@@ -1254,10 +1480,69 @@ function generateAIResponse(
       `I want to zoom into something specific.`,
     ];
     const transition = transitions[(messageCount / 3) % transitions.length];
-    return `${reflection}\n\n${transition}\n\n${question}`;
+    return profileBridge
+      ? `${reflection}\n\n${profileBridge}\n\n${transition}\n\n${question}`
+      : `${reflection}\n\n${transition}\n\n${question}`;
+  }
+
+  // Every 2nd or 3rd message, inject a profile context bridge to connect to previous knowledge
+  if (profileBridge && (messageCount % 2 === 1 || messageCount <= 2)) {
+    return `${reflection}\n\n${profileBridge}\n\n${question}`;
   }
 
   return `${reflection}\n\n${question}`;
+}
+
+// Generate a contextual bridge that connects the current conversation to previously verified insights
+function generateProfileContextBridge(
+  lastUserMessage: string,
+  profileContext: ProfileContext,
+  topicTitle: string,
+  messageCount: number
+): string {
+  // Find the most relevant insight to the user's current message
+  const lastMessageLower = lastUserMessage.toLowerCase();
+  const lastMessageWords = lastMessageLower.split(/\s+/).filter(w => w.length > 4);
+
+  // Score insights by relevance to the current message
+  const scoredInsights = profileContext.verifiedInsights.map(insight => {
+    const insightLower = insight.content.toLowerCase();
+    let score = 0;
+    for (const word of lastMessageWords) {
+      if (insightLower.includes(word)) score += 3;
+    }
+    // Boost related insights (from same/connected topics)
+    const isRelated = profileContext.relatedInsights.some(r => r.content === insight.content);
+    if (isRelated) score += 5;
+    return { ...insight, relevanceScore: score };
+  }).filter(i => i.relevanceScore > 0)
+    .sort((a, b) => b.relevanceScore - a.relevanceScore);
+
+  if (scoredInsights.length === 0) {
+    // No directly relevant insight found - try a general connection every few messages
+    if (messageCount <= 1 && profileContext.previousSessionTopics.length > 0) {
+      const relatedTopic = profileContext.previousSessionTopics[0];
+      return `I notice this connects to ground you've covered before — you previously explored **"${relatedTopic.title}"**, and I can see how those threads might weave together with what you're sharing about **${topicTitle}** now.`;
+    }
+    return '';
+  }
+
+  // Pick the top-scoring insight
+  const bestInsight = scoredInsights[0];
+  const insightSnippet = bestInsight.content.length > 100
+    ? bestInsight.content.substring(0, 100) + '...'
+    : bestInsight.content;
+
+  // Generate the bridge text (varies by message count for variety)
+  const bridges = [
+    `This connects to something you've already verified about yourself — from your exploration of **"${bestInsight.topicTitle}"**, you established: *"${insightSnippet}"* How does that relate to what you're sharing now about **${topicTitle}**?`,
+    `Interestingly, your verified insight from **"${bestInsight.topicTitle}"** — *"${insightSnippet}"* — seems to resonate with what you're describing here. I'd love to understand how these threads connect for you.`,
+    `I'm noticing a pattern here. In your work on **"${bestInsight.topicTitle}"**, you verified: *"${insightSnippet}"* There's a clear connection to what you're exploring in **${topicTitle}** right now.`,
+    `This builds on something you've already articulated. From **"${bestInsight.topicTitle}"**: *"${insightSnippet}"* — and what you're sharing now adds another dimension to that understanding.`,
+    `Your previous insight from **"${bestInsight.topicTitle}"** — *"${insightSnippet}"* — adds interesting context to what you're exploring here in **${topicTitle}**.`,
+  ];
+
+  return bridges[messageCount % bridges.length];
 }
 
 // Extract a meaningful topic word from user messages for quick reply personalization
