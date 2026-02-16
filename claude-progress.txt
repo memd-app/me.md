@@ -1,3 +1,31 @@
+## Session - 2026-02-16 (Agent handling Feature #213)
+
+### Accomplished
+- Feature #213 (AI-Powered Insight Extraction): PASSING
+  - Verified extractInsightsAI() in server/src/services/ai.ts already uses Claude API for semantic insight extraction
+  - Enhanced prompt evaluates confidence based on three dimensions: Conviction, Specificity, and Consistency
+  - DistillationContext includes isMiniSession flag for context-aware extraction
+  - Mini sessions get adjusted insight range (2-5 vs 3-10 for standard sessions)
+  - Prompt explicitly instructs Claude to avoid generic truisms, simple restatements, and vague reactions
+  - Scoring rubric: 50-60 (implied), 61-75 (medium conviction/specificity), 76-85 (clear and referenced), 86-95 (strong, specific, consistent)
+  - Output validated: JSON array of {content, confidenceScore}, capped at 10, scores clamped to 50-95
+  - Falls back to regex-based extractInsightsFromSession() when Claude API unavailable
+  - notes.ts distill endpoint calls extractInsightsAI(distillCtx) first, then falls back to regex
+  - No mock data patterns found in client/src or server/src
+  - TypeScript compiles cleanly (no errors in notes.ts or ai.ts)
+  - Vite production build succeeds (654 modules transformed)
+
+### Files Verified (already modified by Feature #212 agent)
+- server/src/services/ai.ts: extractInsightsAI() with conviction/specificity/consistency prompt, isMiniSession in DistillationContext
+- server/src/routes/notes.ts: distillCtx passes isMiniSession, calls extractInsightsAI with regex fallback
+
+### Current Status
+- 217/223 features passing (97.3%)
+- Feature #213 marked as passing
+
+### What to Work on Next
+- Continue with next assigned features from orchestrator
+
 ## Session - 2026-02-16 (Agent handling Feature #212)
 
 ### Accomplished
