@@ -99,6 +99,7 @@ export default function TopicDetailPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [topicNotFound, setTopicNotFound] = useState(false);
   const [newUrl, setNewUrl] = useState('');
   const [isAddingUrl, setIsAddingUrl] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
@@ -120,11 +121,17 @@ export default function TopicDetailPage() {
     const fetchTopic = async () => {
       setIsLoading(true);
       setError(null);
+      setTopicNotFound(false);
       try {
         // Fetch topic details
         const topicRes = await fetch(`/api/topics/${id}`, {
           headers: { 'x-user-id': user.id },
         });
+        if (topicRes.status === 404) {
+          setTopicNotFound(true);
+          setTopic(null);
+          throw new Error('This topic has been deleted or does not exist.');
+        }
         if (!topicRes.ok) {
           throw new Error('Failed to load topic');
         }
@@ -151,6 +158,17 @@ export default function TopicDetailPage() {
     fetchTopic();
   }, [user, id]);
 
+  // Helper to check if an API response indicates the topic was deleted
+  const checkTopicDeleted = (status: number, errorMsg?: string): boolean => {
+    if (status === 404 || (errorMsg && errorMsg.toLowerCase().includes('not found'))) {
+      setTopicNotFound(true);
+      setTopic(null);
+      setError('This topic has been deleted or no longer exists.');
+      return true;
+    }
+    return false;
+  };
+
   const handleStartSession = async () => {
     if (!user || !topic) return;
 
@@ -167,14 +185,17 @@ export default function TopicDetailPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        if (checkTopicDeleted(res.status, data.error)) return;
         throw new Error(data.error || 'Failed to start session');
       }
 
       const data = await res.json();
       navigate(`/app/session/${data.session.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start session');
+      if (!topicNotFound) {
+        setError(err instanceof Error ? err.message : 'Failed to start session');
+      }
     } finally {
       setIsStartingSession(false);
     }
@@ -192,7 +213,12 @@ export default function TopicDetailPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        // If already deleted (404), just navigate away
+        if (res.status === 404) {
+          navigate('/app/topics', { replace: true });
+          return;
+        }
         throw new Error(data.error || 'Failed to delete topic');
       }
 
@@ -267,7 +293,8 @@ export default function TopicDetailPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        if (checkTopicDeleted(res.status, data.error)) return;
         throw new Error(data.error || 'Failed to add URL');
       }
 
@@ -275,7 +302,9 @@ export default function TopicDetailPage() {
       setTopic(data.topic);
       setNewUrl('');
     } catch (err) {
-      setUrlError(err instanceof Error ? err.message : 'Failed to add URL');
+      if (!topicNotFound) {
+        setUrlError(err instanceof Error ? err.message : 'Failed to add URL');
+      }
     } finally {
       setIsAddingUrl(false);
     }
@@ -298,14 +327,17 @@ export default function TopicDetailPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        if (checkTopicDeleted(res.status, data.error)) return;
         throw new Error(data.error || 'Failed to remove URL');
       }
 
       const data = await res.json();
       setTopic(data.topic);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to remove URL');
+      if (!topicNotFound) {
+        setError(err instanceof Error ? err.message : 'Failed to remove URL');
+      }
     }
   };
 
@@ -375,7 +407,8 @@ export default function TopicDetailPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        if (checkTopicDeleted(res.status, data.error)) return;
         throw new Error(data.error || 'Failed to update topic');
       }
 
@@ -385,7 +418,9 @@ export default function TopicDetailPage() {
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update topic');
+      if (!topicNotFound) {
+        setError(err instanceof Error ? err.message : 'Failed to update topic');
+      }
     } finally {
       setIsSaving(false);
     }
@@ -402,7 +437,7 @@ export default function TopicDetailPage() {
     );
   }
 
-  if (error && !topic) {
+  if (topicNotFound || (error && !topic)) {
     return (
       <div className="max-w-4xl mx-auto">
         <div className="card text-center py-12" role="alert">
@@ -410,7 +445,9 @@ export default function TopicDetailPage() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             Topic not found
           </h2>
-          <p className="text-gray-600 dark:text-gray-300 mb-4">{error}</p>
+          <p className="text-gray-600 dark:text-gray-300 mb-4">
+            {error || 'This topic has been deleted or does not exist.'}
+          </p>
           <Link to="/app/topics" className="btn-primary inline-block">
             Back to Topics
           </Link>
