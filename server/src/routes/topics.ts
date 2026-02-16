@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../config/database.js';
 import { topics, sessions, messages, notes, insights, topicConnections, conceptNodes, bookmarks } from '../models/schema.js';
-import { eq, and, or } from 'drizzle-orm';
+import { eq, and, or, desc } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
 export const topicsRouter = Router();
@@ -255,7 +255,7 @@ topicsRouter.get('/', async (req, res) => {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
-    const userTopics = db.select().from(topics).where(eq(topics.userId, userId)).all();
+    const userTopics = db.select().from(topics).where(eq(topics.userId, userId)).orderBy(desc(topics.createdAt)).all();
 
     res.json({ topics: userTopics });
   } catch (error) {
