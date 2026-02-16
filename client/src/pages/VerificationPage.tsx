@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import ConflictsSection from '../components/verification/ConflictsSection';
+import SwipeableCard from '../components/verification/SwipeableCard';
 
 interface Insight {
   id: string;
@@ -1077,8 +1078,15 @@ export default function VerificationPage() {
           {pendingInsights.map(insight => {
             const isReVerification = insight.verificationStatus === 're_verification_pending';
             return (
-            <div
+            <SwipeableCard
               key={insight.id}
+              onSwipeRight={() => handleApprove(insight.id)}
+              onSwipeLeft={() => handleReject(insight.id)}
+              rightLabel="Approve"
+              leftLabel="Reject"
+              disabled={actionInProgress === insight.id || editState?.insightId === insight.id}
+            >
+            <div
               className={`card border transition-colors ${
                 isReVerification
                   ? 'border-purple-300 dark:border-purple-700 bg-purple-50/30 dark:bg-purple-900/10 hover:border-purple-400 dark:hover:border-purple-600'
@@ -1451,6 +1459,7 @@ export default function VerificationPage() {
                 </div>
               )}
             </div>
+            </SwipeableCard>
           );
           })}
         </div>
