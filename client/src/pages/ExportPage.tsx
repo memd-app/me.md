@@ -2,6 +2,7 @@ import { useState, useEffect, FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
+import Modal from '@/components/common/Modal';
 
 type ExportFormat = 'markdown' | 'json' | 'both';
 type ExportAction = 'download' | 'clipboard';
@@ -425,74 +426,72 @@ export default function ExportPage() {
       </div>
 
       {/* Authentication Verification Dialog */}
-      {showVerifyDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" role="dialog" aria-modal="true" aria-labelledby="verify-dialog-title">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                <svg className="w-5 h-5 text-amber-600 dark:text-amber-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div>
-                <h3 id="verify-dialog-title" className="text-lg font-semibold text-gray-900 dark:text-white">
-                  Verify Your Identity
-                </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-300">
-                  Export requires authentication confirmation
-                </p>
-              </div>
-            </div>
-
-            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-              To protect your data, please enter your password to confirm your identity before exporting.
-            </p>
-
-            {verifyError && (
-              <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm">
-                {verifyError}
-              </div>
-            )}
-
-            <form onSubmit={handleVerify} className="space-y-4">
-              <div>
-                <label htmlFor="verify-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Password
-                </label>
-                <input
-                  id="verify-password"
-                  type="password"
-                  required
-                  value={verifyPassword}
-                  onChange={(e) => { setVerifyPassword(e.target.value); if (verifyError) setVerifyError(null); }}
-                  className="input-field"
-                  placeholder="Enter your password"
-                  autoComplete="current-password"
-                  autoFocus
-                />
-              </div>
-
-              <div className="flex gap-3 justify-end">
-                <button
-                  type="button"
-                  onClick={handleCancelVerify}
-                  className="btn-secondary"
-                  disabled={verifying}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={verifying || !verifyPassword}
-                  className="btn-primary"
-                >
-                  {verifying ? 'Verifying...' : 'Verify & Export'}
-                </button>
-              </div>
-            </form>
+      <Modal
+        open={showVerifyDialog}
+        onClose={handleCancelVerify}
+        title="Verify Your Identity"
+        labelledBy="verify-dialog-title"
+        icon={
+          <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+            <svg className="w-5 h-5 text-amber-600 dark:text-amber-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+              <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+            </svg>
           </div>
-        </div>
-      )}
+        }
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={handleCancelVerify}
+              className="btn-secondary"
+              disabled={verifying}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={(e) => handleVerify(e as unknown as FormEvent)}
+              disabled={verifying || !verifyPassword}
+              className="btn-primary"
+            >
+              {verifying ? 'Verifying...' : 'Verify & Export'}
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-gray-500 dark:text-gray-300 mb-3">
+          Export requires authentication confirmation
+        </p>
+
+        <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+          To protect your data, please enter your password to confirm your identity before exporting.
+        </p>
+
+        {verifyError && (
+          <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm">
+            {verifyError}
+          </div>
+        )}
+
+        <form onSubmit={handleVerify}>
+          <div>
+            <label htmlFor="verify-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Password
+            </label>
+            <input
+              id="verify-password"
+              type="password"
+              required
+              value={verifyPassword}
+              onChange={(e) => { setVerifyPassword(e.target.value); if (verifyError) setVerifyError(null); }}
+              className="input-field"
+              placeholder="Enter your password"
+              autoComplete="current-password"
+              autoFocus
+            />
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

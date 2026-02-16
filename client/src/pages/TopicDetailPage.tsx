@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import Modal from '@/components/common/Modal';
 import VerifiedBadge from '@/components/VerifiedBadge';
 import { formatDateTime, formatShortDate } from '@/utils/dateFormat';
 
@@ -743,59 +744,57 @@ export default function TopicDetailPage() {
       </div>
 
       {/* Delete Confirmation Dialog */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="delete-topic-dialog-title">
-          <div className="bg-white dark:bg-dark-card rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                </svg>
-              </div>
-              <h3 id="delete-topic-dialog-title" className="text-lg font-semibold text-gray-900 dark:text-white">
-                Delete Topic
-              </h3>
-            </div>
-
-            <p className="text-gray-600 dark:text-gray-300 mb-2">
-              Are you sure you want to delete <span className="font-semibold text-gray-900 dark:text-white">&quot;{topic.title}&quot;</span>?
-            </p>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-              This will permanently delete this topic and all associated data including:
-            </p>
-            <ul className="text-sm text-gray-500 dark:text-gray-400 mb-6 list-disc list-inside space-y-1">
-              {sessions.length > 0 && <li>{sessions.length} session{sessions.length !== 1 ? 's' : ''} and their messages</li>}
-              <li>All notes and distilled content</li>
-              <li>All extracted insights</li>
-              <li>Knowledge graph connections</li>
-            </ul>
-
-            <div className="flex items-center gap-3 justify-end">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                disabled={isDeleting}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteTopic}
-                disabled={isDeleting}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg transition-colors flex items-center gap-2"
-              >
-                {isDeleting ? (
-                  <>
-                    <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
-                    Deleting...
-                  </>
-                ) : (
-                  'Delete Topic'
-                )}
-              </button>
-            </div>
+      <Modal
+        open={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        title="Delete Topic"
+        labelledBy="delete-topic-dialog-title"
+        icon={
+          <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+            <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
           </div>
-        </div>
-      )}
+        }
+        footer={
+          <>
+            <button
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={isDeleting}
+              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDeleteTopic}
+              disabled={isDeleting}
+              className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg transition-colors flex items-center gap-2"
+            >
+              {isDeleting ? (
+                <>
+                  <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete Topic'
+              )}
+            </button>
+          </>
+        }
+      >
+        <p className="text-gray-600 dark:text-gray-300 mb-2">
+          Are you sure you want to delete <span className="font-semibold text-gray-900 dark:text-white">&quot;{topic.title}&quot;</span>?
+        </p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          This will permanently delete this topic and all associated data including:
+        </p>
+        <ul className="text-sm text-gray-500 dark:text-gray-400 mb-2 list-disc list-inside space-y-1">
+          {sessions.length > 0 && <li>{sessions.length} session{sessions.length !== 1 ? 's' : ''} and their messages</li>}
+          <li>All notes and distilled content</li>
+          <li>All extracted insights</li>
+          <li>Knowledge graph connections</li>
+        </ul>
+      </Modal>
 
       {/* Start Session CTA */}
       <div className="card mb-6 border-primary-200 dark:border-primary-800 bg-primary-50/50 dark:bg-primary-900/10">

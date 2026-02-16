@@ -4,6 +4,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { formatSettingsDate, formatFullDate } from '@/utils/dateFormat';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 import { isValidEmail } from '@/utils/validateEmail';
+import Modal from '@/components/common/Modal';
 
 const API_BASE = '/api';
 
@@ -1582,70 +1583,96 @@ export default function SettingsPage() {
       {/* MCP Confirmation Dialogs */}
 
       {/* Confirm Add Agent Dialog */}
-      {confirmAddAgent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" data-testid="confirm-add-dialog" role="dialog" aria-modal="true" aria-labelledby="add-dialog-title">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-              </div>
-              <h3 id="add-dialog-title" className="text-lg font-semibold text-gray-900 dark:text-white">Enable Agent Access</h3>
-            </div>
-            <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
-              Are you sure you want to grant MCP access to:
-            </p>
-            <p className="text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700/50 rounded px-3 py-2 mb-4">
-              {newAgentName.trim()}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-300 mb-6">
-              This agent will be able to access your verified, exportable personal context through the Model Context Protocol.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setConfirmAddAgent(false)}
-                className="btn-secondary text-sm px-4 py-2"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddAgentConfirmed}
-                className="btn-primary text-sm px-4 py-2"
-              >
-                Confirm & Add
-              </button>
-            </div>
+      <Modal
+        open={confirmAddAgent}
+        onClose={() => setConfirmAddAgent(false)}
+        title="Enable Agent Access"
+        labelledBy="add-dialog-title"
+        testId="confirm-add-dialog"
+        icon={
+          <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+            <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
           </div>
-        </div>
-      )}
+        }
+        footer={
+          <>
+            <button
+              onClick={() => setConfirmAddAgent(false)}
+              className="btn-secondary text-sm px-4 py-2"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleAddAgentConfirmed}
+              className="btn-primary text-sm px-4 py-2"
+            >
+              Confirm & Add
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
+          Are you sure you want to grant MCP access to:
+        </p>
+        <p className="text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700/50 rounded px-3 py-2 mb-4">
+          {newAgentName.trim()}
+        </p>
+        <p className="text-xs text-gray-500 dark:text-gray-300">
+          This agent will be able to access your verified, exportable personal context through the Model Context Protocol.
+        </p>
+      </Modal>
 
       {/* Confirm Toggle Agent Dialog */}
-      {confirmToggle && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" data-testid="confirm-toggle-dialog" role="dialog" aria-modal="true" aria-labelledby="toggle-dialog-title">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+      <Modal
+        open={!!confirmToggle}
+        onClose={() => setConfirmToggle(null)}
+        title={confirmToggle ? `${confirmToggle.currentEnabled ? 'Disable' : 'Enable'} Agent Access` : ''}
+        labelledBy="toggle-dialog-title"
+        testId="confirm-toggle-dialog"
+        icon={confirmToggle ? (
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+            confirmToggle.currentEnabled
+              ? 'bg-amber-100 dark:bg-amber-900/30'
+              : 'bg-green-100 dark:bg-green-900/30'
+          }`}>
+            <svg className={`w-5 h-5 ${
+              confirmToggle.currentEnabled
+                ? 'text-amber-600 dark:text-amber-400'
+                : 'text-green-600 dark:text-green-400'
+            }`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              {confirmToggle.currentEnabled ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              )}
+            </svg>
+          </div>
+        ) : undefined}
+        footer={confirmToggle ? (
+          <>
+            <button
+              onClick={() => setConfirmToggle(null)}
+              className="btn-secondary text-sm px-4 py-2"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleToggleAgentConfirmed}
+              className={`text-sm px-4 py-2 rounded-lg font-medium text-white ${
                 confirmToggle.currentEnabled
-                  ? 'bg-amber-100 dark:bg-amber-900/30'
-                  : 'bg-green-100 dark:bg-green-900/30'
-              }`}>
-                <svg className={`w-5 h-5 ${
-                  confirmToggle.currentEnabled
-                    ? 'text-amber-600 dark:text-amber-400'
-                    : 'text-green-600 dark:text-green-400'
-                }`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  {confirmToggle.currentEnabled ? (
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                  ) : (
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  )}
-                </svg>
-              </div>
-              <h3 id="toggle-dialog-title" className="text-lg font-semibold text-gray-900 dark:text-white">
-                {confirmToggle.currentEnabled ? 'Disable' : 'Enable'} Agent Access
-              </h3>
-            </div>
+                  ? 'bg-amber-600 hover:bg-amber-700'
+                  : 'bg-green-600 hover:bg-green-700'
+              }`}
+            >
+              {confirmToggle.currentEnabled ? 'Disable Access' : 'Enable Access'}
+            </button>
+          </>
+        ) : undefined}
+      >
+        {confirmToggle && (
+          <>
             <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
               {confirmToggle.currentEnabled
                 ? 'Are you sure you want to disable MCP access for:'
@@ -1654,71 +1681,56 @@ export default function SettingsPage() {
             <p className="text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700/50 rounded px-3 py-2 mb-4">
               {confirmToggle.agentName}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-300 mb-6">
+            <p className="text-xs text-gray-500 dark:text-gray-300">
               {confirmToggle.currentEnabled
                 ? 'This agent will no longer be able to access your personal context until re-enabled.'
                 : 'This agent will be able to access your verified, exportable personal context through MCP.'}
             </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setConfirmToggle(null)}
-                className="btn-secondary text-sm px-4 py-2"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleToggleAgentConfirmed}
-                className={`text-sm px-4 py-2 rounded-lg font-medium text-white ${
-                  confirmToggle.currentEnabled
-                    ? 'bg-amber-600 hover:bg-amber-700'
-                    : 'bg-green-600 hover:bg-green-700'
-                }`}
-              >
-                {confirmToggle.currentEnabled ? 'Disable Access' : 'Enable Access'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
 
       {/* Confirm Delete Agent Dialog */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" data-testid="confirm-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </div>
-              <h3 id="delete-dialog-title" className="text-lg font-semibold text-gray-900 dark:text-white">Revoke Agent Access</h3>
-            </div>
-            <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
-              Are you sure you want to permanently revoke MCP access for:
-            </p>
-            <p className="text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700/50 rounded px-3 py-2 mb-4">
-              {mcpPermissions.find((p) => p.id === confirmDelete)?.agentName || 'Unknown agent'}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-300 mb-6">
-              This will permanently remove this agent connection. You can add it again later if needed.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setConfirmDelete(null)}
-                className="btn-secondary text-sm px-4 py-2"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteAgentConfirmed}
-                className="btn-danger text-sm px-4 py-2"
-              >
-                Revoke Access
-              </button>
-            </div>
+      <Modal
+        open={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        title="Revoke Agent Access"
+        labelledBy="delete-dialog-title"
+        testId="confirm-delete-dialog"
+        icon={
+          <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
+            <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
           </div>
-        </div>
-      )}
+        }
+        footer={
+          <>
+            <button
+              onClick={() => setConfirmDelete(null)}
+              className="btn-secondary text-sm px-4 py-2"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDeleteAgentConfirmed}
+              className="btn-danger text-sm px-4 py-2"
+            >
+              Revoke Access
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
+          Are you sure you want to permanently revoke MCP access for:
+        </p>
+        <p className="text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700/50 rounded px-3 py-2 mb-4">
+          {mcpPermissions.find((p) => p.id === confirmDelete)?.agentName || 'Unknown agent'}
+        </p>
+        <p className="text-xs text-gray-500 dark:text-gray-300">
+          This will permanently remove this agent connection. You can add it again later if needed.
+        </p>
+      </Modal>
     </div>
   );
 }
