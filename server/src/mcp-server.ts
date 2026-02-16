@@ -174,6 +174,167 @@ function getTopicNotes(topicId: string): NoteRow[] {
   `).all(topicId, userId) as NoteRow[];
 }
 
+// ============================================
+// Big Five Personality Assessment Helpers
+// ============================================
+
+const BIG_FIVE_DOMAIN_LABELS: Record<string, string> = {
+  N: 'Neuroticism',
+  E: 'Extraversion',
+  O: 'Openness to Experience',
+  A: 'Agreeableness',
+  C: 'Conscientiousness',
+};
+
+const BIG_FIVE_FACET_LABELS: Record<string, string[]> = {
+  N: ['Anxiety', 'Anger', 'Depression', 'Self-Consciousness', 'Immoderation', 'Vulnerability'],
+  E: ['Friendliness', 'Gregariousness', 'Assertiveness', 'Activity Level', 'Excitement-Seeking', 'Cheerfulness'],
+  O: ['Imagination', 'Artistic Interests', 'Emotionality', 'Adventurousness', 'Intellect', 'Liberalism'],
+  A: ['Trust', 'Morality', 'Altruism', 'Cooperation', 'Modesty', 'Sympathy'],
+  C: ['Self-Efficacy', 'Orderliness', 'Dutifulness', 'Achievement-Striving', 'Self-Discipline', 'Cautiousness'],
+};
+
+interface AssessmentResultRow {
+  domain: string;
+  domainScore: number;
+  facet1Score: number | null;
+  facet2Score: number | null;
+  facet3Score: number | null;
+  facet4Score: number | null;
+  facet5Score: number | null;
+  facet6Score: number | null;
+}
+
+interface AssessmentAttemptRow {
+  id: string;
+  completedAt: string | null;
+  status: string;
+}
+
+function normalizeTo5(rawScore: number, questionCount: number): number {
+  if (questionCount <= 0) return rawScore;
+  return Math.round((rawScore / questionCount) * 100) / 100;
+}
+
+function getScoreLevel(normalizedScore: number): string {
+  if (normalizedScore >= 4) return 'High';
+  if (normalizedScore >= 3.5) return 'Above Average';
+  if (normalizedScore >= 2.5) return 'Average';
+  if (normalizedScore >= 2) return 'Below Average';
+  return 'Low';
+}
+
+const DOMAIN_Q_COUNT = 24;
+const FACET_Q_COUNT = 4;
+
+function getPersonalityData(): {
+  hasAssessment: boolean;
+  latestAttempt: { attemptId: string; completedAt: string | null } | null;
+  domainScores: Array<{
+    domain: string;
+    domainLabel: string;
+    score: number;
+    level: string;
+    facets: Array<{ name: string; score: number; level: string }>;
+  }>;
+  verifiedInsights: Array<{ content: string; confidence: number }>;
+  changeTrends: Array<{
+    attemptId: string;
+    completedAt: string | null;
+    domainScores: Array<{ domain: string; domainLabel: string; score: number }>;
+  }>;
+} {
+  // Get completed attempts
+  const completedAttempts = sqlite.prepare(`
+    SELECT id, completed_at as completedAt, status
+    FROM assessment_attempts
+    WHERE user_id = ? AND status = 'completed'
+    ORDER BY completed_at DESC
+  `).all(userId) as AssessmentAttemptRow[];
+
+  if (completedAttempts.length === 0) {
+    return { hasAssessment: false, latestAttempt: null, domainScores: [], verifiedInsights: [], changeTrends: [] };
+  }
+
+  const latestAttempt = completedAttempts[0];
+
+  // Get latest results
+  const latestResults = sqlite.prepare(`
+    SELECT domain, domain_score as domainScore,
+           facet_1_score as facet1Score, facet_2_score as facet2Score,
+           facet_3_score as facet3Score, facet_4_score as facet4Score,
+           facet_5_score as facet5Score, facet_6_score as facet6Score
+    FROM assessment_results
+    WHERE attempt_id = ?
+  `).all(latestAttempt.id) as AssessmentResultRow[];
+
+  const domainScores = latestResults.map(r => {
+    const facetLabels = BIG_FIVE_FACET_LABELS[r.domain] || [];
+    const facetScoreValues = [r.facet1Score, r.facet2Score, r.facet3Score, r.facet4Score, r.facet5Score, r.facet6Score];
+    const facets: Array<{ name: string; score: number; level: string }> = [];
+
+    for (let i = 0; i < facetScoreValues.length; i++) {
+      const fScore = facetScoreValues[i];
+      if (fScore !== null && fScore !== undefined) {
+        const normalized = normalizeTo5(fScore, FACET_Q_COUNT);
+        facets.push({
+          name: facetLabels[i] || `Facet ${i + 1}`,
+          score: normalized,
+          level: getScoreLevel(normalized),
+        });
+      }
+    }
+
+    const normalizedDomain = normalizeTo5(r.domainScore, DOMAIN_Q_COUNT);
+    return {
+      domain: r.domain,
+      domainLabel: BIG_FIVE_DOMAIN_LABELS[r.domain] || r.domain,
+      score: normalizedDomain,
+      level: getScoreLevel(normalizedDomain),
+      facets,
+    };
+  });
+
+  // Get verified exportable personality insights
+  const personalityInsights = sqlite.prepare(`
+    SELECT i.content, i.confidence_score as confidence
+    FROM insights i
+    JOIN topics t ON i.topic_id = t.id
+    WHERE i.user_id = ?
+      AND t.title = 'Big Five Personality Assessment'
+      AND i.verification_status = 'verified'
+      AND i.privacy_tier = 'exportable'
+    ORDER BY i.confidence_score DESC
+  `).all(userId) as Array<{ content: string; confidence: number }>;
+
+  // Build change trends
+  const changeTrends = completedAttempts.length > 1 ? completedAttempts.map(attempt => {
+    const results = sqlite.prepare(`
+      SELECT domain, domain_score as domainScore
+      FROM assessment_results
+      WHERE attempt_id = ?
+    `).all(attempt.id) as Array<{ domain: string; domainScore: number }>;
+
+    return {
+      attemptId: attempt.id,
+      completedAt: attempt.completedAt,
+      domainScores: results.map(r => ({
+        domain: r.domain,
+        domainLabel: BIG_FIVE_DOMAIN_LABELS[r.domain] || r.domain,
+        score: normalizeTo5(r.domainScore, DOMAIN_Q_COUNT),
+      })),
+    };
+  }) : [];
+
+  return {
+    hasAssessment: true,
+    latestAttempt: { attemptId: latestAttempt.id, completedAt: latestAttempt.completedAt },
+    domainScores,
+    verifiedInsights: personalityInsights,
+    changeTrends,
+  };
+}
+
 function searchInsights(query: string): InsightRow[] {
   const searchPattern = `%${query}%`;
   return sqlite.prepare(`
@@ -226,6 +387,9 @@ server.resource(
     const verifiedInsights = getVerifiedExportableInsights();
     const userTopics = getUserTopics();
 
+    // Include personality assessment data
+    const personalityData = getPersonalityData();
+
     const profileContext = {
       uri: 'user://profile',
       resourceType: 'profile',
@@ -249,6 +413,12 @@ server.resource(
         status: t.status,
         tags: t.tags ? JSON.parse(t.tags) : [],
       })),
+      personality: personalityData.hasAssessment ? {
+        latestAssessment: personalityData.latestAttempt,
+        domainScores: personalityData.domainScores,
+        verifiedInsights: personalityData.verifiedInsights,
+        changeTrends: personalityData.changeTrends,
+      } : null,
     };
 
     return {
@@ -340,6 +510,38 @@ server.resource(
   }
 );
 
+// Resource: user://personality
+// Serves Big Five personality assessment data (respecting privacy tiers)
+server.resource(
+  'personality',
+  'user://personality',
+  {
+    description: `Big Five personality assessment data for ${userRow.name}`,
+    mimeType: 'application/json',
+  },
+  async (uri) => {
+    const personalityData = getPersonalityData();
+
+    const personalityContext = {
+      uri: 'user://personality',
+      resourceType: 'personality',
+      userName: userRow.name,
+      generatedAt: new Date().toISOString(),
+      ...personalityData,
+    };
+
+    return {
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: 'application/json',
+          text: JSON.stringify(personalityContext, null, 2),
+        },
+      ],
+    };
+  }
+);
+
 // ============================================
 // Tools
 // ============================================
@@ -425,6 +627,25 @@ server.tool(
       lines.push('');
     }
 
+    // Include personality data in the context summary
+    const personalityData = getPersonalityData();
+    if (personalityData.hasAssessment && personalityData.domainScores.length > 0) {
+      lines.push('## Personality Profile (Big Five)');
+      lines.push('');
+      for (const ds of personalityData.domainScores) {
+        lines.push(`- **${ds.domainLabel}**: ${ds.score.toFixed(2)}/5 (${ds.level})`);
+      }
+      lines.push('');
+      if (personalityData.verifiedInsights.length > 0) {
+        lines.push('### Verified Personality Insights');
+        lines.push('');
+        for (const insight of personalityData.verifiedInsights) {
+          lines.push(`- ${insight.content}`);
+        }
+        lines.push('');
+      }
+    }
+
     lines.push('---');
     lines.push('*Generated by me.md*');
 
@@ -440,6 +661,7 @@ server.tool(
             content: markdown,
             totalInsights: verifiedInsights.length,
             topics: Object.keys(insightsByTopic),
+            hasPersonalityData: personalityData.hasAssessment,
           }, null, 2),
         },
       ],

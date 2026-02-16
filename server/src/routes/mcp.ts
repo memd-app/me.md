@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db, sqlite } from '../config/database.js';
-import { mcpAccessPermissions, insights, topics, users, notes } from '../models/schema.js';
+import { mcpAccessPermissions, insights, topics, users, notes, assessmentAttempts, assessmentResults } from '../models/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -200,6 +200,41 @@ function checkAgentAccess(userId: string, agentName?: string): boolean {
   return permission.isEnabled === true;
 }
 
+// ============================================
+// Big Five Personality Constants
+// ============================================
+const BIG_FIVE_DOMAIN_LABELS: Record<string, string> = {
+  N: 'Neuroticism',
+  E: 'Extraversion',
+  O: 'Openness to Experience',
+  A: 'Agreeableness',
+  C: 'Conscientiousness',
+};
+
+const BIG_FIVE_FACET_LABELS: Record<string, string[]> = {
+  N: ['Anxiety', 'Anger', 'Depression', 'Self-Consciousness', 'Immoderation', 'Vulnerability'],
+  E: ['Friendliness', 'Gregariousness', 'Assertiveness', 'Activity Level', 'Excitement-Seeking', 'Cheerfulness'],
+  O: ['Imagination', 'Artistic Interests', 'Emotionality', 'Adventurousness', 'Intellect', 'Liberalism'],
+  A: ['Trust', 'Morality', 'Altruism', 'Cooperation', 'Modesty', 'Sympathy'],
+  C: ['Self-Efficacy', 'Orderliness', 'Dutifulness', 'Achievement-Striving', 'Self-Discipline', 'Cautiousness'],
+};
+
+function normalizeTo5(rawScore: number, questionCount: number): number {
+  if (questionCount <= 0) return rawScore;
+  return Math.round((rawScore / questionCount) * 100) / 100;
+}
+
+function getScoreLevel(normalizedScore: number): string {
+  if (normalizedScore >= 4) return 'High';
+  if (normalizedScore >= 3.5) return 'Above Average';
+  if (normalizedScore >= 2.5) return 'Average';
+  if (normalizedScore >= 2) return 'Below Average';
+  return 'Low';
+}
+
+const DOMAIN_Q_COUNT = 24;
+const FACET_Q_COUNT = 4;
+
 // GET /api/mcp/resources/profile - user://profile resource
 // Serves verified profile context as structured data
 mcpRouter.get('/resources/profile', async (req, res) => {
@@ -253,6 +288,71 @@ mcpRouter.get('/resources/profile', async (req, res) => {
       .where(eq(topics.userId, userId))
       .all();
 
+    // Get personality assessment data
+    const completedAttempts = db.select()
+      .from(assessmentAttempts)
+      .where(
+        and(
+          eq(assessmentAttempts.userId, userId),
+          eq(assessmentAttempts.status, 'completed')
+        )
+      )
+      .orderBy(desc(assessmentAttempts.completedAt))
+      .limit(1)
+      .all();
+
+    let personalitySection: any = null;
+    if (completedAttempts.length > 0) {
+      const latestResults = db.select()
+        .from(assessmentResults)
+        .where(eq(assessmentResults.attemptId, completedAttempts[0].id))
+        .all();
+
+      if (latestResults.length > 0) {
+        const domainScores = latestResults.map(r => {
+          const normalized = normalizeTo5(r.domainScore, DOMAIN_Q_COUNT);
+          return {
+            domain: r.domain,
+            domainLabel: BIG_FIVE_DOMAIN_LABELS[r.domain] || r.domain,
+            score: normalized,
+            level: getScoreLevel(normalized),
+          };
+        });
+
+        // Get verified personality insights
+        const assessmentTopic = db.select()
+          .from(topics)
+          .where(and(eq(topics.userId, userId), eq(topics.title, 'Big Five Personality Assessment')))
+          .get();
+
+        let personalityInsights: Array<{ content: string; confidence: number | null }> = [];
+        if (assessmentTopic) {
+          personalityInsights = db.select({ content: insights.content, confidence: insights.confidenceScore })
+            .from(insights)
+            .where(and(
+              eq(insights.topicId, assessmentTopic.id),
+              eq(insights.userId, userId),
+              eq(insights.verificationStatus, 'verified'),
+              eq(insights.privacyTier, 'exportable')
+            ))
+            .orderBy(desc(insights.confidenceScore))
+            .all();
+        }
+
+        personalitySection = {
+          latestAssessment: {
+            attemptId: completedAttempts[0].id,
+            completedAt: completedAttempts[0].completedAt,
+          },
+          domainScores,
+          verifiedInsights: personalityInsights.map(i => ({
+            content: i.content,
+            confidence: i.confidence ?? 50,
+          })),
+        };
+      }
+    }
+
     // Categorize insights into profile sections
     const profileContext = {
       uri: 'user://profile',
@@ -277,6 +377,7 @@ mcpRouter.get('/resources/profile', async (req, res) => {
         status: t.status,
         tags: t.tags ? JSON.parse(t.tags as string) : [],
       })),
+      personality: personalitySection,
     };
 
     // Update last accessed time for the agent
@@ -545,6 +646,75 @@ mcpRouter.get('/tools/context-summary', async (req, res) => {
       lines.push('');
     }
 
+    // Include personality assessment data in context summary
+    const completedAttempts = db.select()
+      .from(assessmentAttempts)
+      .where(
+        and(
+          eq(assessmentAttempts.userId, userId),
+          eq(assessmentAttempts.status, 'completed')
+        )
+      )
+      .orderBy(desc(assessmentAttempts.completedAt))
+      .limit(1)
+      .all();
+
+    let hasPersonalityData = false;
+    if (completedAttempts.length > 0) {
+      const latestResults = db.select()
+        .from(assessmentResults)
+        .where(eq(assessmentResults.attemptId, completedAttempts[0].id))
+        .all();
+
+      if (latestResults.length > 0) {
+        hasPersonalityData = true;
+        lines.push('## Personality Profile (Big Five)');
+        lines.push('');
+        for (const r of latestResults) {
+          const domainLabel = BIG_FIVE_DOMAIN_LABELS[r.domain] || r.domain;
+          const normalized = normalizeTo5(r.domainScore, DOMAIN_Q_COUNT);
+          const level = getScoreLevel(normalized);
+          lines.push(`- **${domainLabel}**: ${normalized.toFixed(2)}/5 (${level})`);
+        }
+        lines.push('');
+
+        // Include verified personality insights
+        const assessmentTopic = db.select()
+          .from(topics)
+          .where(
+            and(
+              eq(topics.userId, userId),
+              eq(topics.title, 'Big Five Personality Assessment')
+            )
+          )
+          .get();
+
+        if (assessmentTopic) {
+          const personalityInsights = db.select({ content: insights.content })
+            .from(insights)
+            .where(
+              and(
+                eq(insights.topicId, assessmentTopic.id),
+                eq(insights.userId, userId),
+                eq(insights.verificationStatus, 'verified'),
+                eq(insights.privacyTier, 'exportable')
+              )
+            )
+            .orderBy(desc(insights.confidenceScore))
+            .all();
+
+          if (personalityInsights.length > 0) {
+            lines.push('### Verified Personality Insights');
+            lines.push('');
+            for (const pi of personalityInsights) {
+              lines.push(`- ${pi.content}`);
+            }
+            lines.push('');
+          }
+        }
+      }
+    }
+
     lines.push('---');
     lines.push('*Generated by me.md*');
 
@@ -556,9 +726,175 @@ mcpRouter.get('/tools/context-summary', async (req, res) => {
       content: markdown,
       totalInsights: verifiedInsights.length,
       topics: Object.keys(insightsByTopic),
+      hasPersonalityData,
     });
   } catch (error) {
     console.error('MCP context summary tool error:', error);
     res.status(500).json({ error: 'Failed to generate context summary' });
+  }
+});
+
+// GET /api/mcp/resources/personality - user://personality resource
+// Serves Big Five personality assessment data (respecting privacy tiers)
+mcpRouter.get('/resources/personality', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string;
+    const agentName = req.headers['x-agent-name'] as string || req.query.agentName as string;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    // Check agent access
+    if (agentName && !checkAgentAccess(userId, agentName)) {
+      return res.status(403).json({ error: 'Agent does not have MCP access' });
+    }
+
+    // Get user
+    const user = db.select().from(users).where(eq(users.id, userId)).get();
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get all completed attempts
+    const completedAttempts = db.select()
+      .from(assessmentAttempts)
+      .where(
+        and(
+          eq(assessmentAttempts.userId, userId),
+          eq(assessmentAttempts.status, 'completed')
+        )
+      )
+      .orderBy(desc(assessmentAttempts.completedAt))
+      .all();
+
+    if (completedAttempts.length === 0) {
+      return res.json({
+        uri: 'user://personality',
+        resourceType: 'personality',
+        userName: user.name,
+        hasAssessment: false,
+        message: 'No completed personality assessment found',
+        generatedAt: new Date().toISOString(),
+      });
+    }
+
+    const latestAttempt = completedAttempts[0];
+
+    // Get latest results
+    const latestResults = db.select()
+      .from(assessmentResults)
+      .where(eq(assessmentResults.attemptId, latestAttempt.id))
+      .all();
+
+    const domainScores = latestResults.map(r => {
+      const facetLabels = BIG_FIVE_FACET_LABELS[r.domain] || [];
+      const facetScoreValues = [r.facet1Score, r.facet2Score, r.facet3Score, r.facet4Score, r.facet5Score, r.facet6Score];
+      const facets: Array<{ name: string; score: number; level: string }> = [];
+
+      for (let i = 0; i < facetScoreValues.length; i++) {
+        const fScore = facetScoreValues[i];
+        if (fScore !== null && fScore !== undefined) {
+          const normalizedFacet = normalizeTo5(fScore, FACET_Q_COUNT);
+          facets.push({
+            name: facetLabels[i] || `Facet ${i + 1}`,
+            score: normalizedFacet,
+            level: getScoreLevel(normalizedFacet),
+          });
+        }
+      }
+
+      const normalizedDomain = normalizeTo5(r.domainScore, DOMAIN_Q_COUNT);
+      return {
+        domain: r.domain,
+        domainLabel: BIG_FIVE_DOMAIN_LABELS[r.domain] || r.domain,
+        score: normalizedDomain,
+        level: getScoreLevel(normalizedDomain),
+        facets,
+      };
+    });
+
+    // Get verified exportable personality insights
+    const assessmentTopic = db.select()
+      .from(topics)
+      .where(
+        and(
+          eq(topics.userId, userId),
+          eq(topics.title, 'Big Five Personality Assessment')
+        )
+      )
+      .get();
+
+    let verifiedInsights: Array<{ content: string; confidence: number | null }> = [];
+    if (assessmentTopic) {
+      verifiedInsights = db.select({
+        content: insights.content,
+        confidence: insights.confidenceScore,
+      })
+        .from(insights)
+        .where(
+          and(
+            eq(insights.topicId, assessmentTopic.id),
+            eq(insights.userId, userId),
+            eq(insights.verificationStatus, 'verified'),
+            eq(insights.privacyTier, 'exportable')
+          )
+        )
+        .orderBy(desc(insights.confidenceScore))
+        .all();
+    }
+
+    // Build change trends
+    const changeTrends = completedAttempts.length > 1 ? completedAttempts.map(attempt => {
+      const results = db.select()
+        .from(assessmentResults)
+        .where(eq(assessmentResults.attemptId, attempt.id))
+        .all();
+
+      return {
+        attemptId: attempt.id,
+        completedAt: attempt.completedAt,
+        domainScores: results.map(r => ({
+          domain: r.domain,
+          domainLabel: BIG_FIVE_DOMAIN_LABELS[r.domain] || r.domain,
+          score: normalizeTo5(r.domainScore, DOMAIN_Q_COUNT),
+        })),
+      };
+    }) : [];
+
+    // Update last accessed time for the agent
+    if (agentName) {
+      const now = new Date().toISOString();
+      db.update(mcpAccessPermissions)
+        .set({ lastAccessedAt: now, updatedAt: now })
+        .where(
+          and(
+            eq(mcpAccessPermissions.userId, userId),
+            eq(mcpAccessPermissions.agentName, agentName)
+          )
+        )
+        .run();
+    }
+
+    res.json({
+      uri: 'user://personality',
+      resourceType: 'personality',
+      userName: user.name,
+      hasAssessment: true,
+      latestAssessment: {
+        attemptId: latestAttempt.id,
+        completedAt: latestAttempt.completedAt,
+      },
+      domainScores,
+      verifiedInsights: verifiedInsights.map(i => ({
+        content: i.content,
+        confidence: i.confidence ?? 50,
+      })),
+      changeTrends,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('MCP personality resource error:', error);
+    res.status(500).json({ error: 'Failed to serve personality data' });
   }
 });
