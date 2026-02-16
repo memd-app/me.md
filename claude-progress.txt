@@ -1,3 +1,51 @@
+## Session - 2026-02-16 (Agent handling Feature #218)
+
+### Accomplished
+- Feature #218 (AI-Powered Topic Suggestions): PASSING
+  - Added `generatePersonalizedTopicSuggestions` function to server/src/services/ai.ts
+    - Builds a context from user's existing topics, verified insights, and topic connections
+    - Prompts Claude to suggest 3-5 personalized follow-up topics based on knowledge gaps
+    - Considers cross-topic connections and unexplored categories
+    - Returns structured JSON with title, description, category, intent, tags, suggestedQuestion, rationale
+    - Validates and sanitizes Claude output (categories, intents, string lengths)
+  - Added GET /api/topics/suggestions endpoint to server/src/routes/topics.ts
+    - Cold start path: users with <3 topics or no verified insights get filtered preset topics
+    - AI path: users with data get personalized suggestions from Claude
+    - Fallback path: if AI unavailable/rate-limited/fails, returns presets with appropriate message
+    - Filters out topics the user already has (by title, case-insensitive)
+    - Checks user AI rate limit before calling Claude
+  - Added POST /api/topics/suggestions/accept endpoint
+    - Creates a real topic from a suggestion (title, description, category, intent, tags, suggestedQuestion)
+    - Returns the created topic
+  - Added AI suggestions UI section to client/src/pages/TopicsPage.tsx
+    - Collapsible section with "AI-Suggested Topics" or "Suggested Topics" header
+    - Shows "Personalized" badge when suggestions come from AI
+    - Each suggestion card shows: title, description, category/intent badges, tags, rationale, opening question
+    - "Add to My Topics" button accepts a suggestion and refreshes topic list
+    - Dismiss button to hide individual suggestions
+    - Refresh button to re-fetch suggestions
+    - Loading state while generating suggestions
+    - Error handling for failed suggestion fetches
+
+### Verification
+- Client TypeScript compiles with zero errors (tsc --noEmit)
+- Vite production build succeeds (865 kB JS bundle)
+- Server starts cleanly with all routes active
+- Cold start suggestions: returns 5 preset topics for new users
+- Accept endpoint: creates real topic in database, suggestion removed from list
+- Auth required: returns 401 without authentication
+- No mock data patterns found in changed files
+- Test data cleaned up after verification
+
+### Files Changed
+- server/src/services/ai.ts: Added generatePersonalizedTopicSuggestions function + TopicSuggestionContext/AISuggestedTopic types
+- server/src/routes/topics.ts: Added GET /suggestions and POST /suggestions/accept endpoints + AI service imports
+- client/src/pages/TopicsPage.tsx: Added AISuggestion interface, suggestions state/fetch/accept/dismiss logic, and suggestions UI section
+
+### Current Status
+- 220/223 features passing (98.7%)
+- Feature #218 marked as passing
+
 ## Session - 2026-02-16 (Agent handling Feature #222)
 
 ### Accomplished
