@@ -1,3 +1,64 @@
+## Session - 2026-02-16 (Agent handling Features #126 and #127)
+
+### Accomplished
+- Feature #126 (Double-send message in chat prevented): PASSING
+  - SessionPage already had isSendingRef (synchronous useRef guard) from a previous commit
+  - Guard at sendMessage: checks both isSending state AND isSendingRef.current
+  - isSendingRef.current set to true synchronously before any async work
+  - Cleared in finally block so it always resets
+  - Send button disabled={!inputValue.trim() || isSending} prevents UI double-click
+  - Quick reply buttons hidden when isSending is true
+  - Verified: double-click on send produces only 1 user message and 1 AI response
+  - Send button confirmed disabled immediately after first click
+
+- Feature #127 (Back-and-resubmit form doesn't create duplicates): PASSING
+  - Added hasSubmitted state to CreateTopicPage
+  - handleSubmit checks (hasSubmitted || isSubmitting) to prevent resubmission
+  - After successful creation: setHasSubmitted(true) marks form as done
+  - navigate('/app/topics', { replace: true }) removes form from browser history
+  - Submit button disabled when hasSubmitted is true, shows "Topic Created!"
+  - Verified: pressing back after create does NOT return to form (replace worked)
+  - Only 1 topic with unique title exists after full test flow
+
+### Verification
+- Both features verified with Playwright browser automation
+- No mock data patterns in client/src
+- Screenshots confirm correct behavior: single message in chat, single topic created
+- Test data cleaned up (user, topics, sessions all deleted)
+
+### Current Status
+- Features #126 and #127 both passing
+- 144/209 features passing
+
+## Session - 2026-02-16 (Agent handling Features #118, #119, #120)
+
+### Accomplished
+- Feature #118 (Color contrast meets WCAG standards): PASSING
+  - Audited all Tailwind color classes for WCAG 2.1 AA compliance (4.5:1 for text, 3:1 for large text)
+  - Fixed dark:text-gray-400 → dark:text-gray-300 across 23+ files (contrast 4.0→7.5 ratio)
+  - Fixed text-gray-400 dark:text-gray-500 → text-gray-500 dark:text-gray-400 patterns
+  - Manual fixes for nuanced components (Sidebar, VerifiedBadge, DashboardPage badges)
+  - Batch sed replacements for consistent patterns across remaining files
+
+- Feature #119 (Form labels on all input fields): PASSING
+  - Added sr-only labels with htmlFor/id associations to 6 inputs missing labels:
+    - SearchPage.tsx search input
+    - SessionPage.tsx message textarea
+    - ConflictsSection.tsx clarification textarea + optional note input (htmlFor/id association)
+    - SettingsPage.tsx MCP agent name + search query inputs
+
+- Feature #120 (Error announcements for screen readers): PASSING
+  - Added role="alert" and aria-live="assertive" to error displays in 12 files
+  - Added aria-describedby on form inputs linking to error messages (Login, Register, ForgotPassword, ResetPassword, Onboarding)
+  - Added aria-invalid on Onboarding field-level errors
+  - Added id attributes to all error containers for aria-describedby references
+  - Added aria-hidden="true" to decorative error icons
+
+### Stats
+- Progress: 142/209 features passing (67.9%)
+
+---
+
 ## Session - 2026-02-16 (Agent handling Features #123, #124, #125)
 
 ### Accomplished
