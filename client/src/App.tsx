@@ -27,6 +27,7 @@ import TopicDetailPage from '@/pages/TopicDetailPage';
 import SessionPage from '@/pages/SessionPage';
 import TemplatesPage from '@/pages/TemplatesPage';
 import NotesPage from '@/pages/NotesPage';
+import ImportPage from '@/pages/ImportPage';
 
 function App() {
   return (
@@ -77,6 +78,7 @@ function App() {
             <Route path="sandbox" element={<SandboxPage />} />
             <Route path="bookmarks" element={<BookmarksPage />} />
             <Route path="search" element={<SearchPage />} />
+            <Route path="import" element={<ImportPage />} />
             <Route path="export" element={<ExportPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>

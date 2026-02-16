@@ -13,6 +13,7 @@ const navItems = [
   { to: '/app/sandbox', label: 'Sandbox', icon: '🧪' },
   { to: '/app/bookmarks', label: 'Bookmarks', icon: '⭐' },
   { to: '/app/search', label: 'Search', icon: '🔍' },
+  { to: '/app/import', label: 'Import', icon: '📥' },
   { to: '/app/export', label: 'Export', icon: '📤' },
   { to: '/app/settings', label: 'Settings', icon: '⚙️' },
 ];
