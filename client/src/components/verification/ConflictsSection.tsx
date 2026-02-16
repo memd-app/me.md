@@ -486,10 +486,11 @@ export default function ConflictsSection() {
                       {/* Clarification note input */}
                       {resolutionState.resolution === 'clarified' && (
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          <label htmlFor="conflict-clarification" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Your clarification:
                           </label>
                           <textarea
+                            id="conflict-clarification"
                             value={resolutionState.note}
                             onChange={(e) => setResolutionState({ ...resolutionState, note: e.target.value })}
                             placeholder="Explain how these insights relate or clarify the apparent contradiction..."
@@ -502,10 +503,11 @@ export default function ConflictsSection() {
                       {/* Optional note for non-clarified resolutions */}
                       {resolutionState.resolution && resolutionState.resolution !== 'clarified' && (
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          <label htmlFor="conflict-resolution-note" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Note (optional):
                           </label>
                           <input
+                            id="conflict-resolution-note"
                             type="text"
                             value={resolutionState.note}
                             onChange={(e) => setResolutionState({ ...resolutionState, note: e.target.value })}

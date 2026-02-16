@@ -1908,7 +1908,9 @@ export default function SessionPage() {
         <div className={`px-3 sm:px-6 py-3 sm:py-4 bg-white dark:bg-dark-surface border-t border-gray-200 dark:border-dark-border shrink-0 ${isFullscreen ? 'max-w-4xl mx-auto w-full' : ''}`}>
           <form onSubmit={handleSubmit} className="flex items-end gap-2 sm:gap-3">
             <div className="flex-1 relative">
+              <label htmlFor="session-message-input" className="sr-only">Type your response</label>
               <textarea
+                id="session-message-input"
                 ref={inputRef}
                 value={inputValue}
                 onChange={handleInputChange}

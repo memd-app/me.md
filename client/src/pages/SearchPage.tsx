@@ -332,7 +332,9 @@ export default function SearchPage() {
       {/* Search input */}
       <div className="relative mb-6">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+        <label htmlFor="global-search" className="sr-only">Search topics, insights, sessions, notes</label>
         <input
+          id="global-search"
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}

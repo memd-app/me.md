@@ -1336,7 +1336,9 @@ export default function SettingsPage() {
                   Enter the name of the AI agent or application that should have access to your personal context.
                 </p>
                 <div className="flex items-center gap-2">
+                  <label htmlFor="mcp-agent-name" className="sr-only">Agent name</label>
                   <input
+                    id="mcp-agent-name"
                     type="text"
                     value={newAgentName}
                     onChange={(e) => setNewAgentName(e.target.value)}
@@ -1472,7 +1474,9 @@ export default function SettingsPage() {
                 Search across your verified, exportable insights by keyword.
               </p>
               <div className="flex items-center gap-2 mb-3">
+                <label htmlFor="mcp-search-query" className="sr-only">Search your verified knowledge</label>
                 <input
+                  id="mcp-search-query"
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
