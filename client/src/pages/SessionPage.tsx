@@ -100,6 +100,7 @@ export default function SessionPage() {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const isSendingRef = useRef(false); // Synchronous guard against double-send
 
   // Scroll to bottom of messages
   const scrollToBottom = useCallback(() => {
@@ -659,7 +660,9 @@ export default function SessionPage() {
 
   // Send a message with SSE streaming
   const sendMessage = async (content: string, voiceInput?: boolean) => {
-    if (!user || !session || !content.trim() || isSending) return;
+    // Use ref for synchronous double-click protection (state updates are async)
+    if (!user || !session || !content.trim() || isSending || isSendingRef.current) return;
+    isSendingRef.current = true;
 
     const trimmedContent = content.trim();
     const isVoice = voiceInput || isVoiceInputPending;
@@ -776,6 +779,7 @@ export default function SessionPage() {
       setIsStreaming(false);
     } finally {
       setIsSending(false);
+      isSendingRef.current = false;
       streamAbortRef.current = null;
       inputRef.current?.focus();
     }
@@ -1507,8 +1511,9 @@ export default function SessionPage() {
           {!isFullscreen && (
             <Link
               to={`/app/topics/${topic.id}`}
-              className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors shrink-0"
+              className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
               title="Back to topic"
+              aria-label="Go back to topic"
             >
               <svg className="w-5 h-5 text-gray-500 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
