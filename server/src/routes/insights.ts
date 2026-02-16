@@ -346,11 +346,37 @@ insightsRouter.post('/:id/verify', async (req, res) => {
       }
     }
 
+    // Check if all insights for this topic are now verified/rejected
+    // If so, automatically transition topic status to 'refined'
+    let topicRefined = false;
+    if (insight.topicId) {
+      const topicInsights = db.select().from(insights)
+        .where(eq(insights.topicId, insight.topicId))
+        .all();
+      const allResolved = topicInsights.length > 0 && topicInsights.every(
+        i => i.verificationStatus === 'verified' || i.verificationStatus === 'rejected'
+      );
+      if (allResolved) {
+        const topic = db.select().from(topics)
+          .where(eq(topics.id, insight.topicId))
+          .get();
+        if (topic && topic.status === 'extracted') {
+          db.update(topics).set({
+            status: 'refined',
+            updatedAt: now,
+          }).where(eq(topics.id, insight.topicId)).run();
+          topicRefined = true;
+          console.log(`[me.md] Topic "${topic.title}" auto-transitioned to 'refined' - all insights resolved`);
+        }
+      }
+    }
+
     res.json({
       insight: updated,
       message: 'Insight verified successfully',
       conceptNodeCreated: !!newConceptNode,
       conceptNode: newConceptNode,
+      topicRefined,
     });
   } catch (error) {
     console.error('Verify insight error:', error);
@@ -416,7 +442,32 @@ insightsRouter.post('/:id/reject', async (req, res) => {
       db.delete(conceptNodes).where(eq(conceptNodes.insightId, insightId)).run();
     }
 
-    res.json({ insight: updated, message: 'Insight rejected', removedConceptNodes: linkedConceptNodes.length });
+    // Check if all insights for this topic are now verified/rejected
+    // If so, automatically transition topic status to 'refined'
+    let topicRefined = false;
+    if (insight.topicId) {
+      const topicInsights = db.select().from(insights)
+        .where(eq(insights.topicId, insight.topicId))
+        .all();
+      const allResolved = topicInsights.length > 0 && topicInsights.every(
+        i => i.verificationStatus === 'verified' || i.verificationStatus === 'rejected'
+      );
+      if (allResolved) {
+        const topicRecord = db.select().from(topics)
+          .where(eq(topics.id, insight.topicId))
+          .get();
+        if (topicRecord && topicRecord.status === 'extracted') {
+          db.update(topics).set({
+            status: 'refined',
+            updatedAt: now,
+          }).where(eq(topics.id, insight.topicId)).run();
+          topicRefined = true;
+          console.log(`[me.md] Topic "${topicRecord.title}" auto-transitioned to 'refined' - all insights resolved`);
+        }
+      }
+    }
+
+    res.json({ insight: updated, message: 'Insight rejected', removedConceptNodes: linkedConceptNodes.length, topicRefined });
   } catch (error) {
     console.error('Reject insight error:', error);
     res.status(500).json({ error: 'Failed to reject insight' });
