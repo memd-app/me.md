@@ -32,6 +32,7 @@ interface Stats {
 interface EditState {
   insightId: string;
   editedContent: string;
+  expectedUpdatedAt: string | null;
 }
 
 interface HistoryEntry {
@@ -203,7 +204,7 @@ export default function VerificationPage() {
   };
 
   const handleStartEdit = (insight: Insight) => {
-    setEditState({ insightId: insight.id, editedContent: insight.content });
+    setEditState({ insightId: insight.id, editedContent: insight.content, expectedUpdatedAt: insight.updatedAt });
     setIntervalDropdownOpen(null);
     // Focus textarea after render
     setTimeout(() => {
@@ -235,8 +236,27 @@ export default function VerificationPage() {
           'Content-Type': 'application/json',
           'x-user-id': user.id,
         },
-        body: JSON.stringify({ content: editState.editedContent.trim() }),
+        body: JSON.stringify({
+          content: editState.editedContent.trim(),
+          expectedUpdatedAt: editState.expectedUpdatedAt,
+        }),
       });
+
+      if (res.status === 409) {
+        // Concurrent edit conflict detected
+        const conflictData = await res.json().catch(() => ({}));
+        // Update local state with the server's current content
+        setPendingInsights(prev =>
+          prev.map(i =>
+            i.id === editState.insightId
+              ? { ...i, content: conflictData.currentContent, updatedAt: conflictData.currentUpdatedAt }
+              : i
+          )
+        );
+        setEditState(null);
+        setError('This insight was modified in another session. The latest version has been loaded. Please review and try editing again.');
+        return;
+      }
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));

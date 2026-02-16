@@ -528,11 +528,12 @@ insightsRouter.post('/check-reverification', async (req, res) => {
 });
 
 // PUT /api/insights/:id - Edit an insight's content
+// Supports optimistic concurrency control via expectedUpdatedAt parameter
 insightsRouter.put('/:id', async (req, res) => {
   try {
     const userId = req.headers['x-user-id'] as string || req.body.userId;
     const insightId = req.params.id;
-    const { content, agreementScore, privacyTier } = req.body;
+    const { content, agreementScore, privacyTier, expectedUpdatedAt } = req.body;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -544,6 +545,17 @@ insightsRouter.put('/:id', async (req, res) => {
 
     if (!insight) {
       return res.status(404).json({ error: 'Insight not found' });
+    }
+
+    // Optimistic concurrency control: if client provides expectedUpdatedAt,
+    // check it matches the current value to detect concurrent edits
+    if (expectedUpdatedAt && insight.updatedAt !== expectedUpdatedAt) {
+      return res.status(409).json({
+        error: 'Conflict: this insight was modified by another session',
+        currentContent: insight.content,
+        currentUpdatedAt: insight.updatedAt,
+        yourExpectedUpdatedAt: expectedUpdatedAt,
+      });
     }
 
     const now = new Date().toISOString();
