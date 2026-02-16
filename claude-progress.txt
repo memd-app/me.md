@@ -1,3 +1,56 @@
+## Session - 2026-02-16 (Agent handling Feature #210)
+
+### Accomplished
+- Feature #210 (Integrate Claude API into Interview Sessions): PASSING
+
+### Changes Made
+- **server/src/services/ai.ts** (NEW): AI service layer wrapping the Anthropic SDK
+  - Lazy initialization of Anthropic client from process.env.ANTHROPIC_API_KEY
+  - `isAIAvailable()` check for whether API key is configured
+  - `generateClaudeResponse()` for non-streaming Claude API calls
+  - `streamClaudeResponse()` async generator for real-time SSE streaming
+  - `checkUserAIRateLimit()` per-user rate limiting (60 calls/hour)
+  - `buildSystemPrompt()` constructs rich system prompts including:
+    - Topic title, description, and intent
+    - Current questioning methodology (Clean Language, Socratic, Five Whys, Appreciative Inquiry, Micro Phenomenology)
+    - Interview map angle guidance (Journey, Principles, Frameworks, Examples, Tensions)
+    - User profile context (name, occupation, verified insights, previous topics)
+    - Cross-topic insight connections for reference
+    - Response format guidelines
+  - `buildMiniSessionSystemPrompt()` for quick-win sessions
+  - Rate limit cleanup interval (30 min)
+  - Comprehensive error handling with status-specific logging (429, 401, 403, overloaded)
+
+- **server/src/routes/sessions.ts**: Updated 3 endpoints to use Claude API
+  - POST /api/sessions/:id/messages: Tries Claude API → falls back to template
+  - POST /api/sessions/:id/messages/retry: Tries Claude API → falls back to template
+  - POST /api/sessions/:id/messages/stream: Uses real Claude streaming → falls back to simulated streaming with template
+  - All paths check per-user rate limit before making API calls
+  - Mini sessions also try Claude API with mini-session-specific system prompt
+  - Template-based generateAIResponse() preserved as graceful fallback
+
+### Architecture
+- Claude model: claude-sonnet-4-20250514 (max_tokens: 1024)
+- Fallback strategy: If ANTHROPIC_API_KEY is missing/invalid or API call fails,
+  all responses gracefully fall back to the existing template-based system
+- Rate limiting: 60 AI calls per user per hour, tracked in-memory
+- Conversation history: Full message history passed to Claude as alternating user/assistant messages
+- System prompt: Rich context including methodology, interview angle, profile, and verified insights
+
+### Verification
+- TypeScript compiles with zero new errors (only 2 pre-existing errors in graph.ts and sessions.ts line 1100)
+- Server loads all modules successfully (verified via node startup)
+- No mock data patterns found in new code
+- Client TypeScript compiles with zero errors
+- Feature #210 marked as passing
+
+### Current Status
+- 210/223 features passing (94.2%)
+- Feature #210 marked as passing
+
+### What to Work on Next
+- Continue with next assigned features from orchestrator
+
 ## Session - 2026-02-16 (Agent handling Feature #207)
 
 ### Accomplished
