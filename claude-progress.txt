@@ -1,3 +1,33 @@
+## Session - 2026-02-16 (Agent handling Feature #220)
+
+### Accomplished
+- Feature #220 (Include Notes and Sessions in JSON Export): PASSING
+  - Added notes (distilled session summaries) to rawData in JSON export
+  - Added session metadata (topicTitle, status, messageCount, duration, timestamps) to rawData
+  - Session message counts aggregated via SQL GROUP BY for efficiency
+  - Notes include parsed contentJson (handles double-encoded strings)
+  - Privacy tiers respected: notes and sessions exported for the authenticated user only
+  - Updated exportVersion from '1.0' to '1.1' to reflect schema change
+  - Added totalNotes, totalSessions, completedSessions to metadata
+  - Updated ExportPage.tsx JSON format description to mention comprehensive data types
+  - Imported `sessions`, `messages` schema and `count` from drizzle-orm
+
+### Files Changed
+- server/src/routes/profile.ts: Added notes and sessions queries to JSON export endpoint
+- client/src/pages/ExportPage.tsx: Updated JSON format description
+
+### Verification
+- TypeScript compiles with zero errors (client tsc --noEmit)
+- Server starts cleanly, health check passes
+- JSON export endpoint returns correct structure with notes and sessions arrays
+- Tested with real user: session includes topicTitle, messageCount, status fields
+- No mock data patterns found in modified files
+- Test data cleaned up after verification
+
+### Current Status
+- 213/223 features passing (95.5%)
+- Feature #220 marked as passing
+
 ## Session - 2026-02-16 (Agent handling Feature #219)
 
 ### Accomplished
