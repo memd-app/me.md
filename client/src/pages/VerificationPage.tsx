@@ -783,6 +783,19 @@ export default function VerificationPage() {
                         <span className={`text-xs ${getConfidenceColor(insight.confidenceScore)}`}>
                           {insight.confidenceScore}% confidence
                         </span>
+
+                        {/* Extraction method indicator — only shown for fallback */}
+                        {insight.extractionMethod === 'fallback' && (
+                          <span
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                            title="Rule-based extraction (AI was unavailable)"
+                          >
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            Rule-based
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -945,6 +958,18 @@ export default function VerificationPage() {
                     </svg>
                     {insight.confidenceScore}% ({getConfidenceLabel(insight.confidenceScore)})
                   </span>
+                  {/* Extraction method indicator — only shown for fallback */}
+                  {insight.extractionMethod === 'fallback' && (
+                    <span
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                      title="This insight was extracted using rule-based pattern matching instead of AI. It may be lower quality — please review carefully."
+                    >
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      Rule-based
+                    </span>
+                  )}
                   {insight.topicTitle && (
                     <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1208,6 +1233,19 @@ export default function VerificationPage() {
                   </svg>
                   {insight.confidenceScore}% ({getConfidenceLabel(insight.confidenceScore)})
                 </span>
+
+                {/* Extraction method indicator — only shown for fallback */}
+                {insight.extractionMethod === 'fallback' && (
+                  <span
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                    title="This insight was extracted using rule-based pattern matching instead of AI. It may be lower quality — please review carefully."
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    Rule-based
+                  </span>
+                )}
 
                 {/* Source topic */}
                 {insight.topicTitle && (
