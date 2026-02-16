@@ -1,3 +1,42 @@
+## Session - 2026-02-16 (Agent handling Feature #207)
+
+### Accomplished
+- Feature #207 (Insights per topic breakdown matches actual data): PASSING
+
+### Changes Made
+- **server/src/routes/dashboard.ts**: Added `topicInsightBreakdown` array to GET /api/dashboard/stats
+  - Each entry includes: topicId, topicTitle, category, totalInsights, verified, rejected, unverified
+  - Filtered to only show topics with insights, sorted by most insights first
+  - Uses same userInsights/userTopics arrays already fetched (no extra DB queries)
+
+- **client/src/pages/DashboardPage.tsx**: Added "Insights per Topic" section to dashboard
+  - Shows each topic with insight count, linked to topic detail page
+  - Stacked horizontal bar chart showing verified (green) / pending (amber) / rejected (red) proportions
+  - Category icon and color from existing CATEGORY_COLORS/CATEGORY_ICONS
+  - Legend for bar colors
+  - Loading and empty states
+  - Added TopicInsightBreakdown interface and updated DashboardStats type
+
+- **server/src/routes/insights.ts**: Added DELETE /api/insights/:id endpoint
+  - Deletes insight, its verification history, concept nodes, and concept edges
+  - Auth-protected: only insight owner can delete
+  - Returns 404 if insight not found
+
+### Verification
+- Created 3 topics with 3, 2, 1 insights respectively
+- Dashboard API correctly showed topicInsightBreakdown with correct counts
+- Added extra insight to TopicB -> dashboard updated (2->3)
+- Deleted insight from TopicA -> dashboard count decreased (3->2)
+- Data persists across server restart (verified)
+- TypeScript compiles with zero errors
+- Vite production build succeeds (654 modules transformed)
+- No mock data patterns found in client/src or server/src
+- No globalThis, devStore, or dev-store patterns
+
+### Current Status
+- 206/209 features passing (98.6%)
+- Feature #207 marked as passing
+
 ## Session - 2026-02-16 (Agent handling Feature #209)
 
 ### Accomplished
