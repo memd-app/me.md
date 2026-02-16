@@ -1,3 +1,44 @@
+## Session - 2026-02-16 (Agent handling Features #128, #129, #130)
+
+### Accomplished
+- Feature #128 (Concurrent edits to same insight handled gracefully): PASSING
+  - Backend: PUT /api/insights/:id now accepts optional `expectedUpdatedAt` parameter
+  - If `expectedUpdatedAt` doesn't match the server's current `updatedAt`, returns 409 Conflict
+  - 409 response includes `currentContent` and `currentUpdatedAt` so client can show latest version
+  - Frontend: VerificationPage sends `expectedUpdatedAt` when editing insights
+  - Handles 409 by loading the latest version into state and showing a user-friendly conflict message
+  - Backward compatible: edits without `expectedUpdatedAt` always succeed (last-write-wins)
+  - Verified: Tab1 succeeds, Tab2 gets 409, no data corruption, retry with fresh timestamp works
+
+- Feature #129 (Viewing a deleted topic shows appropriate state): PASSING
+  - TopicDetailPage now detects 404 on all API calls and sets `topicNotFound` state
+  - Shows clear "Topic not found" page with message and "Back to Topics" link
+  - All interaction handlers check for 404: fetchTopic, startSession, saveEdit, addUrl, removeUrl
+  - Delete of already-deleted topic gracefully navigates back to topics list
+  - Backend already returns 404 for GET/PUT/DELETE/POST-session on deleted topics
+  - Verified: All 4 operations on deleted topic return 404 correctly
+
+- Feature #130 (Rapid navigation between pages doesn't cause errors): PASSING
+  - Added AbortController to useEffect fetch calls in 8 key pages:
+    DashboardPage, TopicsPage, KnowledgeGraphPage, BookmarksPage,
+    NotesPage, TopicDetailPage, VerificationPage, ProfilePage
+  - Fetch requests are cancelled via AbortController when navigating away
+  - AbortError is silently caught (no console errors from cancelled requests)
+  - Loading state only updated if request was not aborted (prevents stale state)
+  - Verified: 5 rounds of rapid concurrent page API calls all succeed cleanly
+
+### Verification
+- TypeScript compiles clean (zero errors)
+- No mock data patterns in any modified files
+- API tests: concurrent edit conflict detection works (6 tests pass)
+- API tests: deleted topic returns 404 on all operations (4 tests pass)
+- API tests: rapid navigation simulation with 9 concurrent requests across 5 rounds (all pass)
+- Server restart persistence: all data in real SQLite database
+
+### Current Status
+- Features #128, #129, #130 all passing
+- 145/209 features passing (estimated)
+
 ## Session - 2026-02-16 (Agent handling Features #126 and #127)
 
 ### Accomplished
