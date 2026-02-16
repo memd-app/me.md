@@ -287,6 +287,7 @@ export default function SettingsPage() {
   const [notifications, setNotifications] = useState({
     sessionReminders: true,
     verificationAlerts: true,
+    reVerificationReminders: true,
     insightUpdates: false,
   });
   const [prefsSaving, setPrefsSaving] = useState(false);
@@ -1278,6 +1279,27 @@ export default function SettingsPage() {
                   <span
                     className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                       notifications.verificationAlerts ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-white">Re-verification Reminders</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-300">Get periodic reminders when verified insights are due for re-verification</p>
+                </div>
+                <button
+                  onClick={() => saveNotificationPref('reVerificationReminders', !notifications.reVerificationReminders)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${
+                    notifications.reVerificationReminders ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
+                  }`}
+                  role="switch"
+                  aria-checked={notifications.reVerificationReminders}
+                  disabled={prefsSaving}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      notifications.reVerificationReminders ? 'translate-x-6' : 'translate-x-1'
                     }`}
                   />
                 </button>
