@@ -1,3 +1,24 @@
+## Session - 2026-02-16 (Agent handling Feature #224)
+
+### Accomplished
+- Feature #224 (AI-Powered Insight Extraction for Imports): PASSING
+  - Verified POST /api/import/:id/process uses the unified AI extraction service (insightExtraction.ts)
+  - Removed 184 lines of dead code: scoreExtractedInsight, extractInsightsFromChatgpt, extractInsightsFromUrl, extractInsightsFromText
+  - All import types (URL, text, file, ChatGPT) flow through unified AI pipeline with Claude
+  - Rule-based fallback preserved in insightExtraction.ts for when AI is unavailable
+  - Different source types get tailored prompts (ChatGPT memory has structured sections, URLs have web content focus, etc.)
+  - Insights stored as 'unverified' with AI-assigned confidence scores (50-95)
+  - Client TypeScript compiles with zero errors
+  - Server starts cleanly, health check passes
+  - No mock data patterns found in server/src or client/src
+
+### Files Changed
+- server/src/routes/import.ts: Removed dead rule-based extraction functions (184 lines), added architecture comment
+
+### Current Status
+- 225/226 features passing (99.6%)
+- Feature #224 marked as passing
+
 ## Session - 2026-02-16 (Agent handling Feature #226)
 
 ### Accomplished
