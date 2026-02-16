@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { formatShortDate } from '@/utils/dateFormat';
 
 interface SearchResult {
   id: string;
@@ -306,15 +307,7 @@ export default function SearchPage() {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
-  function formatDate(dateStr?: string): string {
-    if (!dateStr) return '';
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  }
+  // Date formatting uses shared utility from @/utils/dateFormat
 
   // Check if any advanced filters are active
   const hasActiveAdvancedFilters = !!(verificationStatus || dateFrom || dateTo || minConfidence > 0);
@@ -611,7 +604,7 @@ export default function SearchPage() {
                     )}
                     {result.createdAt && (
                       <span className="text-xs text-gray-500 dark:text-gray-300 ml-auto">
-                        {formatDate(result.createdAt)}
+                        {formatShortDate(result.createdAt)}
                       </span>
                     )}
                   </div>

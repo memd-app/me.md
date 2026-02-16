@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatShortDate } from '@/utils/dateFormat';
 import * as d3 from 'd3';
 
 interface GraphNode {
@@ -741,7 +742,7 @@ export default function KnowledgeGraphPage() {
                   )}
                   {hoveredNode.lastUpdated && (
                     <p className="text-xs text-gray-400 mt-1">
-                      Updated: {new Date(hoveredNode.lastUpdated).toLocaleDateString()}
+                      Updated: {formatShortDate(hoveredNode.lastUpdated)}
                     </p>
                   )}
                 </>

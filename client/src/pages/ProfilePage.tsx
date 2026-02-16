@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocation } from 'react-router-dom';
 import VerifiedBadge from '@/components/VerifiedBadge';
+import { formatDateTime } from '@/utils/dateFormat';
 
 interface ProfileSection {
   title: string;
@@ -374,10 +375,7 @@ export default function ProfilePage() {
       {summary && summary.generatedAt && (
         <p className="mt-6 text-xs text-gray-500 dark:text-gray-300 text-center">
           Profile auto-generated from verified insights &middot; Last updated{' '}
-          {new Date(summary.generatedAt).toLocaleString('en-US', {
-            dateStyle: 'medium',
-            timeStyle: 'short',
-          })}
+          {formatDateTime(summary.generatedAt)}
           <span className="block mt-1 text-gray-400 dark:text-gray-600">
             Profile updates automatically when insights are verified, edited, or removed
           </span>

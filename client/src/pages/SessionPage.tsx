@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatFullDate, formatDateTime, formatTime } from '@/utils/dateFormat';
 
 interface Message {
   id: string;
@@ -503,7 +504,7 @@ export default function SessionPage() {
     const title = note.title || 'Untitled Note';
     // Build markdown header with metadata
     const topicTitle = topic?.title || 'Unknown Topic';
-    const createdDate = note.createdAt ? new Date(note.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+    const createdDate = note.createdAt ? formatFullDate(note.createdAt) : '';
     const formatLabel = FORMAT_LABELS[selectedFormat] || 'Full Analysis';
 
     let markdownContent: string;
@@ -1707,7 +1708,7 @@ export default function SessionPage() {
               </svg>
               <span className="text-sm text-gray-600 dark:text-gray-300">
                 This session has been completed and distilled.
-                {session.completedAt && ` Completed ${new Date(session.completedAt).toLocaleString()}`}
+                {session.completedAt && ` Completed ${formatDateTime(session.completedAt)}`}
               </span>
             </div>
             {note && (
@@ -1768,7 +1769,7 @@ export default function SessionPage() {
                   : 'text-gray-500 dark:text-gray-300'
               }`}>
                 <span className="text-xs">
-                  {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {formatTime(message.createdAt)}
                 </span>
                 {/* Bookmark button - only show for real messages (not temp) */}
                 {!message.id.startsWith('temp-') && (

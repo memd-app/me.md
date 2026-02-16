@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { formatShortDate } from '@/utils/dateFormat';
 
 interface Insight {
   id: string;
@@ -245,18 +246,7 @@ export default function ConflictsSection() {
     }
   };
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '';
-    try {
-      return new Date(dateStr).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
-    } catch {
-      return dateStr;
-    }
-  };
+  const formatDate = (dateStr: string | null) => formatShortDate(dateStr);
 
   if (isLoading) {
     return (

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { formatSettingsDate, formatFullDate } from '@/utils/dateFormat';
 
 const API_BASE = '/api';
 
@@ -541,20 +542,7 @@ export default function SettingsPage() {
     }
   };
 
-  const formatMcpDate = (dateStr: string | null): string => {
-    if (!dateStr) return 'Never';
-    try {
-      return new Date(dateStr).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch {
-      return dateStr;
-    }
-  };
+  const formatMcpDate = (dateStr: string | null): string => formatSettingsDate(dateStr);
 
   const startEditing = (field: string, currentValue: string) => {
     setEditingField(field);
@@ -793,12 +781,8 @@ export default function SettingsPage() {
   const formatDisplayValue = (field: EditableField, value: string): string => {
     if (!value || value === 'Unknown' || value === 'unspecified') return 'Not set';
     if (field.key === 'dateOfBirth' && value !== 'Not set') {
-      try {
-        const date = new Date(value + 'T00:00:00');
-        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-      } catch {
-        return value;
-      }
+      const formatted = formatFullDate(value + 'T00:00:00');
+      return formatted || value;
     }
     if (field.key === 'gender') {
       return value.charAt(0).toUpperCase() + value.slice(1);
@@ -808,11 +792,7 @@ export default function SettingsPage() {
 
   const formatDate = (dateStr: string): string => {
     if (!dateStr) return 'Unknown';
-    try {
-      return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    } catch {
-      return dateStr;
-    }
+    return formatFullDate(dateStr) || dateStr;
   };
 
   return (

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { formatTime } from '@/utils/dateFormat';
 
 interface ComparisonResult {
   prompt: string;
@@ -265,7 +266,7 @@ export default function SandboxPage() {
       {/* Timestamp */}
       {result && (
         <div className="mt-4 text-xs text-gray-500 dark:text-gray-300 text-center">
-          Generated at {new Date(result.generatedAt).toLocaleTimeString()}
+          Generated at {formatTime(result.generatedAt)}
         </div>
       )}
     </div>

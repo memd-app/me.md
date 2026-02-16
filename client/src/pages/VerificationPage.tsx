@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import ConflictsSection from '../components/verification/ConflictsSection';
 import SwipeableCard from '../components/verification/SwipeableCard';
+import { formatDateTime as sharedFormatDateTime, formatShortDate } from '@/utils/dateFormat';
 
 interface Insight {
   id: string;
@@ -548,20 +549,7 @@ export default function VerificationPage() {
     }
   };
 
-  const formatDateTime = (dateStr: string | null) => {
-    if (!dateStr) return '';
-    try {
-      return new Date(dateStr).toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch {
-      return dateStr;
-    }
-  };
+  const formatDateTime = (dateStr: string | null) => sharedFormatDateTime(dateStr);
 
   const getConfidenceColor = (score: number | null) => {
     if (!score) return 'text-gray-500 dark:text-gray-300';
@@ -577,18 +565,7 @@ export default function VerificationPage() {
     return 'Low';
   };
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '';
-    try {
-      return new Date(dateStr).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
-    } catch {
-      return dateStr;
-    }
-  };
+  const formatDate = (dateStr: string | null) => formatShortDate(dateStr);
 
   const getIntervalLabel = (interval: string | null) => {
     if (!interval) return null;
