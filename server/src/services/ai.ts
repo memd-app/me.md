@@ -493,3 +493,355 @@ export async function* streamClaudeResponse(options: AIResponseOptions): AsyncGe
     return null;
   }
 }
+
+// ============================================
+// AI-Powered Note Distillation
+// ============================================
+
+export interface DistillationContext {
+  topicTitle: string;
+  topicDescription: string | null;
+  userMessages: Array<{ role: string; content: string }>;
+  assistantMessages: Array<{ role: string; content: string }>;
+  userName?: string;
+  occupation?: string;
+  isMiniSession?: boolean;
+}
+
+/**
+ * Helper to call Claude for distillation. Returns null if AI is unavailable.
+ */
+async function callClaudeForDistillation(systemPrompt: string, userPrompt: string): Promise<string | null> {
+  const client = getClient();
+  if (!client) {
+    return null;
+  }
+
+  try {
+    console.log('[me.md:ai] Calling Claude API for note distillation');
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4096,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    });
+
+    const textBlocks = response.content.filter(block => block.type === 'text');
+    const responseText = textBlocks.map(block => block.text).join('\n\n');
+
+    if (!responseText || responseText.trim().length === 0) {
+      console.warn('[me.md:ai] Claude returned empty distillation response.');
+      return null;
+    }
+
+    console.log(`[me.md:ai] Distillation response received (${responseText.length} chars, ${response.usage.input_tokens} in / ${response.usage.output_tokens} out tokens)`);
+    return responseText;
+  } catch (error: unknown) {
+    const err = error as { status?: number; message?: string };
+    console.error(`[me.md:ai] Claude distillation error: ${err.message || 'Unknown error'}`);
+    return null;
+  }
+}
+
+/**
+ * Format the conversation transcript for inclusion in prompts.
+ */
+function formatConversationTranscript(
+  userMessages: Array<{ role: string; content: string }>,
+  assistantMessages: Array<{ role: string; content: string }>
+): string {
+  // Interleave messages in chronological order (assistant first, then user response)
+  const lines: string[] = [];
+  const maxMessages = Math.max(userMessages.length, assistantMessages.length);
+  for (let i = 0; i < maxMessages; i++) {
+    if (i < assistantMessages.length) {
+      lines.push(`**Interviewer:** ${assistantMessages[i].content}`);
+    }
+    if (i < userMessages.length) {
+      lines.push(`**User:** ${userMessages[i].content}`);
+    }
+  }
+  return lines.join('\n\n');
+}
+
+/**
+ * Generate a Full Analysis using Claude AI.
+ * Returns null if AI is unavailable (caller should use fallback).
+ */
+export async function generateFullAnalysisAI(ctx: DistillationContext): Promise<string | null> {
+  const transcript = formatConversationTranscript(ctx.userMessages, ctx.assistantMessages);
+
+  const systemPrompt = `You are a personal knowledge analyst for me.md, a personal knowledge system. Your job is to distill interview session conversations into deep, meaningful Full Analysis documents that capture the user's authentic self-knowledge.
+
+You produce structured markdown output. Be specific, reference the user's actual words and ideas (using direct quotes where impactful), and surface patterns and insights that help the user understand themselves better.
+
+${ctx.userName ? `The user's name is ${ctx.userName}${ctx.occupation ? `, occupation: ${ctx.occupation}` : ''}.` : ''}`;
+
+  const userPrompt = `Analyze the following interview session about "${ctx.topicTitle}"${ctx.topicDescription ? ` (${ctx.topicDescription})` : ''} and produce a Full Analysis document.
+
+## Conversation Transcript
+
+${transcript}
+
+## Required Output Format
+
+Produce a markdown document with these exact sections:
+
+# Full Analysis: ${ctx.topicTitle}
+
+## Context
+Summarize what this session covered, how many exchanges occurred, and the overall depth of exploration.
+
+## Core Principles
+Identify 3-5 core principles, beliefs, or values that emerged from the user's responses. Use direct quotes from the user to support each principle.
+
+## Mental Models & Frameworks
+Identify decision-making patterns, mental models, or frameworks the user uses. Look for "when...then" patterns, habitual approaches, and recurring strategies.
+
+## Key Examples
+Highlight 2-3 specific examples, stories, or experiences the user shared. Quote them and explain their significance.
+
+## Open Questions & Tensions
+Identify areas of uncertainty, contradictions, or unresolved tensions. List 2-3 questions for further exploration.
+
+Be specific and reference the user's actual words. Do NOT be generic.`;
+
+  return callClaudeForDistillation(systemPrompt, userPrompt);
+}
+
+/**
+ * Generate a Brief Summary using Claude AI.
+ * Returns null if AI is unavailable (caller should use fallback).
+ */
+export async function generateBriefSummaryAI(ctx: DistillationContext): Promise<string | null> {
+  const transcript = formatConversationTranscript(ctx.userMessages, ctx.assistantMessages);
+
+  const systemPrompt = `You are a personal knowledge analyst for me.md. Your job is to create concise, impactful Brief Summaries of interview sessions that capture the essential takeaways in a scannable format.
+
+${ctx.userName ? `The user's name is ${ctx.userName}${ctx.occupation ? `, occupation: ${ctx.occupation}` : ''}.` : ''}`;
+
+  const userPrompt = `Create a Brief Summary of the following interview session about "${ctx.topicTitle}"${ctx.topicDescription ? ` (${ctx.topicDescription})` : ''}.
+
+## Conversation Transcript
+
+${transcript}
+
+## Required Output Format
+
+# Brief Summary: ${ctx.topicTitle}
+
+## TL;DR
+A 2-3 sentence overview capturing the essence of what was discussed and what emerged.
+
+## Key Takeaways
+A numbered list of 3-5 key insights or takeaways from the session, each in one sentence.
+
+## One Thing to Remember
+The single most important or revealing thing the user shared, as a direct quote with brief context.
+
+Be specific. Reference the user's actual words and ideas.`;
+
+  return callClaudeForDistillation(systemPrompt, userPrompt);
+}
+
+/**
+ * Generate a Decision Framework using Claude AI.
+ * Returns null if AI is unavailable (caller should use fallback).
+ */
+export async function generateDecisionFrameworkAI(ctx: DistillationContext): Promise<string | null> {
+  const transcript = formatConversationTranscript(ctx.userMessages, ctx.assistantMessages);
+
+  const systemPrompt = `You are a personal knowledge analyst for me.md. Your job is to synthesize interview sessions into actionable Decision Frameworks that help the user make future decisions aligned with their values and patterns.
+
+${ctx.userName ? `The user's name is ${ctx.userName}${ctx.occupation ? `, occupation: ${ctx.occupation}` : ''}.` : ''}`;
+
+  const userPrompt = `Create a Decision Framework from the following interview session about "${ctx.topicTitle}"${ctx.topicDescription ? ` (${ctx.topicDescription})` : ''}.
+
+## Conversation Transcript
+
+${transcript}
+
+## Required Output Format
+
+# Decision Framework: ${ctx.topicTitle}
+
+## Decision Context
+Summarize the domain this framework applies to and what kinds of decisions it can guide.
+
+## Guiding Principles
+List 3-5 principles the user expressed (explicitly or implicitly) that should guide decisions in this area. Use direct quotes where possible.
+
+## Decision Criteria
+Provide a checklist of 4-6 questions to ask when facing a decision in this area, derived from the user's values and patterns.
+
+## Red Flags
+Identify 2-4 warning signs or situations the user should watch out for, based on their stated concerns and past experiences.
+
+## Green Lights
+Identify 2-4 positive signals that indicate a good decision, based on what the user values and what energizes them.
+
+Be specific and ground everything in what the user actually said.`;
+
+  return callClaudeForDistillation(systemPrompt, userPrompt);
+}
+
+/**
+ * Generate structured JSON content using Claude AI.
+ * Returns null if AI is unavailable (caller should use fallback).
+ */
+export async function generateJsonContentAI(ctx: DistillationContext): Promise<string | null> {
+  const transcript = formatConversationTranscript(ctx.userMessages, ctx.assistantMessages);
+
+  const systemPrompt = `You are a personal knowledge analyst for me.md. Your job is to extract structured data from interview sessions into a JSON format that can be consumed by AI agents and applications.
+
+Output ONLY valid JSON with no markdown code fences, no explanation, and no commentary. Just the raw JSON object.
+
+${ctx.userName ? `The user's name is ${ctx.userName}${ctx.occupation ? `, occupation: ${ctx.occupation}` : ''}.` : ''}`;
+
+  const userPrompt = `Extract structured data from the following interview session about "${ctx.topicTitle}"${ctx.topicDescription ? ` (${ctx.topicDescription})` : ''}.
+
+## Conversation Transcript
+
+${transcript}
+
+## Required JSON Structure
+
+{
+  "topic": "${ctx.topicTitle}",
+  "sessionDate": "${new Date().toISOString()}",
+  "messageCount": ${ctx.userMessages.length + ctx.assistantMessages.length},
+  "userResponseCount": ${ctx.userMessages.length},
+  "principles": ["Array of 3-5 core principles/beliefs the user expressed"],
+  "frameworks": ["Array of 2-4 mental models or decision-making patterns identified"],
+  "examples": ["Array of 2-3 key examples or experiences shared, summarized in 1-2 sentences each"],
+  "decisions": ["Array of 2-4 decision-related statements or patterns"],
+  "tags": ["Array of 3-6 relevant tags from: values, experience, decision-making, growth, relationships, career, creativity, leadership, communication, goals"]
+}
+
+Extract meaningful, specific content from the actual conversation. Do NOT use generic placeholders.`;
+
+  const result = await callClaudeForDistillation(systemPrompt, userPrompt);
+  if (!result) return null;
+
+  // Clean up: remove markdown code fences if Claude wrapped the JSON
+  let cleaned = result.trim();
+  if (cleaned.startsWith('```json')) {
+    cleaned = cleaned.slice(7);
+  } else if (cleaned.startsWith('```')) {
+    cleaned = cleaned.slice(3);
+  }
+  if (cleaned.endsWith('```')) {
+    cleaned = cleaned.slice(0, -3);
+  }
+  cleaned = cleaned.trim();
+
+  // Validate it's valid JSON
+  try {
+    JSON.parse(cleaned);
+    return cleaned;
+  } catch {
+    console.warn('[me.md:ai] Claude returned invalid JSON for distillation, returning raw response.');
+    return cleaned;
+  }
+}
+
+/**
+ * Generate AI-powered insights from session messages.
+ * Returns null if AI is unavailable (caller should use fallback).
+ */
+export async function extractInsightsAI(ctx: DistillationContext): Promise<Array<{ content: string; confidenceScore: number }> | null> {
+  const transcript = formatConversationTranscript(ctx.userMessages, ctx.assistantMessages);
+  const isMini = ctx.isMiniSession || false;
+  const insightRange = isMini ? '2-5' : '3-10';
+
+  const systemPrompt = `You are a personal knowledge analyst for me.md, a system that builds verified personal context from AI-guided interviews. Your job is to semantically identify genuine personal insights from conversation — not keyword-match, but deeply understand what the user is revealing about themselves.
+
+Output ONLY a valid JSON array with no markdown code fences, no explanation, and no commentary.
+
+${ctx.userName ? `The user's name is ${ctx.userName}${ctx.occupation ? `, occupation: ${ctx.occupation}` : ''}.` : ''}`;
+
+  const userPrompt = `Extract self-knowledge insights from the following interview session about "${ctx.topicTitle}"${ctx.topicDescription ? ` (${ctx.topicDescription})` : ''}.
+${isMini ? '\nNote: This was a quick mini-session with shorter, more direct answers. Adjust expectations accordingly — even brief self-descriptions can be meaningful insights.\n' : ''}
+## Conversation Transcript
+
+${transcript}
+
+## Instructions
+
+Extract ${insightRange} distinct, genuine self-knowledge insights — statements that capture something true and specific about the user. Each insight should be:
+- A clear, declarative statement about the user (e.g., "Values autonomy over stability when making career decisions")
+- Specific and grounded in what the user actually said (not generic truisms)
+- Semantically meaningful — capturing genuine personal knowledge, not surface-level keywords
+- Useful as portable context for other AI tools to understand and act like the user
+
+Avoid extracting:
+- Generic statements that could apply to anyone (e.g., "Wants to be happy")
+- Simple restatements of the question
+- Vague or purely emotional reactions without substance
+
+## Confidence Scoring
+
+Evaluate each insight's confidenceScore (50-95) based on THREE dimensions:
+
+**Conviction** (How strongly/emphatically did the user express this?):
+- Low: Hedged, tentative ("I think maybe...", "I'm not sure but...")
+- Medium: Stated clearly but without emphasis
+- High: Emphatic, repeated, or emotionally charged ("I absolutely...", "This is fundamental to who I am...")
+
+**Specificity** (How precise and detailed is the insight?):
+- Low: Broad generalization ("I like helping people")
+- Medium: Somewhat specific ("I prefer mentoring junior developers")
+- High: Highly specific with context ("I find deep satisfaction in pair programming with junior devs because it reminds me of how my first manager invested in me")
+
+**Consistency** (Is it reinforced across multiple statements or just mentioned once?):
+- Low: Mentioned once in passing
+- Medium: Referenced in 2+ related statements
+- High: A recurring theme throughout the conversation
+
+Scoring guide:
+- 50-60: Low conviction OR low specificity, mentioned once (implied/inferred)
+- 61-75: Medium conviction with reasonable specificity, or consistent theme with lower specificity
+- 76-85: Clear conviction with good specificity, referenced multiple times
+- 86-95: Strong conviction, highly specific, consistent throughout conversation
+
+Output format (JSON array only, no wrapping):
+[
+  { "content": "Insight statement here", "confidenceScore": 75 }
+]`;
+
+  const result = await callClaudeForDistillation(systemPrompt, userPrompt);
+  if (!result) return null;
+
+  // Clean up markdown code fences
+  let cleaned = result.trim();
+  if (cleaned.startsWith('```json')) {
+    cleaned = cleaned.slice(7);
+  } else if (cleaned.startsWith('```')) {
+    cleaned = cleaned.slice(3);
+  }
+  if (cleaned.endsWith('```')) {
+    cleaned = cleaned.slice(0, -3);
+  }
+  cleaned = cleaned.trim();
+
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (!Array.isArray(parsed)) return null;
+
+    // Validate structure
+    return parsed
+      .filter((item: unknown) => {
+        if (typeof item !== 'object' || item === null) return false;
+        const obj = item as Record<string, unknown>;
+        return typeof obj.content === 'string' && typeof obj.confidenceScore === 'number';
+      })
+      .map((item: { content: string; confidenceScore: number }) => ({
+        content: item.content.substring(0, 500),
+        confidenceScore: Math.min(Math.max(item.confidenceScore, 50), 95),
+      }))
+      .slice(0, 10);
+  } catch {
+    console.warn('[me.md:ai] Failed to parse AI insight extraction result.');
+    return null;
+  }
+}

@@ -1,8 +1,16 @@
 import { Router } from 'express';
 import { db } from '../config/database.js';
-import { notes, sessions, topics, messages, insights, conceptNodes } from '../models/schema.js';
+import { notes, sessions, topics, messages, insights, conceptNodes, users } from '../models/schema.js';
 import { eq, and, desc, ne } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  generateFullAnalysisAI,
+  generateBriefSummaryAI,
+  generateDecisionFrameworkAI,
+  generateJsonContentAI,
+  extractInsightsAI,
+  type DistillationContext,
+} from '../services/ai.js';
 
 export const notesRouter = Router();
 
@@ -64,14 +72,34 @@ notesRouter.post('/sessions/:sessionId/distill', async (req, res) => {
       updatedAt: new Date().toISOString(),
     }).where(eq(topics.id, session.topicId)).run();
 
-    // Generate distillation in all formats
+    // Generate distillation in all formats (AI-powered with fallback)
     const userMessages = sessionMessages.filter(m => m.role === 'user');
     const assistantMessages = sessionMessages.filter(m => m.role === 'assistant');
 
-    const fullAnalysis = generateFullAnalysis(topic.title, topic.description, userMessages, assistantMessages);
-    const briefSummary = generateBriefSummary(topic.title, userMessages, assistantMessages);
-    const decisionFramework = generateDecisionFramework(topic.title, userMessages, assistantMessages);
-    const jsonContent = generateJsonContent(topic.title, userMessages, assistantMessages);
+    // Gather user profile context for richer AI prompts
+    const userProfile = db.select().from(users).where(eq(users.id, userId)).get();
+    const distillCtx: DistillationContext = {
+      topicTitle: topic.title,
+      topicDescription: topic.description,
+      userMessages,
+      assistantMessages,
+      userName: userProfile?.name || undefined,
+      occupation: userProfile?.occupation || undefined,
+      isMiniSession: !!session.isMiniSession,
+    };
+
+    // Run all 4 AI distillation calls in parallel, falling back to regex-based versions
+    const [aiFullAnalysis, aiBriefSummary, aiDecisionFramework, aiJsonContent] = await Promise.all([
+      generateFullAnalysisAI(distillCtx).catch(() => null),
+      generateBriefSummaryAI(distillCtx).catch(() => null),
+      generateDecisionFrameworkAI(distillCtx).catch(() => null),
+      generateJsonContentAI(distillCtx).catch(() => null),
+    ]);
+
+    const fullAnalysis = aiFullAnalysis || generateFullAnalysis(topic.title, topic.description, userMessages, assistantMessages);
+    const briefSummary = aiBriefSummary || generateBriefSummary(topic.title, userMessages, assistantMessages);
+    const decisionFramework = aiDecisionFramework || generateDecisionFramework(topic.title, userMessages, assistantMessages);
+    const jsonContent = aiJsonContent || generateJsonContent(topic.title, userMessages, assistantMessages);
 
     // Create note
     const noteId = uuidv4();
@@ -90,8 +118,9 @@ notesRouter.post('/sessions/:sessionId/distill', async (req, res) => {
       selectedFormat,
     }).returning().get();
 
-    // Extract insights from the session (mini sessions use lower threshold)
-    const extractedInsights = extractInsightsFromSession(userMessages, topic.title, !!session.isMiniSession);
+    // Extract insights from the session using AI with regex fallback
+    const aiInsights = await extractInsightsAI(distillCtx).catch(() => null);
+    const extractedInsights = aiInsights || extractInsightsFromSession(userMessages, topic.title, !!session.isMiniSession);
     const savedInsights = [];
 
     for (const insight of extractedInsights) {
@@ -282,25 +311,44 @@ notesRouter.post('/sessions/:sessionId/distill/regenerate', async (req, res) => 
       const userMessages = sessionMessages.filter(m => m.role === 'user');
       const assistantMessages = sessionMessages.filter(m => m.role === 'assistant');
 
-      // Regenerate the requested format
+      // Gather user context for AI
+      const regenUserProfile = db.select().from(users).where(eq(users.id, userId)).get();
+      const regenCtx: DistillationContext = {
+        topicTitle: topic.title,
+        topicDescription: topic.description,
+        userMessages,
+        assistantMessages,
+        userName: regenUserProfile?.name || undefined,
+        occupation: regenUserProfile?.occupation || undefined,
+      };
+
+      // Regenerate the requested format using AI with fallback
       const updateData: Record<string, string> = {
         selectedFormat: format,
         updatedAt: new Date().toISOString(),
       };
 
       switch (format) {
-        case 'full_analysis':
-          updateData.contentFullAnalysis = generateFullAnalysis(topic.title, topic.description, userMessages, assistantMessages);
+        case 'full_analysis': {
+          const aiResult = await generateFullAnalysisAI(regenCtx).catch(() => null);
+          updateData.contentFullAnalysis = aiResult || generateFullAnalysis(topic.title, topic.description, userMessages, assistantMessages);
           break;
-        case 'brief_summary':
-          updateData.contentBriefSummary = generateBriefSummary(topic.title, userMessages, assistantMessages);
+        }
+        case 'brief_summary': {
+          const aiResult = await generateBriefSummaryAI(regenCtx).catch(() => null);
+          updateData.contentBriefSummary = aiResult || generateBriefSummary(topic.title, userMessages, assistantMessages);
           break;
-        case 'decision_framework':
-          updateData.contentDecisionFramework = generateDecisionFramework(topic.title, userMessages, assistantMessages);
+        }
+        case 'decision_framework': {
+          const aiResult = await generateDecisionFrameworkAI(regenCtx).catch(() => null);
+          updateData.contentDecisionFramework = aiResult || generateDecisionFramework(topic.title, userMessages, assistantMessages);
           break;
-        case 'json':
-          updateData.contentJson = generateJsonContent(topic.title, userMessages, assistantMessages);
+        }
+        case 'json': {
+          const aiResult = await generateJsonContentAI(regenCtx).catch(() => null);
+          updateData.contentJson = aiResult || generateJsonContent(topic.title, userMessages, assistantMessages);
           break;
+        }
       }
 
       const updated = db.update(notes).set(updateData).where(eq(notes.id, note.id)).returning().get();
