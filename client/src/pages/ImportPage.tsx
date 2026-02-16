@@ -1,5 +1,6 @@
-import { useState, FormEvent } from 'react';
+import { useState, useMemo, FormEvent } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 
 type ImportMethod = 'chatgpt' | 'url' | 'text' | 'file';
 
@@ -63,6 +64,19 @@ export default function ImportPage() {
   // File state
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [fileError, setFileError] = useState('');
+
+  // Track unsaved changes in import forms
+  const isImportDirty = useMemo(() => {
+    return (
+      chatgptOutput.trim() !== '' ||
+      chatgptTitle.trim() !== '' ||
+      urlInput.trim() !== '' ||
+      pasteText.trim() !== '' ||
+      pasteTitle.trim() !== ''
+    );
+  }, [chatgptOutput, chatgptTitle, urlInput, pasteText, pasteTitle]);
+
+  useUnsavedChangesWarning(isImportDirty);
 
   const handleCopyPrompt = async () => {
     try {

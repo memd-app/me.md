@@ -1,7 +1,8 @@
-import { useState, FormEvent } from 'react';
+import { useState, useMemo, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
+import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 
 const INTENT_OPTIONS = [
   { value: 'articulate', label: 'Articulate', description: 'Express something you already know' },
@@ -24,6 +25,20 @@ export default function CreateTopicPage() {
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isNetworkError, setIsNetworkError] = useState(false);
+
+  // Track whether any form field has been modified from defaults
+  const isDirty = useMemo(() => {
+    return (
+      title.trim() !== '' ||
+      description.trim() !== '' ||
+      tags.length > 0 ||
+      intent !== '' ||
+      trigger.trim() !== ''
+    );
+  }, [title, description, tags, intent, trigger]);
+
+  // Warn user about unsaved changes on page refresh/close (but not after successful submit)
+  useUnsavedChangesWarning(isDirty && !hasSubmitted);
 
   const handleAddTag = () => {
     const trimmed = tagInput.trim().toLowerCase();

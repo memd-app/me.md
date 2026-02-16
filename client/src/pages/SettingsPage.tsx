@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { formatSettingsDate, formatFullDate } from '@/utils/dateFormat';
+import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 
 const API_BASE = '/api';
 
@@ -329,6 +330,19 @@ export default function SettingsPage() {
     { id: 'privacy', label: 'Privacy' },
     { id: 'mcp', label: 'MCP Access' },
   ];
+
+  // Track unsaved changes in settings forms
+  const isSettingsDirty = useMemo(() => {
+    // Dirty if editing a field inline
+    if (editingField !== null && editValue.trim() !== '') return true;
+    // Dirty if password change form is open and has input
+    if (showChangePassword && (currentPassword !== '' || newPassword !== '' || confirmNewPassword !== '')) return true;
+    // Dirty if adding a new MCP agent
+    if (showAddForm && newAgentName.trim() !== '') return true;
+    return false;
+  }, [editingField, editValue, showChangePassword, currentPassword, newPassword, confirmNewPassword, showAddForm, newAgentName]);
+
+  useUnsavedChangesWarning(isSettingsDirty);
 
   const fetchProfile = useCallback(async (signal?: AbortSignal) => {
     if (!user?.id) return;

@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect, FormEvent } from 'react';
+import { useState, useRef, useEffect, useMemo, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 
 type OnboardingStep = 'welcome' | 'profile' | 'context' | 'topics';
 type ImportTab = 'url' | 'text' | 'file';
@@ -110,6 +111,24 @@ export default function OnboardingPage() {
 
   const currentStepIndex = STEPS.findIndex((s) => s.key === currentStep);
   const progressPercent = ((currentStepIndex + 1) / STEPS.length) * 100;
+
+  // Track unsaved changes during onboarding flow
+  const isOnboardingDirty = useMemo(() => {
+    if (currentStep === 'welcome') return false;
+    // Check if profile fields have been modified
+    const hasProfileData =
+      profileFields.name.trim() !== '' ||
+      profileFields.dateOfBirth.trim() !== '' ||
+      profileFields.location.trim() !== '' ||
+      profileFields.occupation.trim() !== '' ||
+      profileFields.gender !== '';
+    // Check if imports or topic selections exist
+    const hasImportData = importResults.length > 0 || pasteText.trim() !== '';
+    const hasTopicSelections = selectedTopicTitles.size > 0;
+    return hasProfileData || hasImportData || hasTopicSelections;
+  }, [currentStep, profileFields, importResults, pasteText, selectedTopicTitles]);
+
+  useUnsavedChangesWarning(isOnboardingDirty);
 
   // Load preset topics when entering topics step
   useEffect(() => {
