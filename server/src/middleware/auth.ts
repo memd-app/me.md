@@ -159,6 +159,60 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
 }
 
 /**
+ * Refresh an existing session token.
+ * Validates the current token, revokes it, and issues a new one.
+ * Returns null if the token is invalid or expired.
+ */
+export function refreshSessionToken(currentToken: string): { token: string; expiresAt: string; userId: string } | null {
+  // Validate signature
+  if (!validateTokenSignature(currentToken)) {
+    return null;
+  }
+
+  // Look up current token in database
+  const tokenHash = createHmac('sha256', TOKEN_SECRET).update(currentToken).digest('hex');
+  const row = sqlite.prepare(
+    'SELECT user_id, expires_at FROM session_tokens WHERE token_hash = ?'
+  ).get(tokenHash) as { user_id: string; expires_at: string } | undefined;
+
+  if (!row) {
+    return null;
+  }
+
+  // Check if token is expired (we allow refresh even for recently expired tokens within a grace period)
+  const now = new Date();
+  const expiresAt = new Date(row.expires_at);
+  const REFRESH_GRACE_PERIOD_MS = 24 * 60 * 60 * 1000; // 24 hours after expiry
+
+  if (now.getTime() > expiresAt.getTime() + REFRESH_GRACE_PERIOD_MS) {
+    // Token is too far expired, no refresh allowed
+    sqlite.prepare('DELETE FROM session_tokens WHERE token_hash = ?').run(tokenHash);
+    return null;
+  }
+
+  // Verify user still exists
+  const user = db.select({ id: users.id }).from(users).where(eq(users.id, row.user_id)).get();
+  if (!user) {
+    sqlite.prepare('DELETE FROM session_tokens WHERE token_hash = ?').run(tokenHash);
+    return null;
+  }
+
+  // Revoke old token
+  sqlite.prepare('DELETE FROM session_tokens WHERE token_hash = ?').run(tokenHash);
+
+  // Generate new token
+  const newSession = generateSessionToken(row.user_id);
+
+  console.log(`[me.md:auth] Token refreshed for user: ${row.user_id}`);
+
+  return {
+    token: newSession.token,
+    expiresAt: newSession.expiresAt,
+    userId: row.user_id,
+  };
+}
+
+/**
  * Clean up expired session tokens periodically.
  */
 export function cleanupExpiredTokens(): void {

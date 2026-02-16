@@ -4,7 +4,7 @@ import { users, passwordResetTokens } from '../models/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
-import { generateSessionToken, revokeUserTokens, revokeToken, authMiddleware } from '../middleware/auth.js';
+import { generateSessionToken, revokeUserTokens, revokeToken, authMiddleware, refreshSessionToken } from '../middleware/auth.js';
 
 export const authRouter = Router();
 
@@ -285,6 +285,41 @@ authRouter.post('/google', async (req, res) => {
   } catch (error) {
     console.error('Google auth error:', error);
     res.status(500).json({ error: 'Failed to authenticate with Google' });
+  }
+});
+
+// POST /api/auth/refresh - Refresh an expiring session token
+authRouter.post('/refresh', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No authentication token provided' });
+    }
+
+    const currentToken = authHeader.slice(7);
+    const result = refreshSessionToken(currentToken);
+
+    if (!result) {
+      return res.status(401).json({ error: 'Token expired or invalid. Please sign in again.' });
+    }
+
+    // Get user details to return
+    const user = db.select().from(users).where(eq(users.id, result.userId)).get();
+    if (!user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    const { passwordHash: _ph, ...userWithoutPassword } = user;
+
+    res.json({
+      message: 'Token refreshed successfully',
+      token: result.token,
+      tokenExpiresAt: result.expiresAt,
+      user: userWithoutPassword,
+    });
+  } catch (error) {
+    console.error('Token refresh error:', error);
+    res.status(500).json({ error: 'Failed to refresh token' });
   }
 });
 
