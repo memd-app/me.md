@@ -1,3 +1,37 @@
+## Session - 2026-02-16 (Agent handling Feature #146 - Round-trip export and re-import preserves data)
+
+### Accomplished
+- Feature #146 (Round-trip export and re-import preserves data): PASSING
+  - Enhanced JSON export endpoint (/api/profile/export/json) with comprehensive round-trip data
+  - Added safeParseJsonArray helper to handle double-encoded JSON fields (tags, referenceUrls, contextItems)
+  - Export now includes:
+    - exportVersion: '1.0', exportedAt timestamp, source: 'me.md'
+    - Full profile summary with categorized insights across 6 sections
+    - Raw verified insights with ALL metadata: id, content, confidenceScore, verificationStatus,
+      agreementScore, privacyTier, topicId, noteId, sourceSessionId, verifiedAt, reVerifyAt,
+      reVerifyInterval, createdAt, updatedAt, topicTitle
+    - All user topics with properly parsed JSON array fields (tags, referenceUrls, contextItems)
+    - Topic connections/relationships with connectionType and relevanceScore
+    - Metadata counts (totalVerifiedInsights, totalTopics, totalTopicConnections)
+  - Privacy enforcement verified: never_export insights excluded, unverified insights excluded
+  - JSON is valid and parseable by external tools (verified with JSON.parse)
+  - Test data created and cleaned up after verification
+
+### Verification
+- TypeScript compiles clean for client (zero errors)
+- Server compiles with only pre-existing errors in graph.ts and sessions.ts (not profile.ts)
+- Server starts and runs without errors
+- Created test user with 3 topics, 7 insights (5 verified+exportable, 1 never_export, 1 unverified),
+  2 topic connections, 2 sessions, 2 notes
+- Export JSON validated: 5 insights (correct - excluded never_export and unverified),
+  3 topics with proper array tags, 2 topic connections, all metadata fields present
+- No mock data patterns in client/src or server/src
+- Test data cleaned up after verification
+
+### Current Status
+- Feature #146 passing
+- 160/209 features passing (76.6%)
+
 ## Session - 2026-02-16 (Agent handling Feature #145 - Context import via ChatGPT memory extraction)
 
 ### Accomplished
