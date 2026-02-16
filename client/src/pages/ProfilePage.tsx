@@ -63,13 +63,13 @@ function SectionCard({
                 <svg className="mt-1 w-4 h-4 text-green-500 dark:text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                <span className="leading-relaxed">{item}</span>
+                <span className="leading-relaxed break-words">{item}</span>
               </li>
             ))}
           </ul>
           {section.topicSources.length > 0 && (
             <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
-              <p className="text-xs text-gray-500 dark:text-gray-300">
+              <p className="text-xs text-gray-500 dark:text-gray-300 break-words">
                 <span className="font-medium">Sources:</span>{' '}
                 {section.topicSources.join(', ')}
               </p>

@@ -395,15 +395,15 @@ export default function ConflictsSection() {
                       <span className="text-xs text-amber-600 dark:text-amber-400">(outdated)</span>
                     )}
                   </div>
-                  <p className="text-sm text-gray-900 dark:text-white leading-relaxed">
+                  <p className="text-sm text-gray-900 dark:text-white leading-relaxed break-words">
                     {conflict.insightA?.content || 'Insight not found'}
                   </p>
                   {conflict.insightA?.topicTitle && (
-                    <p className="mt-2 text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <p className="mt-2 text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1 truncate">
+                      <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                       </svg>
-                      {conflict.insightA.topicTitle}
+                      <span className="truncate">{conflict.insightA.topicTitle}</span>
                     </p>
                   )}
                 </div>
@@ -422,15 +422,15 @@ export default function ConflictsSection() {
                       <span className="text-xs text-amber-600 dark:text-amber-400">(outdated)</span>
                     )}
                   </div>
-                  <p className="text-sm text-gray-900 dark:text-white leading-relaxed">
+                  <p className="text-sm text-gray-900 dark:text-white leading-relaxed break-words">
                     {conflict.insightB?.content || 'Insight not found'}
                   </p>
                   {conflict.insightB?.topicTitle && (
-                    <p className="mt-2 text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <p className="mt-2 text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1 truncate">
+                      <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                       </svg>
-                      {conflict.insightB.topicTitle}
+                      <span className="truncate">{conflict.insightB.topicTitle}</span>
                     </p>
                   )}
                 </div>
@@ -440,7 +440,7 @@ export default function ConflictsSection() {
               {conflict.resolutionNote && conflict.resolutionStatus !== 'unresolved' && (
                 <div className="mt-3 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
                   <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-1">Resolution Note:</p>
-                  <p className="text-sm text-gray-700 dark:text-gray-300">{conflict.resolutionNote}</p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 break-words">{conflict.resolutionNote}</p>
                 </div>
               )}
 

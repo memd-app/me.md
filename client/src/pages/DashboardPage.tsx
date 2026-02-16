@@ -357,7 +357,7 @@ export default function DashboardPage() {
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-1.5 gap-0.5 sm:gap-0">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="text-base flex-shrink-0">{icon}</span>
-                      <span className={`text-sm font-medium ${colors.text}`}>
+                      <span className={`text-sm font-medium ${colors.text} truncate`}>
                         {cat.label}
                       </span>
                       {/* Show percentage inline on mobile */}

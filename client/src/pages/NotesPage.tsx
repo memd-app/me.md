@@ -283,7 +283,7 @@ export default function NotesPage() {
         <div className="bg-white dark:bg-dark-surface rounded-xl border border-gray-200 dark:border-dark-border p-6 mb-4">
           <div className="flex items-start justify-between mb-3">
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-1">
+              <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-1 break-words">
                 {selectedNote.title || 'Untitled Note'}
               </h1>
               <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-gray-300">

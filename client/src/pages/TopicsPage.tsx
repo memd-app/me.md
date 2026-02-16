@@ -614,7 +614,7 @@ export default function TopicsPage() {
             <Link
               key={topic.id}
               to={`/app/topics/${topic.id}`}
-              className="card block hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
+              className="card block hover:border-primary-300 dark:hover:border-primary-700 transition-colors overflow-hidden"
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">

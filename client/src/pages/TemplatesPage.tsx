@@ -209,15 +209,15 @@ export default function TemplatesPage() {
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    <div className="flex items-center gap-3 mb-2 min-w-0">
+                      <h2 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
                         {template.title}
                       </h2>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${tagColor}`}>
                         {tagLabel}
                       </span>
                     </div>
-                    <p className="text-gray-600 dark:text-gray-300 text-sm mb-3">
+                    <p className="text-gray-600 dark:text-gray-300 text-sm mb-3 line-clamp-2">
                       {template.description}
                     </p>
 

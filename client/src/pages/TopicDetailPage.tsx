@@ -473,12 +473,12 @@ export default function TopicDetailPage() {
   return (
     <div className="max-w-4xl mx-auto">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-300 mb-6">
-        <Link to="/app/topics" className="hover:text-primary-600 dark:hover:text-primary-400">
+      <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-300 mb-6 min-w-0">
+        <Link to="/app/topics" className="hover:text-primary-600 dark:hover:text-primary-400 shrink-0">
           Topics
         </Link>
-        <span>/</span>
-        <span className="text-gray-900 dark:text-white">{topic.title}</span>
+        <span className="shrink-0">/</span>
+        <span className="text-gray-900 dark:text-white truncate">{topic.title}</span>
       </nav>
 
       {/* Error banner */}
@@ -677,7 +677,7 @@ export default function TopicDetailPage() {
           <div className="flex items-start justify-between">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 mb-3">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white break-words">
                   {topic.title}
                 </h1>
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[topic.status] || STATUS_COLORS.backlog}`}>
@@ -686,7 +686,7 @@ export default function TopicDetailPage() {
               </div>
 
               {topic.description && (
-                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                <p className="text-gray-600 dark:text-gray-300 mb-4 break-words">
                   {topic.description}
                 </p>
               )}
@@ -1063,7 +1063,7 @@ export default function TopicDetailPage() {
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <p className={`text-sm ${isRejected ? 'text-gray-500 dark:text-gray-300 line-through' : 'text-gray-800 dark:text-gray-200'}`}>
+                    <p className={`text-sm break-words ${isRejected ? 'text-gray-500 dark:text-gray-300 line-through' : 'text-gray-800 dark:text-gray-200'}`}>
                       {insight.content}
                     </p>
                     <div className="flex items-center gap-2 shrink-0">
@@ -1119,13 +1119,13 @@ export default function TopicDetailPage() {
                 to={`/app/topics/${ct.id}`}
                 className="block p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-3 min-w-0">
                     <svg className="w-5 h-5 text-primary-500 dark:text-primary-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                     </svg>
-                    <div>
-                      <span className="font-medium text-gray-900 dark:text-white">
+                    <div className="min-w-0">
+                      <span className="font-medium text-gray-900 dark:text-white truncate block">
                         {ct.title}
                       </span>
                       <div className="flex items-center gap-2 mt-0.5">

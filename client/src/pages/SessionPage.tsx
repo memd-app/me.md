@@ -136,7 +136,7 @@ const MessageBubble = memo(function MessageBubble({
         </div>
 
         {/* Message content */}
-        <div className={`text-sm leading-relaxed ${
+        <div className={`text-sm leading-relaxed break-words overflow-hidden ${
           message.role === 'user' ? 'text-white' : ''
         }`}>
           {renderMessageContent(message.content)}

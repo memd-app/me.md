@@ -238,7 +238,7 @@ export default function BookmarksPage() {
                               : ''}
                           </span>
                         </div>
-                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed break-words">
                           {bookmark.message
                             ? cleanMarkdown(truncateContent(bookmark.message.content))
                             : 'Message no longer available'}

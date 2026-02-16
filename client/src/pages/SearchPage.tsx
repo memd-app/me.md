@@ -636,7 +636,7 @@ export default function SearchPage() {
                   </div>
 
                   {/* Title with highlighting */}
-                  <h3 className="font-medium text-gray-900 dark:text-white text-sm">
+                  <h3 className="font-medium text-gray-900 dark:text-white text-sm truncate">
                     {highlightMatch(result.title, query)}
                   </h3>
 
@@ -648,7 +648,7 @@ export default function SearchPage() {
                   {/* Topic context and navigation hint */}
                   <div className="flex items-center gap-2 mt-1">
                     {result.topicTitle && result.type !== 'topic' && (
-                      <p className="text-xs text-gray-500 dark:text-gray-300">
+                      <p className="text-xs text-gray-500 dark:text-gray-300 truncate">
                         📋 {result.topicTitle}
                       </p>
                     )}

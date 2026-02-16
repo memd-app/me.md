@@ -754,7 +754,7 @@ export default function VerificationPage() {
 
                     {/* Insight content */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-gray-900 dark:text-white text-sm leading-relaxed">{insight.content}</p>
+                      <p className="text-gray-900 dark:text-white text-sm leading-relaxed break-words">{insight.content}</p>
                       <div className="flex flex-wrap items-center gap-2 mt-2">
                         {/* Privacy tier badge */}
                         {insight.privacyTier === 'never_export' ? (
@@ -775,7 +775,7 @@ export default function VerificationPage() {
 
                         {/* Topic */}
                         {insight.topicTitle && (
-                          <span className="text-xs text-blue-600 dark:text-blue-400">{insight.topicTitle}</span>
+                          <span className="text-xs text-blue-600 dark:text-blue-400 truncate max-w-[200px] inline-block align-bottom">{insight.topicTitle}</span>
                         )}
 
                         {/* Confidence */}
@@ -1192,7 +1192,7 @@ export default function VerificationPage() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-gray-900 dark:text-white leading-relaxed">
+                  <p className="text-gray-900 dark:text-white leading-relaxed break-words">
                     {insight.content}
                   </p>
                 )}
@@ -1210,11 +1210,11 @@ export default function VerificationPage() {
 
                 {/* Source topic */}
                 {insight.topicTitle && (
-                  <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400 min-w-0 max-w-[200px]">
+                    <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                     </svg>
-                    {insight.topicTitle}
+                    <span className="truncate">{insight.topicTitle}</span>
                   </span>
                 )}
 
@@ -1471,11 +1471,11 @@ export default function VerificationPage() {
                               {/* Show content diff for edits */}
                               {entry.action === 'edited' && entry.previousContent && entry.newContent && (
                                 <div className="mt-1.5 space-y-1">
-                                  <div className="text-xs">
+                                  <div className="text-xs break-words">
                                     <span className="text-red-500 dark:text-red-400 font-medium">Before: </span>
                                     <span className="text-gray-600 dark:text-gray-300 line-through">{entry.previousContent}</span>
                                   </div>
-                                  <div className="text-xs">
+                                  <div className="text-xs break-words">
                                     <span className="text-green-500 dark:text-green-400 font-medium">After: </span>
                                     <span className="text-gray-700 dark:text-gray-300">{entry.newContent}</span>
                                   </div>
