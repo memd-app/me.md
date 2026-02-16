@@ -95,6 +95,7 @@ export default function TopicsPage() {
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [sortBy, setSortBy] = useState<SortOption>('date_newest');
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(() => {
     const pageParam = searchParams.get('page');
@@ -103,9 +104,14 @@ export default function TopicsPage() {
   const [fetchVersion, setFetchVersion] = useState(0);
   const exploreCategory = searchParams.get('explore');
 
-  const fetchTopics = useCallback(async (signal?: AbortSignal) => {
+  const fetchTopics = useCallback(async (signal?: AbortSignal, isBackground = false) => {
     if (!user) return;
-    setIsLoading(true);
+    // For background re-fetches (tab focus, page navigation), don't clear existing data
+    if (isBackground) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
     setError(null);
     try {
       const res = await fetch('/api/topics', {
@@ -121,13 +127,18 @@ export default function TopicsPage() {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'Failed to load topics');
     } finally {
-      if (!signal?.aborted) setIsLoading(false);
+      if (!signal?.aborted) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
     }
   }, [user]);
 
   useEffect(() => {
     const controller = new AbortController();
-    fetchTopics(controller.signal);
+    // fetchVersion > 0 means this is a background re-fetch (tab focus, page change)
+    const isBackground = fetchVersion > 0;
+    fetchTopics(controller.signal, isBackground);
     return () => controller.abort();
   }, [fetchTopics, fetchVersion]);
 
@@ -176,9 +187,15 @@ export default function TopicsPage() {
     }
   }, [currentPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Filter and sort topics
+  // Filter and sort topics - deduplicate by ID for consistency during data updates
   const filteredAndSortedTopics = useMemo(() => {
-    let result = [...topics];
+    // Deduplicate topics by ID to prevent gaps or duplicates during concurrent data changes
+    const seen = new Set<string>();
+    let result = topics.filter(t => {
+      if (seen.has(t.id)) return false;
+      seen.add(t.id);
+      return true;
+    });
 
     // Apply status filter
     if (statusFilter !== 'all') {
@@ -502,16 +519,24 @@ export default function TopicsPage() {
         </div>
       )}
 
-      {/* Loading state */}
-      {isLoading && (
+      {/* Loading state - only shown on initial load, not background refreshes */}
+      {isLoading && topics.length === 0 && (
         <div className="card text-center py-12">
           <div className="animate-spin inline-block w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full mb-3" />
           <p className="text-gray-600 dark:text-gray-300">Loading topics...</p>
         </div>
       )}
 
-      {/* Topics list */}
-      {!isLoading && paginatedTopics.length > 0 && (
+      {/* Subtle refreshing indicator for background re-fetches */}
+      {isRefreshing && topics.length > 0 && (
+        <div className="flex items-center gap-2 mb-3 text-sm text-gray-500 dark:text-gray-400">
+          <div className="animate-spin w-3 h-3 border-2 border-gray-300 border-t-primary-500 rounded-full" />
+          <span>Refreshing...</span>
+        </div>
+      )}
+
+      {/* Topics list - show existing data even during background refreshes */}
+      {(!isLoading || topics.length > 0) && paginatedTopics.length > 0 && (
         <div className="space-y-3">
           {paginatedTopics.map((topic) => (
             <Link
@@ -565,7 +590,13 @@ export default function TopicsPage() {
 
           {/* Pagination Controls */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between pt-4 mt-2 border-t border-gray-200 dark:border-dark-border">
+            <div
+              className="flex items-center justify-between pt-4 mt-2 border-t border-gray-200 dark:border-dark-border"
+              data-testid="topics-pagination"
+              data-current-page={currentPage}
+              data-total-pages={totalPages}
+              data-total-items={totalFilteredTopics}
+            >
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Showing {((currentPage - 1) * TOPICS_PER_PAGE) + 1}–{Math.min(currentPage * TOPICS_PER_PAGE, totalFilteredTopics)} of {totalFilteredTopics} topics
               </p>
@@ -630,8 +661,8 @@ export default function TopicsPage() {
         </div>
       )}
 
-      {/* Empty state */}
-      {!isLoading && filteredAndSortedTopics.length === 0 && !error && (
+      {/* Empty state - don't show during background refreshes */}
+      {!isLoading && !isRefreshing && filteredAndSortedTopics.length === 0 && !error && (
         <div className="card text-center py-12">
           <span className="text-4xl block mb-3">📋</span>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
