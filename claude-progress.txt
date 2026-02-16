@@ -3595,3 +3595,30 @@
 ### Current Status
 - 187/209 features passing (89.5%)
 - Feature #177 marked as passing
+
+## Session - 2026-02-16 (Agent handling Feature #178)
+
+### Accomplished
+- Feature #178 (Post-login redirect to intended page): PASSING
+  - Verified the feature was already fully implemented by previous sessions
+  - ProtectedRoute captures intended location via state={{ from: location }}
+  - LoginPage reads location.state?.from?.pathname (defaults to /app)
+  - After successful login (email/password or Google), navigate(from, { replace: true }) redirects to original page
+  - Works for /app/topics, /app/graph, /app/settings, and any protected route
+
+### Verification
+- TypeScript compiles with zero errors (client tsc --noEmit)
+- Vite production build succeeds (833.67 kB JS bundle)
+- Backend server starts cleanly with no errors
+- No mock data patterns found in client/src or server/src
+
+### Code Flow
+1. User navigates to /app/topics while logged out
+2. ProtectedRoute detects !isAuthenticated, redirects to /login with state={{ from: { pathname: '/app/topics' } }}
+3. LoginPage extracts: const from = location.state?.from?.pathname, defaults to '/app'
+4. After login success: navigate('/app/topics', { replace: true })
+5. Same flow for /app/graph, /app/settings, etc.
+
+### Current Status
+- 188/209 features passing (90.0%)
+- Feature #178 marked as passing
