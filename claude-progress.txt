@@ -1,3 +1,33 @@
+## Session - 2026-02-16 (Agent handling Feature #175)
+
+### Accomplished
+- Feature #175 (Uniqueness validation for duplicate topic titles): PASSING
+  - Added GET /api/topics/check-title endpoint for real-time duplicate title detection
+  - Case-insensitive title comparison (e.g., "My Values" matches "my values")
+  - POST /api/topics now returns a warning field when creating a topic with a duplicate title
+  - PUT /api/topics/:id now returns a warning field when updating to a duplicate title
+  - Duplicate titles are ALLOWED (both exist) - user is warned but not blocked
+  - Client-side: debounced (500ms) title check as user types in CreateTopicPage
+  - Amber warning banner shows existing topic count, titles, statuses, and creation dates
+  - Topics with same title are distinguishable in UI by creation date, description, and unique ID/URL
+  - No crashes or errors when creating duplicates
+  - System handles this gracefully end-to-end
+
+### Verification
+- TypeScript compiles clean (client: zero errors; server: only pre-existing errors in graph.ts/sessions.ts)
+- Vite production build succeeds
+- Server starts and handles requests correctly
+- API tested: create first "My Values" (no warning), create second "My Values" (warning returned)
+- check-title endpoint correctly identifies 0 or N existing duplicates
+- Case-insensitive matching verified
+- Both topics coexist with different IDs, dates, descriptions
+- No mock data patterns found in source
+- Test data cleaned up after verification
+
+### Current Status
+- Feature #175 marked as passing
+- 186/209 features passing (89.0%)
+
 ## Session - 2026-02-16 (Agent handling Feature #174)
 
 ### Accomplished
