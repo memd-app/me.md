@@ -660,189 +660,13 @@ importRouter.post('/file', async (req, res) => {
 // ============================================
 // Import Processing Pipeline
 // ============================================
-
-// Score an extracted statement to determine if it's insight-worthy
-function scoreExtractedInsight(statement: string): number {
-  let score = 40; // base score for import-derived insights (lower than session-derived)
-
-  const lowerStatement = statement.toLowerCase();
-
-  // Strong personal statements
-  if (/\b(i am|i believe|i value|i always|i never|i think|i feel|my|i prefer|i tend to)\b/i.test(lowerStatement)) {
-    score += 15;
-  }
-
-  // Reasoning/understanding markers
-  if (/\b(because|reason|learned|realized|understand|important|matters)\b/i.test(lowerStatement)) {
-    score += 10;
-  }
-
-  // Core trait indicators
-  if (/\b(core|fundamental|deeply|who i am|trait|personality|character|principle|philosophy)\b/i.test(lowerStatement)) {
-    score += 10;
-  }
-
-  // Preference indicators
-  if (/\b(prefer|like|enjoy|love|dislike|hate|comfortable|style|approach)\b/i.test(lowerStatement)) {
-    score += 8;
-  }
-
-  // Length bonus
-  if (statement.length > 60) {
-    score += 5;
-  }
-
-  return Math.min(score, 90);
-}
-
-// Extract insights from ChatGPT Memory import (structured sections)
-function extractInsightsFromChatgpt(
-  content: { sections?: Record<string, string>; extractedText?: string },
-): Array<{ content: string; confidenceScore: number; suggestedCategory: string }> {
-  const results: Array<{ content: string; confidenceScore: number; suggestedCategory: string }> = [];
-
-  // Map ChatGPT sections to me.md categories
-  const sectionCategoryMap: Record<string, string> = {
-    'Personal Background': 'identity',
-    'Communication Style': 'perspectives',
-    'Values & Beliefs': 'identity',
-    'Interests & Hobbies': 'experiences',
-    'Professional Life': 'skills',
-    'Decision-Making Style': 'perspectives',
-    'Strengths & Weaknesses': 'skills',
-    'Goals & Aspirations': 'goals',
-    'Preferences': 'perspectives',
-    'Personality Traits': 'identity',
-  };
-
-  if (content.sections && Object.keys(content.sections).length > 0) {
-    // Process each section
-    for (const [sectionName, sectionContent] of Object.entries(content.sections)) {
-      const category = sectionCategoryMap[sectionName] || 'identity';
-
-      // Split section into individual statements
-      const statements = sectionContent
-        .split(/[.!?\n]+/)
-        .map(s => s.replace(/^[-*•]\s*/, '').trim())
-        .filter(s => s.length > 20 && s.length < 500);
-
-      for (const statement of statements) {
-        const score = scoreExtractedInsight(statement);
-        if (score >= 45) {
-          results.push({
-            content: statement,
-            confidenceScore: score,
-            suggestedCategory: category,
-          });
-        }
-      }
-    }
-  } else if (content.extractedText) {
-    // Fallback: process as plain text
-    const statements = content.extractedText
-      .split(/[.!?\n]+/)
-      .map(s => s.replace(/^[-*•]\s*/, '').trim())
-      .filter(s => s.length > 20 && s.length < 500);
-
-    for (const statement of statements) {
-      const score = scoreExtractedInsight(statement);
-      if (score >= 50) {
-        results.push({
-          content: statement,
-          confidenceScore: score,
-          suggestedCategory: 'identity',
-        });
-      }
-    }
-  }
-
-  // Deduplicate by content
-  const unique = results.filter((item, index, self) =>
-    index === self.findIndex(t => t.content.toLowerCase() === item.content.toLowerCase())
-  );
-
-  return unique.slice(0, 30); // Limit to 30 insights per import
-}
-
-// Extract insights from URL import
-function extractInsightsFromUrl(
-  content: { extractedText?: string; title?: string },
-): Array<{ content: string; confidenceScore: number; suggestedCategory: string }> {
-  const results: Array<{ content: string; confidenceScore: number; suggestedCategory: string }> = [];
-
-  if (!content.extractedText) return results;
-
-  // Split into sentences
-  const statements = content.extractedText
-    .split(/[.!?\n]+/)
-    .map(s => s.trim())
-    .filter(s => s.length > 25 && s.length < 500);
-
-  // Extract statements that contain personal pronouns or self-describing language
-  for (const statement of statements) {
-    const score = scoreExtractedInsight(statement);
-    // Higher threshold for URLs since content may not be personal
-    if (score >= 55) {
-      // Try to categorize by content
-      let category = 'identity';
-      const lower = statement.toLowerCase();
-      if (/\b(skill|expert|experience|professional|work|career|project)\b/.test(lower)) category = 'skills';
-      else if (/\b(goal|aspir|dream|plan|future|want to)\b/.test(lower)) category = 'goals';
-      else if (/\b(learn|grew|journey|story|memory|remember)\b/.test(lower)) category = 'experiences';
-      else if (/\b(think|believe|approach|perspective|opinion|view)\b/.test(lower)) category = 'perspectives';
-
-      results.push({
-        content: statement,
-        confidenceScore: score,
-        suggestedCategory: category,
-      });
-    }
-  }
-
-  const unique = results.filter((item, index, self) =>
-    index === self.findIndex(t => t.content.toLowerCase() === item.content.toLowerCase())
-  );
-
-  return unique.slice(0, 20);
-}
-
-// Extract insights from plain text or file import
-function extractInsightsFromText(
-  content: { extractedText?: string; title?: string },
-): Array<{ content: string; confidenceScore: number; suggestedCategory: string }> {
-  const results: Array<{ content: string; confidenceScore: number; suggestedCategory: string }> = [];
-
-  if (!content.extractedText) return results;
-
-  const statements = content.extractedText
-    .split(/[.!?\n]+/)
-    .map(s => s.replace(/^[-*•]\s*/, '').trim())
-    .filter(s => s.length > 20 && s.length < 500);
-
-  for (const statement of statements) {
-    const score = scoreExtractedInsight(statement);
-    if (score >= 48) {
-      let category = 'identity';
-      const lower = statement.toLowerCase();
-      if (/\b(skill|expert|experience|professional|work|career|project)\b/.test(lower)) category = 'skills';
-      else if (/\b(goal|aspir|dream|plan|future|want to)\b/.test(lower)) category = 'goals';
-      else if (/\b(learn|grew|journey|story|memory|remember)\b/.test(lower)) category = 'experiences';
-      else if (/\b(think|believe|approach|perspective|opinion|view)\b/.test(lower)) category = 'perspectives';
-
-      results.push({
-        content: statement,
-        confidenceScore: score,
-        suggestedCategory: category,
-      });
-    }
-  }
-
-  const unique = results.filter((item, index, self) =>
-    index === self.findIndex(t => t.content.toLowerCase() === item.content.toLowerCase())
-  );
-
-  return unique.slice(0, 25);
-}
+// All insight extraction is now handled by the unified AI-powered extraction
+// service in server/src/services/insightExtraction.ts. The service:
+// - Uses Claude AI for semantic insight extraction (primary path)
+// - Falls back to rule-based extraction when AI is unavailable
+// - Handles all import types (ChatGPT, URL, text, file) with tailored prompts
+// - Chunks large content for processing within token limits
+// - Deduplicates against existing verified insights
 
 // POST /api/import/:id/process - Process an imported file and extract insights
 importRouter.post('/:id/process', async (req, res) => {
@@ -936,11 +760,12 @@ importRouter.post('/:id/process', async (req, res) => {
 
     const unifiedInsights = await extractInsights(extractionCtx);
 
-    // Map to the format expected downstream (with suggestedCategory)
+    // Map to the format expected downstream (with suggestedCategory and extractionMethod)
     const extractedInsights = unifiedInsights.map(i => ({
       content: i.content,
       confidenceScore: i.confidenceScore,
       suggestedCategory: i.category,
+      extractionMethod: i.extractionMethod,
     }));
 
     if (extractedInsights.length === 0) {
