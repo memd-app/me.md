@@ -1,3 +1,36 @@
+## Session - 2026-02-16 (Agent handling Feature #200)
+
+### Accomplished
+- Feature #200 (Search works with special characters in content): PASSING
+  - Escaped SQL LIKE wildcards (%, _) in search queries using backslash escape character
+  - Added ESCAPE '\\' clause to all LIKE queries across 4 search types (topics, insights, sessions, notes)
+  - Replaced Drizzle ORM `like()` with raw `sql` template tag to support ESCAPE clause
+  - Updated raw SQLite prepared statement for sessions/messages search with ESCAPE clause
+  - Imported `sql` from drizzle-orm, removed unused `like` import
+
+### Verification
+- Created test topic "My C++ & Java Skills" with special chars in title, description, and tags
+- Search for "C++" → found topic correctly
+- Search for "&" → found topic correctly
+- Search for "continuous learning" (with quotes in content) → found insight, session, and note
+- Search for "%" (literal percent) → correctly found only content containing literal %, not all records
+- Single character search "a" → handled gracefully with matching results
+- TypeScript compiles clean (client), pre-existing errors in graph.ts/sessions.ts unrelated
+- Vite build succeeds (654 modules, no errors)
+- No mock data patterns found in server/src or client/src
+- Frontend already had proper regex escaping (escapeRegex function) for highlighting
+
+### Technical Details
+- SQL LIKE wildcards % and _ are now escaped with backslash before query
+- Backslashes in user input are also escaped (\\) to prevent bypass
+- Drizzle ORM's `like()` doesn't support ESCAPE clause, so raw `sql` template used
+- SQLite ESCAPE clause: `column LIKE ? ESCAPE '\'` tells SQLite to treat `\%` and `\_` as literals
+- Frontend `escapeRegex()` properly handles special regex chars for highlighting
+
+### Current Status
+- 200/209 features passing (95.7%)
+- Feature #200 marked as passing
+
 ## Session - 2026-02-16 (Agent handling Feature #201)
 
 ### Accomplished
