@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db, sqlite } from '../config/database.js';
 import { topics, insights, notes, messages, sessions } from '../models/schema.js';
-import { eq, and, like, or, desc, gte, lte } from 'drizzle-orm';
+import { eq, and, or, desc, gte, lte, sql } from 'drizzle-orm';
 
 export const searchRouter = Router();
 
@@ -57,7 +57,10 @@ searchRouter.get('/', async (req, res) => {
       });
     }
 
-    const searchPattern = `%${query}%`;
+    // Escape SQL LIKE wildcards (% and _) in the search query so they are treated as literals.
+    // Use backslash as the escape character and tell SQLite via ESCAPE '\' clause.
+    const escapedQuery = query.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+    const searchPattern = `%${escapedQuery}%`;
     const results: SearchResult[] = [];
     let totalCount = 0;
 
@@ -68,9 +71,9 @@ searchRouter.get('/', async (req, res) => {
           and(
             eq(topics.userId, userId),
             or(
-              like(topics.title, searchPattern),
-              like(topics.description, searchPattern),
-              like(topics.tags, searchPattern)
+              sql`${topics.title} LIKE ${searchPattern} ESCAPE '\\'`,
+              sql`${topics.description} LIKE ${searchPattern} ESCAPE '\\'`,
+              sql`${topics.tags} LIKE ${searchPattern} ESCAPE '\\'`
             )
           )
         )
@@ -104,7 +107,7 @@ searchRouter.get('/', async (req, res) => {
         .where(
           and(
             eq(insights.userId, userId),
-            like(insights.content, searchPattern)
+            sql`${insights.content} LIKE ${searchPattern} ESCAPE '\\'`
           )
         )
         .all();
@@ -147,7 +150,7 @@ searchRouter.get('/', async (req, res) => {
         JOIN sessions s ON m.session_id = s.id
         JOIN topics t ON s.topic_id = t.id
         WHERE s.user_id = ?
-          AND m.content LIKE ?
+          AND m.content LIKE ? ESCAPE '\\'
         ORDER BY m.created_at DESC
       `).all(userId, searchPattern) as Array<{
         message_id: string;
@@ -198,10 +201,10 @@ searchRouter.get('/', async (req, res) => {
           and(
             eq(notes.userId, userId),
             or(
-              like(notes.title, searchPattern),
-              like(notes.contentFullAnalysis, searchPattern),
-              like(notes.contentBriefSummary, searchPattern),
-              like(notes.contentDecisionFramework, searchPattern)
+              sql`${notes.title} LIKE ${searchPattern} ESCAPE '\\'`,
+              sql`${notes.contentFullAnalysis} LIKE ${searchPattern} ESCAPE '\\'`,
+              sql`${notes.contentBriefSummary} LIKE ${searchPattern} ESCAPE '\\'`,
+              sql`${notes.contentDecisionFramework} LIKE ${searchPattern} ESCAPE '\\'`
             )
           )
         )
