@@ -24,33 +24,41 @@ function PrivacyTab({ userId }: { userId: string }) {
   const [filter, setFilter] = useState<'all' | 'exportable' | 'never_export'>('all');
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  const fetchInsights = useCallback(async () => {
+  const fetchInsights = useCallback(async (signal?: AbortSignal) => {
     if (!userId) return;
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/insights?status=verified`, {
         headers: { 'x-user-id': userId },
+        signal,
       });
       if (res.ok) {
         const data = await res.json();
-        setInsights((data.insights || []).map((i: PrivacyInsightItem) => ({
-          id: i.id,
-          content: i.content,
-          privacyTier: i.privacyTier || 'exportable',
-          verificationStatus: i.verificationStatus,
-          topicTitle: i.topicTitle || null,
-          confidenceScore: i.confidenceScore,
-        })));
+        if (!signal?.aborted) {
+          setInsights((data.insights || []).map((i: PrivacyInsightItem) => ({
+            id: i.id,
+            content: i.content,
+            privacyTier: i.privacyTier || 'exportable',
+            verificationStatus: i.verificationStatus,
+            topicTitle: i.topicTitle || null,
+            confidenceScore: i.confidenceScore,
+          })));
+        }
       }
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error('Failed to fetch insights for privacy:', err);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
   }, [userId]);
 
   useEffect(() => {
-    fetchInsights();
+    const controller = new AbortController();
+    fetchInsights(controller.signal);
+    return () => controller.abort();
   }, [fetchInsights]);
 
   const togglePrivacyTier = async (insightId: string, currentTier: string) => {
@@ -322,34 +330,42 @@ export default function SettingsPage() {
     { id: 'mcp', label: 'MCP Access' },
   ];
 
-  const fetchProfile = useCallback(async () => {
+  const fetchProfile = useCallback(async (signal?: AbortSignal) => {
     if (!user?.id) return;
     try {
       setIsLoading(true);
       const res = await fetch(`${API_BASE}/users/profile`, {
         headers: { 'x-user-id': user.id },
+        signal,
       });
       if (res.ok) {
         const data = await res.json();
-        setProfile({
-          name: data.user.name || '',
-          email: data.user.email || '',
-          dateOfBirth: data.user.dateOfBirth || '',
-          location: data.user.location || '',
-          occupation: data.user.occupation || '',
-          gender: data.user.gender || '',
-          createdAt: data.user.createdAt || '',
-        });
+        if (!signal?.aborted) {
+          setProfile({
+            name: data.user.name || '',
+            email: data.user.email || '',
+            dateOfBirth: data.user.dateOfBirth || '',
+            location: data.user.location || '',
+            occupation: data.user.occupation || '',
+            gender: data.user.gender || '',
+            createdAt: data.user.createdAt || '',
+          });
+        }
       }
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error('Failed to fetch profile:', err);
     } finally {
-      setIsLoading(false);
+      if (!signal?.aborted) {
+        setIsLoading(false);
+      }
     }
   }, [user?.id]);
 
   useEffect(() => {
-    fetchProfile();
+    const controller = new AbortController();
+    fetchProfile(controller.signal);
+    return () => controller.abort();
   }, [fetchProfile]);
 
   // Sync session length and notification prefs from user profile
@@ -370,27 +386,35 @@ export default function SettingsPage() {
   }, [user?.sessionLengthDefault, user?.notificationPreferences]);
 
   // MCP permissions management
-  const fetchMcpPermissions = useCallback(async () => {
+  const fetchMcpPermissions = useCallback(async (signal?: AbortSignal) => {
     if (!user?.id) return;
     setMcpLoading(true);
     try {
       const res = await fetch(`${API_BASE}/mcp/permissions`, {
         headers: { 'x-user-id': user.id },
+        signal,
       });
       if (res.ok) {
         const data = await res.json();
-        setMcpPermissions(data.permissions || []);
+        if (!signal?.aborted) {
+          setMcpPermissions(data.permissions || []);
+        }
       }
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error('Failed to fetch MCP permissions:', err);
     } finally {
-      setMcpLoading(false);
+      if (!signal?.aborted) {
+        setMcpLoading(false);
+      }
     }
   }, [user?.id]);
 
   useEffect(() => {
     if (activeTab === 'mcp') {
-      fetchMcpPermissions();
+      const controller = new AbortController();
+      fetchMcpPermissions(controller.signal);
+      return () => controller.abort();
     }
   }, [activeTab, fetchMcpPermissions]);
 

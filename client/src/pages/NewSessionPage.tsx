@@ -24,24 +24,32 @@ export default function NewSessionPage() {
   // Fetch user topics
   useEffect(() => {
     if (!user) return;
+    const controller = new AbortController();
 
     const fetchTopics = async () => {
       try {
         const res = await fetch('/api/topics', {
           headers: { 'x-user-id': user.id },
+          signal: controller.signal,
         });
         if (res.ok) {
           const data = await res.json();
-          setTopics(data.topics || []);
+          if (!controller.signal.aborted) {
+            setTopics(data.topics || []);
+          }
         }
-      } catch {
-        // Silent fail
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        // Silent fail for other errors
       } finally {
-        setIsLoadingTopics(false);
+        if (!controller.signal.aborted) {
+          setIsLoadingTopics(false);
+        }
       }
     };
 
     fetchTopics();
+    return () => controller.abort();
   }, [user]);
 
   // Start quick-win mini session

@@ -97,10 +97,16 @@ export default function SearchPage() {
   );
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
 
   // Perform search API call
   const performSearch = useCallback(
     async (searchQuery: string, filter: FilterType, page: number, vStatus: VerificationFilter, dFrom: string, dTo: string, minConf: number) => {
+      // Abort any in-flight search request
+      if (searchAbortRef.current) {
+        searchAbortRef.current.abort();
+      }
+
       if (!searchQuery.trim()) {
         setResults([]);
         setTotal(0);
@@ -110,6 +116,9 @@ export default function SearchPage() {
       }
 
       if (!user) return;
+
+      const controller = new AbortController();
+      searchAbortRef.current = controller;
 
       setIsLoading(true);
       setError(null);
@@ -131,6 +140,7 @@ export default function SearchPage() {
 
         const res = await fetch(`/api/search?${params}`, {
           headers: { 'x-user-id': user.id },
+          signal: controller.signal,
         });
 
         if (!res.ok) {
@@ -139,16 +149,23 @@ export default function SearchPage() {
         }
 
         const data: SearchResponse = await res.json();
-        setResults(data.results);
-        setTotal(data.total);
-        setTotalPages(data.totalPages);
+        if (!controller.signal.aborted) {
+          setResults(data.results);
+          setTotal(data.total);
+          setTotalPages(data.totalPages);
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Search failed');
-        setResults([]);
-        setTotal(0);
-        setTotalPages(0);
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        if (!controller.signal.aborted) {
+          setError(err instanceof Error ? err.message : 'Search failed');
+          setResults([]);
+          setTotal(0);
+          setTotalPages(0);
+        }
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
       }
     },
     [user]
@@ -169,6 +186,15 @@ export default function SearchPage() {
     },
     [setSearchParams]
   );
+
+  // Abort in-flight searches when component unmounts
+  useEffect(() => {
+    return () => {
+      if (searchAbortRef.current) {
+        searchAbortRef.current.abort();
+      }
+    };
+  }, []);
 
   // Debounced search on query change
   useEffect(() => {

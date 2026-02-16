@@ -114,11 +114,13 @@ export default function OnboardingPage() {
   // Load preset topics when entering topics step
   useEffect(() => {
     if (currentStep === 'topics' && presetTopics.length === 0) {
-      loadPresetTopics();
+      const controller = new AbortController();
+      loadPresetTopics(controller.signal);
+      return () => controller.abort();
     }
   }, [currentStep]);
 
-  const loadPresetTopics = async () => {
+  const loadPresetTopics = async (signal?: AbortSignal) => {
     setIsLoadingPresets(true);
     setPresetError('');
     try {
@@ -127,6 +129,7 @@ export default function OnboardingPage() {
 
       const res = await fetch('/api/topics/presets', {
         headers: { 'x-user-id': userId },
+        signal,
       });
 
       if (!res.ok) {
@@ -134,19 +137,26 @@ export default function OnboardingPage() {
       }
 
       const data = await res.json();
-      setPresetTopics(data.presets || []);
+      if (!signal?.aborted) {
+        setPresetTopics(data.presets || []);
 
-      // Pre-select already selected presets
-      const alreadySelected = (data.presets || [])
-        .filter((p: PresetTopic) => p.alreadySelected)
-        .map((p: PresetTopic) => p.title);
-      if (alreadySelected.length > 0) {
-        setSelectedTopicTitles(new Set(alreadySelected));
+        // Pre-select already selected presets
+        const alreadySelected = (data.presets || [])
+          .filter((p: PresetTopic) => p.alreadySelected)
+          .map((p: PresetTopic) => p.title);
+        if (alreadySelected.length > 0) {
+          setSelectedTopicTitles(new Set(alreadySelected));
+        }
       }
     } catch (err) {
-      setPresetError(err instanceof Error ? err.message : 'Failed to load topics');
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (!signal?.aborted) {
+        setPresetError(err instanceof Error ? err.message : 'Failed to load topics');
+      }
     } finally {
-      setIsLoadingPresets(false);
+      if (!signal?.aborted) {
+        setIsLoadingPresets(false);
+      }
     }
   };
 

@@ -92,7 +92,7 @@ export default function ConflictsSection() {
   const [isResolving, setIsResolving] = useState(false);
   const [showResolved, setShowResolved] = useState(false);
 
-  const fetchConflicts = useCallback(async () => {
+  const fetchConflicts = useCallback(async (signal?: AbortSignal) => {
     if (!user) return;
     try {
       setError(null);
@@ -100,31 +100,44 @@ export default function ConflictsSection() {
       const [conflictsRes, statsRes] = await Promise.all([
         fetch(`/api/conflicts${statusParam}`, {
           headers: { 'x-user-id': user.id },
+          signal,
         }),
         fetch('/api/conflicts/stats', {
           headers: { 'x-user-id': user.id },
+          signal,
         }),
       ]);
 
       if (conflictsRes.ok) {
         const data = await conflictsRes.json();
-        setConflicts(data.conflicts || []);
+        if (!signal?.aborted) {
+          setConflicts(data.conflicts || []);
+        }
       }
 
       if (statsRes.ok) {
         const data = await statsRes.json();
-        setStats(data);
+        if (!signal?.aborted) {
+          setStats(data);
+        }
       }
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error('Failed to fetch conflicts:', err);
-      setError('Failed to load conflicts');
+      if (!signal?.aborted) {
+        setError('Failed to load conflicts');
+      }
     } finally {
-      setIsLoading(false);
+      if (!signal?.aborted) {
+        setIsLoading(false);
+      }
     }
   }, [user, showResolved]);
 
   useEffect(() => {
-    fetchConflicts();
+    const controller = new AbortController();
+    fetchConflicts(controller.signal);
+    return () => controller.abort();
   }, [fetchConflicts]);
 
   const handleDetectConflicts = async () => {

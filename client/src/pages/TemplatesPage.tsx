@@ -45,6 +45,7 @@ export default function TemplatesPage() {
 
   useEffect(() => {
     if (!user) return;
+    const controller = new AbortController();
 
     const fetchTemplates = async () => {
       setIsLoading(true);
@@ -52,20 +53,29 @@ export default function TemplatesPage() {
       try {
         const res = await fetch('/api/templates', {
           headers: { 'x-user-id': user.id },
+          signal: controller.signal,
         });
         if (!res.ok) {
           throw new Error('Failed to load templates');
         }
         const data = await res.json();
-        setTemplates(data.templates || []);
+        if (!controller.signal.aborted) {
+          setTemplates(data.templates || []);
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load templates');
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        if (!controller.signal.aborted) {
+          setError(err instanceof Error ? err.message : 'Failed to load templates');
+        }
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
       }
     };
 
     fetchTemplates();
+    return () => controller.abort();
   }, [user]);
 
   const parsePrompts = (promptsStr: string | null): string[] => {

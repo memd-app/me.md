@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { formatTime } from '@/utils/dateFormat';
 
@@ -49,16 +49,48 @@ export default function SandboxPage() {
   // Fetch context status on mount
   useEffect(() => {
     if (!user?.id) return;
+    const controller = new AbortController();
+
     fetch('/api/sandbox/context-status', {
       headers: { 'x-user-id': user.id },
+      signal: controller.signal,
     })
       .then(res => res.json())
-      .then(data => setContextStatus(data))
-      .catch(() => {/* ignore context status errors */});
+      .then(data => {
+        if (!controller.signal.aborted) {
+          setContextStatus(data);
+        }
+      })
+      .catch((err) => {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        /* ignore other context status errors */
+      });
+
+    return () => controller.abort();
   }, [user?.id]);
+
+  const compareAbortRef = useRef<AbortController | null>(null);
+
+  // Abort any in-flight comparison on unmount
+  useEffect(() => {
+    return () => {
+      if (compareAbortRef.current) {
+        compareAbortRef.current.abort();
+      }
+    };
+  }, []);
 
   const handleSubmit = useCallback(async () => {
     if (!prompt.trim() || !user?.id) return;
+
+    // Abort previous comparison if still running
+    if (compareAbortRef.current) {
+      compareAbortRef.current.abort();
+    }
+
+    const controller = new AbortController();
+    compareAbortRef.current = controller;
+
     setIsLoading(true);
     setError(null);
 
@@ -70,6 +102,7 @@ export default function SandboxPage() {
           'x-user-id': user.id,
         },
         body: JSON.stringify({ prompt: prompt.trim() }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -78,11 +111,18 @@ export default function SandboxPage() {
       }
 
       const data: ComparisonResult = await response.json();
-      setResult(data);
+      if (!controller.signal.aborted) {
+        setResult(data);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate comparison');
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (!controller.signal.aborted) {
+        setError(err instanceof Error ? err.message : 'Failed to generate comparison');
+      }
     } finally {
-      setIsLoading(false);
+      if (!controller.signal.aborted) {
+        setIsLoading(false);
+      }
     }
   }, [prompt, user?.id]);
 
