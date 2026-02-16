@@ -251,6 +251,42 @@ topicsRouter.post('/presets/select', async (req, res) => {
   }
 });
 
+// GET /api/topics/check-title - Check if a topic with this title already exists for the user
+topicsRouter.get('/check-title', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const title = req.query.title as string;
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Title query parameter is required' });
+    }
+
+    const trimmedTitle = title.trim().toLowerCase();
+
+    // Find existing topics with the same title (case-insensitive)
+    const userTopics = db.select().from(topics).where(eq(topics.userId, userId)).all();
+    const duplicates = userTopics.filter(t => t.title.trim().toLowerCase() === trimmedTitle);
+
+    res.json({
+      exists: duplicates.length > 0,
+      count: duplicates.length,
+      existingTopics: duplicates.map(t => ({
+        id: t.id,
+        title: t.title,
+        status: t.status,
+        createdAt: t.createdAt,
+      })),
+    });
+  } catch (error) {
+    console.error('Check title error:', error);
+    res.status(500).json({ error: 'Failed to check title' });
+  }
+});
+
 // GET /api/topics - List all topics for a user
 topicsRouter.get('/', async (req, res) => {
   try {
@@ -319,6 +355,11 @@ topicsRouter.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Description is too long. Please keep it under 2000 characters.' });
     }
 
+    // Check for existing topics with same title (case-insensitive) for duplicate warning
+    const trimmedTitle = title.trim().toLowerCase();
+    const userTopics = db.select().from(topics).where(eq(topics.userId, userId)).all();
+    const existingDuplicates = userTopics.filter(t => t.title.trim().toLowerCase() === trimmedTitle);
+
     const topicId = uuidv4();
 
     const newTopic = db.insert(topics).values({
@@ -337,7 +378,21 @@ topicsRouter.post('/', async (req, res) => {
       presetCategory: presetCategory || null,
     }).returning().get();
 
-    res.status(201).json({ topic: newTopic });
+    const response: Record<string, any> = { topic: newTopic };
+
+    // Include duplicate warning if there were existing topics with the same title
+    if (existingDuplicates.length > 0) {
+      response.warning = `A topic with the title "${title.trim()}" already exists. Both topics have been kept — you can distinguish them by their creation dates and descriptions.`;
+      response.duplicateCount = existingDuplicates.length;
+      response.existingTopics = existingDuplicates.map(t => ({
+        id: t.id,
+        title: t.title,
+        status: t.status,
+        createdAt: t.createdAt,
+      }));
+    }
+
+    res.status(201).json(response);
   } catch (error) {
     console.error('Create topic error:', error);
     res.status(500).json({ error: 'Failed to create topic. Please try again later.' });
@@ -554,7 +609,20 @@ topicsRouter.put('/:id', async (req, res) => {
       .returning()
       .get();
 
-    res.json({ topic: updated });
+    const response: Record<string, any> = { topic: updated };
+
+    // Check for duplicate title warning when title is being updated
+    if (title !== undefined && title.trim()) {
+      const trimmedTitle = title.trim().toLowerCase();
+      const userTopics = db.select().from(topics).where(eq(topics.userId, userId)).all();
+      const duplicates = userTopics.filter(t => t.id !== topicId && t.title.trim().toLowerCase() === trimmedTitle);
+      if (duplicates.length > 0) {
+        response.warning = `Another topic with the title "${title.trim()}" already exists. Both topics have been kept.`;
+        response.duplicateCount = duplicates.length;
+      }
+    }
+
+    res.json(response);
   } catch (error) {
     console.error('Update topic error:', error);
     res.status(500).json({ error: 'Failed to update topic' });

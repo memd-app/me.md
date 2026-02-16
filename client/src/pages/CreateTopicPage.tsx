@@ -1,4 +1,4 @@
-import { useState, useMemo, FormEvent } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
@@ -35,6 +35,11 @@ export default function CreateTopicPage() {
   const [titleError, setTitleError] = useState<string | null>(null);
   const [tagDuplicateHint, setTagDuplicateHint] = useState<string | null>(null);
 
+  // Duplicate title detection state
+  const [duplicateTitleWarning, setDuplicateTitleWarning] = useState<string | null>(null);
+  const [duplicateExistingTopics, setDuplicateExistingTopics] = useState<Array<{ id: string; title: string; status: string; createdAt: string }>>([]);
+  const duplicateCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Track whether any form field has been modified from defaults
   const isDirty = useMemo(() => {
     return (
@@ -48,6 +53,35 @@ export default function CreateTopicPage() {
 
   // Warn user about unsaved changes on page refresh/close (but not after successful submit)
   useUnsavedChangesWarning(isDirty && !hasSubmitted);
+
+  // Debounced duplicate title check
+  const checkDuplicateTitle = useCallback(async (titleValue: string) => {
+    const trimmed = titleValue.trim();
+    if (!trimmed || !user) {
+      setDuplicateTitleWarning(null);
+      setDuplicateExistingTopics([]);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/topics/check-title?title=${encodeURIComponent(trimmed)}`, {
+        headers: { 'x-user-id': user.id },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.exists && data.count > 0) {
+          setDuplicateTitleWarning(
+            `You already have ${data.count} topic${data.count > 1 ? 's' : ''} with this title. You can still create another — they will be distinguishable by their dates and descriptions.`
+          );
+          setDuplicateExistingTopics(data.existingTopics || []);
+        } else {
+          setDuplicateTitleWarning(null);
+          setDuplicateExistingTopics([]);
+        }
+      }
+    } catch {
+      // Silently ignore check errors - this is a non-critical warning
+    }
+  }, [user]);
 
   // Validate title and set field-level error
   const validateTitle = (value: string): string | null => {
@@ -68,7 +102,23 @@ export default function CreateTopicPage() {
       const err = validateTitle(value);
       setTitleError(err);
     }
+    // Debounced duplicate title check (500ms after user stops typing)
+    if (duplicateCheckTimerRef.current) {
+      clearTimeout(duplicateCheckTimerRef.current);
+    }
+    duplicateCheckTimerRef.current = setTimeout(() => {
+      checkDuplicateTitle(value);
+    }, 500);
   };
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (duplicateCheckTimerRef.current) {
+        clearTimeout(duplicateCheckTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleTitleBlur = () => {
     setTitleTouched(true);
@@ -154,10 +204,18 @@ export default function CreateTopicPage() {
         throw new Error(data.error || 'Failed to create topic');
       }
 
+      const data = await res.json();
+
       // Mark as submitted to prevent back-button resubmission
       setHasSubmitted(true);
-      // Show success toast notification
-      addToast('Topic created successfully!', 'success', 4000);
+
+      // Show appropriate toast based on whether duplicates existed
+      if (data.warning) {
+        addToast('Topic created! Note: a topic with this title already existed.', 'success', 5000);
+      } else {
+        addToast('Topic created successfully!', 'success', 4000);
+      }
+
       // Use replace to remove the form page from history, preventing back+resubmit
       navigate('/app/topics', { replace: true });
     } catch (err) {
@@ -252,6 +310,35 @@ export default function CreateTopicPage() {
                 {title.trim().length}/{TITLE_MAX_LENGTH}
               </span>
             </div>
+            {/* Duplicate title warning */}
+            {duplicateTitleWarning && (
+              <div className="mt-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800" role="alert">
+                <div className="flex items-start gap-2">
+                  <svg className="w-4 h-4 text-amber-500 dark:text-amber-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <div>
+                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                      {duplicateTitleWarning}
+                    </p>
+                    {duplicateExistingTopics.length > 0 && (
+                      <ul className="mt-1.5 space-y-1">
+                        {duplicateExistingTopics.map(t => (
+                          <li key={t.id} className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 dark:bg-amber-500" />
+                            <span>&ldquo;{t.title}&rdquo;</span>
+                            <span className="text-amber-500 dark:text-amber-500">—</span>
+                            <span className="capitalize">{t.status?.replace('_', ' ')}</span>
+                            <span className="text-amber-500 dark:text-amber-500">·</span>
+                            <span>Created {new Date(t.createdAt).toLocaleDateString()}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Description */}
