@@ -89,6 +89,17 @@ const EXPLORE_CATEGORY_DESCRIPTIONS: Record<string, string> = {
   goals: 'Clarify your aspirations, objectives, and what you want to achieve.',
 };
 
+interface AISuggestion {
+  title: string;
+  description: string;
+  category: string;
+  intent: string;
+  tags: string[];
+  suggestedQuestion: string;
+  rationale: string;
+  source: 'ai' | 'preset';
+}
+
 export default function TopicsPage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -110,6 +121,16 @@ export default function TopicsPage() {
   });
   const [fetchVersion, setFetchVersion] = useState(0);
   const exploreCategory = searchParams.get('explore');
+
+  // AI topic suggestions state
+  const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
+  const [suggestionsMessage, setSuggestionsMessage] = useState('');
+  const [suggestionsSource, setSuggestionsSource] = useState<'ai' | 'preset' | ''>('');
+  const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(false);
+  const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(true);
+  const [acceptingIndex, setAcceptingIndex] = useState<number | null>(null);
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
 
   const fetchTopics = useCallback(async (signal?: AbortSignal, isBackground = false) => {
     if (!user) return;
@@ -168,6 +189,79 @@ export default function TopicsPage() {
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
   }, []);
+
+  // Fetch AI topic suggestions
+  const fetchSuggestions = useCallback(async () => {
+    if (!user) return;
+    setIsSuggestionsLoading(true);
+    setSuggestionsError(null);
+    try {
+      const res = await fetch('/api/topics/suggestions', {
+        headers: { 'x-user-id': user.id },
+      });
+      if (!res.ok) {
+        throw new Error('Failed to load suggestions');
+      }
+      const data = await res.json();
+      setSuggestions(data.suggestions || []);
+      setSuggestionsMessage(data.message || '');
+      setSuggestionsSource(data.source || 'preset');
+    } catch (err) {
+      setSuggestionsError(err instanceof Error ? err.message : 'Failed to load suggestions');
+    } finally {
+      setIsSuggestionsLoading(false);
+    }
+  }, [user]);
+
+  // Load suggestions on mount (after initial topics load)
+  useEffect(() => {
+    if (!isLoading && user) {
+      fetchSuggestions();
+    }
+  }, [isLoading, user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Accept a suggestion: create it as a real topic
+  const handleAcceptSuggestion = async (suggestion: AISuggestion, index: number) => {
+    if (!user || acceptingIndex !== null) return;
+    setAcceptingIndex(index);
+    try {
+      const res = await fetch('/api/topics/suggestions/accept', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id,
+        },
+        body: JSON.stringify({
+          title: suggestion.title,
+          description: suggestion.description,
+          category: suggestion.category,
+          intent: suggestion.intent,
+          tags: suggestion.tags,
+          suggestedQuestion: suggestion.suggestedQuestion,
+        }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: 'Failed to create topic' }));
+        throw new Error(errData.error || 'Failed to create topic');
+      }
+      // Refresh topics list
+      setFetchVersion(v => v + 1);
+      // Remove the accepted suggestion from the list
+      setDismissedSuggestions(prev => new Set(prev).add(suggestion.title));
+    } catch (err) {
+      setSuggestionsError(err instanceof Error ? err.message : 'Failed to accept suggestion');
+    } finally {
+      setAcceptingIndex(null);
+    }
+  };
+
+  // Dismiss a suggestion
+  const handleDismissSuggestion = (title: string) => {
+    setDismissedSuggestions(prev => new Set(prev).add(title));
+  };
+
+  // Filter out dismissed suggestions
+  const visibleSuggestions = suggestions.filter(s => !dismissedSuggestions.has(s.title));
 
   const hasActiveFilters = statusFilter !== 'all' || priorityFilter !== 'all' || searchQuery.trim() !== '';
 
@@ -601,6 +695,178 @@ export default function TopicsPage() {
           </div>
         )}
       </div>
+
+      {/* AI-Powered Topic Suggestions */}
+      {!isLoading && visibleSuggestions.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <button
+              onClick={() => setShowSuggestions(!showSuggestions)}
+              className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+            >
+              <svg
+                className={`w-4 h-4 transition-transform ${showSuggestions ? 'rotate-0' : '-rotate-90'}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+              {suggestionsSource === 'ai' ? (
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-xs">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                  </span>
+                  AI-Suggested Topics
+                </span>
+              ) : (
+                <span>Suggested Topics</span>
+              )}
+              <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">
+                ({visibleSuggestions.length})
+              </span>
+            </button>
+            <div className="flex items-center gap-2">
+              {suggestionsSource === 'ai' && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                  Personalized
+                </span>
+              )}
+              <button
+                onClick={fetchSuggestions}
+                disabled={isSuggestionsLoading}
+                className="text-xs text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors flex items-center gap-1"
+                title="Refresh suggestions"
+              >
+                <svg
+                  className={`w-3.5 h-3.5 ${isSuggestionsLoading ? 'animate-spin' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {showSuggestions && (
+            <div className="space-y-2">
+              {suggestionsMessage && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{suggestionsMessage}</p>
+              )}
+              {suggestionsError && (
+                <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2 mb-2">
+                  {suggestionsError}
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {visibleSuggestions.map((suggestion, idx) => (
+                  <div
+                    key={`${suggestion.title}-${idx}`}
+                    className="relative card !p-4 border-l-4 border-l-purple-400 dark:border-l-purple-500 hover:shadow-md transition-shadow"
+                  >
+                    {/* Dismiss button */}
+                    <button
+                      onClick={() => handleDismissSuggestion(suggestion.title)}
+                      className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                      title="Dismiss suggestion"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+
+                    <div className="pr-6">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <h4 className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-1">
+                          {suggestion.title}
+                        </h4>
+                      </div>
+                      <p className="text-xs text-gray-600 dark:text-gray-300 line-clamp-2 mb-2">
+                        {suggestion.description}
+                      </p>
+
+                      {/* Tags and category */}
+                      <div className="flex flex-wrap items-center gap-1 mb-2">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 capitalize">
+                          {suggestion.category}
+                        </span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 capitalize">
+                          {suggestion.intent}
+                        </span>
+                        {suggestion.tags.slice(0, 3).map((tag) => (
+                          <span
+                            key={tag}
+                            className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* Rationale */}
+                      {suggestion.rationale && suggestion.source === 'ai' && (
+                        <p className="text-[11px] text-purple-600 dark:text-purple-400 mb-2 italic line-clamp-2">
+                          {suggestion.rationale}
+                        </p>
+                      )}
+
+                      {/* Suggested opening question */}
+                      {suggestion.suggestedQuestion && (
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-3 line-clamp-2">
+                          <span className="font-medium">Opening Q:</span> {suggestion.suggestedQuestion}
+                        </p>
+                      )}
+
+                      {/* Accept button */}
+                      <button
+                        onClick={() => handleAcceptSuggestion(suggestion, idx)}
+                        disabled={acceptingIndex !== null}
+                        className="w-full px-3 py-1.5 text-xs font-medium rounded-lg bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 hover:bg-primary-100 dark:hover:bg-primary-900/40 transition-colors border border-primary-200 dark:border-primary-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                      >
+                        {acceptingIndex === idx ? (
+                          <>
+                            <div className="animate-spin w-3 h-3 border-2 border-primary-300 border-t-primary-600 rounded-full" />
+                            Adding...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                            Add to My Topics
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {isSuggestionsLoading && suggestions.length === 0 && (
+            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 py-4">
+              <div className="animate-spin w-4 h-4 border-2 border-gray-300 border-t-primary-500 rounded-full" />
+              <span>Generating topic suggestions...</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Suggestions loading state (when no existing suggestions to show) */}
+      {!isLoading && isSuggestionsLoading && suggestions.length === 0 && (
+        <div className="mb-6 card !p-6 text-center">
+          <div className="animate-spin w-6 h-6 border-2 border-gray-300 border-t-purple-500 rounded-full mx-auto mb-2" />
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            Analyzing your knowledge profile for personalized topic suggestions...
+          </p>
+        </div>
+      )}
 
       {/* Error state */}
       {error && (

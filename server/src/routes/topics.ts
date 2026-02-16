@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { db } from '../config/database.js';
-import { topics, sessions, messages, notes, insights, topicConnections, conceptNodes, bookmarks } from '../models/schema.js';
+import { topics, sessions, messages, notes, insights, topicConnections, conceptNodes, bookmarks, users } from '../models/schema.js';
 import { eq, and, or, desc } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
+import { generatePersonalizedTopicSuggestions, isAIAvailable, checkUserAIRateLimit } from '../services/ai.js';
+import type { TopicSuggestionContext } from '../services/ai.js';
 
 export const topicsRouter = Router();
 
@@ -248,6 +250,243 @@ topicsRouter.post('/presets/select', async (req, res) => {
   } catch (error) {
     console.error('Select preset topics error:', error);
     res.status(500).json({ error: 'Failed to create preset topics' });
+  }
+});
+
+// GET /api/topics/suggestions - Get AI-powered personalized topic suggestions
+// Returns hardcoded presets for new users (cold start) or AI-generated suggestions for users with existing data
+topicsRouter.get('/suggestions', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    // Get user's existing topics
+    const userTopics = db.select().from(topics).where(eq(topics.userId, userId)).all();
+
+    // Get user profile info
+    const userRecord = db.select().from(users).where(eq(users.id, userId)).get();
+
+    // Get verified insights for this user
+    const verifiedInsights = db.select({
+      content: insights.content,
+      topicId: insights.topicId,
+      confidenceScore: insights.confidenceScore,
+    }).from(insights).where(
+      and(eq(insights.userId, userId), eq(insights.verificationStatus, 'verified'))
+    ).all();
+
+    // Enrich insights with topic titles
+    const insightsWithTopics = verifiedInsights.map(insight => {
+      const topic = userTopics.find(t => t.id === insight.topicId);
+      return {
+        content: insight.content,
+        topicTitle: topic?.title || 'Unknown Topic',
+        confidenceScore: insight.confidenceScore || 50,
+      };
+    });
+
+    // Cold start: if user has fewer than 3 topics or no verified insights, return presets only
+    if (userTopics.length < 3 || verifiedInsights.length === 0) {
+      // Get existing preset titles to filter out already-selected ones
+      const existingTitles = new Set(userTopics.map(t => t.title.toLowerCase()));
+
+      const coldStartSuggestions = PRESET_TOPICS
+        .filter(p => !existingTitles.has(p.title.toLowerCase()))
+        .slice(0, 5)
+        .map(p => ({
+          title: p.title,
+          description: p.description,
+          category: p.category,
+          intent: p.intent,
+          tags: p.tags,
+          suggestedQuestion: p.suggestedQuestion,
+          rationale: 'Recommended starter topic to build your personal knowledge base.',
+          source: 'preset' as const,
+        }));
+
+      return res.json({
+        suggestions: coldStartSuggestions,
+        source: 'preset',
+        message: 'Showing starter topic suggestions. Complete more sessions to unlock personalized AI suggestions.',
+      });
+    }
+
+    // Check if AI is available
+    if (!isAIAvailable()) {
+      // AI not configured: return filtered presets as suggestions
+      const existingTitles = new Set(userTopics.map(t => t.title.toLowerCase()));
+      const fallbackSuggestions = PRESET_TOPICS
+        .filter(p => !existingTitles.has(p.title.toLowerCase()))
+        .slice(0, 5)
+        .map(p => ({
+          title: p.title,
+          description: p.description,
+          category: p.category,
+          intent: p.intent,
+          tags: p.tags,
+          suggestedQuestion: p.suggestedQuestion,
+          rationale: 'Suggested based on common self-knowledge areas.',
+          source: 'preset' as const,
+        }));
+
+      return res.json({
+        suggestions: fallbackSuggestions,
+        source: 'preset',
+        message: 'AI suggestions are currently unavailable. Showing recommended topics.',
+      });
+    }
+
+    // Check rate limit
+    const rateCheck = checkUserAIRateLimit(userId);
+    if (!rateCheck.allowed) {
+      const existingTitles = new Set(userTopics.map(t => t.title.toLowerCase()));
+      const fallbackSuggestions = PRESET_TOPICS
+        .filter(p => !existingTitles.has(p.title.toLowerCase()))
+        .slice(0, 5)
+        .map(p => ({
+          title: p.title,
+          description: p.description,
+          category: p.category,
+          intent: p.intent,
+          tags: p.tags,
+          suggestedQuestion: p.suggestedQuestion,
+          rationale: 'Suggested based on common self-knowledge areas.',
+          source: 'preset' as const,
+        }));
+
+      return res.json({
+        suggestions: fallbackSuggestions,
+        source: 'preset',
+        message: 'AI rate limit reached. Showing recommended topics. Try again later for personalized suggestions.',
+      });
+    }
+
+    // Get topic connections for cross-topic analysis
+    const allConnections = db.select().from(topicConnections).all();
+    const userConnections = allConnections
+      .filter(c => {
+        const sourceMatch = userTopics.some(t => t.id === c.sourceTopicId);
+        const targetMatch = userTopics.some(t => t.id === c.targetTopicId);
+        return sourceMatch && targetMatch;
+      })
+      .map(c => {
+        const sourceT = userTopics.find(t => t.id === c.sourceTopicId);
+        const targetT = userTopics.find(t => t.id === c.targetTopicId);
+        return {
+          sourceTopic: sourceT?.title || 'Unknown',
+          targetTopic: targetT?.title || 'Unknown',
+          connectionType: c.connectionType,
+        };
+      });
+
+    // Build the context for Claude
+    const suggestionContext: TopicSuggestionContext = {
+      userName: userRecord?.name || '',
+      occupation: userRecord?.occupation || '',
+      existingTopics: userTopics.map(t => ({
+        title: t.title,
+        status: t.status || 'backlog',
+        tags: t.tags,
+        intent: t.intent,
+        presetCategory: t.presetCategory,
+      })),
+      verifiedInsights: insightsWithTopics,
+      topicConnections: userConnections,
+    };
+
+    // Call Claude for personalized suggestions
+    const aiSuggestions = await generatePersonalizedTopicSuggestions(suggestionContext);
+
+    if (!aiSuggestions || aiSuggestions.length === 0) {
+      // Fallback to presets if AI fails
+      const existingTitles = new Set(userTopics.map(t => t.title.toLowerCase()));
+      const fallbackSuggestions = PRESET_TOPICS
+        .filter(p => !existingTitles.has(p.title.toLowerCase()))
+        .slice(0, 5)
+        .map(p => ({
+          title: p.title,
+          description: p.description,
+          category: p.category,
+          intent: p.intent,
+          tags: p.tags,
+          suggestedQuestion: p.suggestedQuestion,
+          rationale: 'Suggested based on common self-knowledge areas.',
+          source: 'preset' as const,
+        }));
+
+      return res.json({
+        suggestions: fallbackSuggestions,
+        source: 'preset',
+        message: 'Could not generate personalized suggestions at this time. Showing recommended topics.',
+      });
+    }
+
+    // Filter out suggestions that duplicate existing topic titles
+    const existingTitles = new Set(userTopics.map(t => t.title.toLowerCase()));
+    const filteredSuggestions = aiSuggestions
+      .filter(s => !existingTitles.has(s.title.toLowerCase()))
+      .map(s => ({
+        ...s,
+        source: 'ai' as const,
+      }));
+
+    return res.json({
+      suggestions: filteredSuggestions,
+      source: 'ai',
+      message: `Generated ${filteredSuggestions.length} personalized topic suggestions based on your ${verifiedInsights.length} verified insights across ${userTopics.length} topics.`,
+    });
+  } catch (error) {
+    console.error('Get topic suggestions error:', error);
+    res.status(500).json({ error: 'Failed to generate topic suggestions' });
+  }
+});
+
+// POST /api/topics/suggestions/accept - Create a topic from an AI suggestion
+topicsRouter.post('/suggestions/accept', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const { title, description, category, intent, tags, suggestedQuestion } = req.body;
+
+    if (!title || (typeof title === 'string' && !title.trim())) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+
+    const topicId = uuidv4();
+
+    // Sanitize tags
+    const sanitizedTags = Array.isArray(tags)
+      ? [...new Set(tags.map((t: string) => t.trim().toLowerCase()).filter((t: string) => t.length > 0))]
+      : null;
+
+    const newTopic = db.insert(topics).values({
+      id: topicId,
+      userId,
+      title: title.trim(),
+      description: description || null,
+      tags: sanitizedTags ? JSON.stringify(sanitizedTags) : null,
+      status: 'backlog',
+      priority: 'medium',
+      intent: intent || 'explore',
+      trigger: suggestedQuestion || null,
+      isPreset: false,
+      presetCategory: category || null,
+    }).returning().get();
+
+    res.status(201).json({
+      topic: newTopic,
+      message: `Created topic "${title.trim()}" from AI suggestion`,
+    });
+  } catch (error) {
+    console.error('Accept topic suggestion error:', error);
+    res.status(500).json({ error: 'Failed to create topic from suggestion' });
   }
 });
 
