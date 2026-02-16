@@ -6,6 +6,82 @@ import { v4 as uuidv4 } from 'uuid';
 
 export const sessionsRouter = Router();
 
+// ============================================
+// Default Interview Map
+// ============================================
+// When no research/context is provided for a topic, the AI follows this default
+// interview map structure. It defines 5 angles to explore breadth-first, ensuring
+// comprehensive coverage of the topic from multiple perspectives.
+
+interface InterviewMapAngle {
+  id: string;
+  label: string;
+  description: string;
+  questionFocus: string;
+  explored: boolean;
+}
+
+interface InterviewMap {
+  type: 'default' | 'research-driven';
+  angles: InterviewMapAngle[];
+  currentAngleIndex: number;
+  breadthFirstComplete: boolean;
+}
+
+const DEFAULT_INTERVIEW_MAP_ANGLES: InterviewMapAngle[] = [
+  {
+    id: 'journey',
+    label: 'Journey',
+    description: 'Personal story and evolution over time',
+    questionFocus: 'how you got here, pivotal moments, and how your relationship with this topic has evolved',
+    explored: false,
+  },
+  {
+    id: 'principles',
+    label: 'Principles',
+    description: 'Core beliefs, values, and guiding rules',
+    questionFocus: 'what you believe to be true, your non-negotiables, and the rules you live by regarding this topic',
+    explored: false,
+  },
+  {
+    id: 'frameworks',
+    label: 'Frameworks',
+    description: 'Mental models and decision-making approaches',
+    questionFocus: 'how you think about and structure your approach, the mental models you use, and your decision-making process',
+    explored: false,
+  },
+  {
+    id: 'examples',
+    label: 'Examples',
+    description: 'Concrete stories, cases, and lived experiences',
+    questionFocus: 'specific situations, real stories, and concrete examples that illustrate your perspective',
+    explored: false,
+  },
+  {
+    id: 'tensions',
+    label: 'Tensions',
+    description: 'Contradictions, trade-offs, and unresolved questions',
+    questionFocus: 'where you feel conflicted, what trade-offs you navigate, and what questions remain unresolved',
+    explored: false,
+  },
+];
+
+function createDefaultInterviewMap(): InterviewMap {
+  return {
+    type: 'default',
+    angles: DEFAULT_INTERVIEW_MAP_ANGLES.map(a => ({ ...a })),
+    currentAngleIndex: 0,
+    breadthFirstComplete: false,
+  };
+}
+
+// Get the current angle to explore based on message count (breadth-first rotation)
+function getCurrentInterviewAngle(interviewMap: InterviewMap, userMessageCount: number): InterviewMapAngle {
+  // Breadth-first: cycle through all 5 angles before going deep
+  const angleIndex = userMessageCount % interviewMap.angles.length;
+  return interviewMap.angles[angleIndex];
+}
+
 // POST /api/sessions - Create a new session
 sessionsRouter.post('/', async (req, res) => {
   try {
@@ -53,6 +129,13 @@ sessionsRouter.post('/', async (req, res) => {
       };
     }
 
+    // When no research context is provided, use the default interview map
+    // This defines 5 angles (journey, principles, frameworks, examples, tensions)
+    // that the AI will navigate breadth-first during the interview
+    const interviewMap = (!researchData && !isMiniSession)
+      ? createDefaultInterviewMap()
+      : null;
+
     const newSession = db.insert(sessions).values({
       id: sessionId,
       topicId,
@@ -62,6 +145,7 @@ sessionsRouter.post('/', async (req, res) => {
       suggestedDurationMinutes: suggestedDuration,
       timeSpentSeconds: 0,
       researchData: researchData ? JSON.stringify(researchData) : null,
+      interviewMap: interviewMap ? JSON.stringify(interviewMap) : null,
     }).returning().get();
 
     // Update topic status to in_progress if it's in backlog/scheduled
@@ -310,6 +394,11 @@ sessionsRouter.post('/:id/messages', async (req, res) => {
       // Gather profile context for personalized responses
       const msgProfileContext = gatherProfileContext(userId, session.topicId);
 
+      // Parse the interview map from session (default map when no research provided)
+      const sessionInterviewMap: InterviewMap | null = session.interviewMap
+        ? JSON.parse(session.interviewMap as string)
+        : null;
+
       // Standard session: use methodology-based questioning with profile context
       aiResponseContent = generateAIResponse(
         topic?.title || 'Unknown Topic',
@@ -317,7 +406,8 @@ sessionsRouter.post('/:id/messages', async (req, res) => {
         topic?.intent || '',
         historyForAI,
         hasResearchContext,
-        msgProfileContext
+        msgProfileContext,
+        sessionInterviewMap
       );
       quickRepliesArr = generateQuickReplies(userMessageCount, aiResponseContent, historyForAI);
 
@@ -405,13 +495,19 @@ sessionsRouter.post('/:id/messages/retry', async (req, res) => {
     // Gather profile context for personalized retry response
     const retryProfileContext = gatherProfileContext(userId, session.topicId);
 
+    // Parse the interview map from session (default map when no research provided)
+    const retryInterviewMap: InterviewMap | null = session.interviewMap
+      ? JSON.parse(session.interviewMap as string)
+      : null;
+
     const aiResponseContent = generateAIResponse(
       topic?.title || 'Unknown Topic',
       topic?.description || '',
       topic?.intent || '',
       historyForAI,
       hasResearchContext,
-      retryProfileContext
+      retryProfileContext,
+      retryInterviewMap
     );
 
     // Generate context-aware quick replies
@@ -537,6 +633,11 @@ sessionsRouter.post('/:id/messages/stream', async (req, res) => {
       // Gather profile context for personalized streaming responses
       const streamProfileContext = gatherProfileContext(userId, session.topicId);
 
+      // Parse the interview map from session (default map when no research provided)
+      const streamInterviewMap: InterviewMap | null = session.interviewMap
+        ? JSON.parse(session.interviewMap as string)
+        : null;
+
       // Standard session: use methodology-based questioning with profile context
       aiResponseContent = generateAIResponse(
         topic?.title || 'Unknown Topic',
@@ -544,7 +645,8 @@ sessionsRouter.post('/:id/messages/stream', async (req, res) => {
         topic?.intent || '',
         historyForAI,
         hasResearchContext,
-        streamProfileContext
+        streamProfileContext,
+        streamInterviewMap
       );
       quickRepliesArr = generateQuickReplies(userMessageCount, aiResponseContent, historyForAI);
 
@@ -1353,6 +1455,14 @@ function generateOpeningMessage(title: string, description: string | null, inten
     message += `\n\nI'll use these references to ask more targeted questions and better understand your perspective on **${title}**. Let's dive in with a focused approach.`;
     message += `\n\n**Based on the context you've shared, what's the most important aspect of "${title}" that you'd like to explore?** How does the referenced material connect to your personal experience or thinking?`;
   } else {
+    // No research context: describe the default interview map structure
+    message += `\n\n**Our interview map:** I'll guide us through five key angles to build a comprehensive picture of your knowledge:`;
+    message += `\n- **Journey** — your personal story and evolution`;
+    message += `\n- **Principles** — your core beliefs and guiding values`;
+    message += `\n- **Frameworks** — your mental models and decision-making approaches`;
+    message += `\n- **Examples** — concrete stories and lived experiences`;
+    message += `\n- **Tensions** — contradictions, trade-offs, and open questions`;
+    message += `\n\nWe'll touch on each angle breadth-first, then go deeper where it matters most.`;
     message += `\n\nTo get us started, I'd love to hear: **What first comes to mind when you think about "${title}"?** Feel free to share anything — a thought, a memory, a feeling, or even a question you have about it.`;
   }
 
@@ -1545,6 +1655,61 @@ function generateQuestion(
   return methodQuestions[messageCount % methodQuestions.length];
 }
 
+// Generate an angle-aware question that steers the conversation toward a specific interview map angle
+function generateAngleQuestion(
+  angle: InterviewMapAngle,
+  topicTitle: string,
+  lastUserMessage: string,
+  previousUserMessages: string[],
+  messageCount: number,
+  methodology: Methodology
+): string {
+  const keyPhrases = extractKeyPhrases(lastUserMessage);
+  const keyPhrase = keyPhrases.length > 0 ? keyPhrases[0] : topicTitle;
+
+  // Angle-specific question templates that combine with the current methodology
+  const angleQuestions: Record<string, string[]> = {
+    journey: [
+      `Let's explore your **journey** with **${topicTitle}**. **How did you first get involved** with **${keyPhrase}**, and how has your relationship with it **evolved over time**?`,
+      `Thinking about **${keyPhrase}** and your path with **${topicTitle}** — **what was a pivotal moment** that shaped how you see this today?`,
+      `Looking back at your **journey** with **${topicTitle}** — **where did you start**, and what **turning points** brought you to where you are now with **${keyPhrase}**?`,
+      `**How has your perspective on ${keyPhrase}** changed over the course of your experience with **${topicTitle}**? Was there a **before-and-after moment**?`,
+      `Tell me about the **arc of your experience** with **${topicTitle}** — **what chapter** are you in now, and what led you here?`,
+    ],
+    principles: [
+      `Let's dig into your **principles** around **${topicTitle}**. When it comes to **${keyPhrase}**, **what do you believe to be fundamentally true**?`,
+      `What are your **non-negotiables** when it comes to **${keyPhrase}** in the context of **${topicTitle}**? What **rules or values** guide you here?`,
+      `If you had to distill your **core beliefs** about **${keyPhrase}** and **${topicTitle}** into a few guiding principles, **what would they be**?`,
+      `**What principle** about **${keyPhrase}** would you **never compromise on**, even under pressure? Why does it matter so deeply?`,
+      `When someone asks your advice about **${topicTitle}**, what's the **first principle** you share? How does **${keyPhrase}** fit into that?`,
+    ],
+    frameworks: [
+      `I'd love to understand your **mental models** for **${topicTitle}**. When you encounter **${keyPhrase}**, **how do you think through it**? What's your framework?`,
+      `**How do you structure your thinking** about **${keyPhrase}** in relation to **${topicTitle}**? Do you have a **step-by-step approach** or a **mental model** you rely on?`,
+      `When you need to make a **decision** about **${keyPhrase}** and **${topicTitle}**, **what framework** do you use? Walk me through your process.`,
+      `What **mental model or analogy** best captures how you approach **${keyPhrase}**? How does it help you navigate **${topicTitle}**?`,
+      `If you were teaching someone your approach to **${topicTitle}**, what **framework** would you share? How does **${keyPhrase}** fit into that structure?`,
+    ],
+    examples: [
+      `Let's ground this in a **concrete example**. Can you share a **specific situation** involving **${keyPhrase}** and **${topicTitle}** that really illustrates your perspective?`,
+      `**Tell me a story** about **${keyPhrase}** — a **real moment** that captures what **${topicTitle}** means to you in practice.`,
+      `Think of a **specific time** when **${keyPhrase}** came into play with **${topicTitle}** — **what happened**, and what did it reveal about you?`,
+      `What's the **best example** you can think of that shows how you handle **${keyPhrase}** in the context of **${topicTitle}**? What made it memorable?`,
+      `Can you walk me through a **real scenario** where your approach to **${keyPhrase}** was put to the test? How did it play out?`,
+    ],
+    tensions: [
+      `Now let's explore the **tensions** and **trade-offs**. Where do you feel **conflicted** about **${keyPhrase}** and **${topicTitle}**? What's not fully resolved?`,
+      `Is there a **contradiction** in how you think about **${keyPhrase}**? A place where your **beliefs pull in different directions** regarding **${topicTitle}**?`,
+      `**What trade-off** do you navigate most often with **${keyPhrase}** and **${topicTitle}**? What do you **gain and lose** in that balancing act?`,
+      `What's an **unresolved question** you have about **${keyPhrase}** and **${topicTitle}**? Something that still **keeps you thinking**?`,
+      `Where does your thinking about **${keyPhrase}** feel **incomplete or uncertain**? What would you need to **resolve that tension**?`,
+    ],
+  };
+
+  const questions = angleQuestions[angle.id] || angleQuestions['journey'];
+  return questions[messageCount % questions.length];
+}
+
 // Main function: Generate AI response based on conversation context using methodology-based questioning
 function generateAIResponse(
   topicTitle: string,
@@ -1552,7 +1717,8 @@ function generateAIResponse(
   topicIntent: string,
   conversationHistory: Array<{ role: string; content: string }>,
   hasResearchContext: boolean = false,
-  profileContext?: ProfileContext
+  profileContext?: ProfileContext,
+  interviewMap?: InterviewMap | null
 ): string {
   const userMessages = conversationHistory.filter(m => m.role === 'user');
   const messageCount = userMessages.length;
@@ -1571,15 +1737,36 @@ function generateAIResponse(
     messageCount
   );
 
-  // Generate focused question with bolded key concepts
-  const question = generateQuestion(
-    methodology,
-    topicTitle,
-    lastUserMessage,
-    previousUserMessages,
-    messageCount,
-    topicIntent || 'explore'
-  );
+  // Generate the question — use interview map angles when available (default map),
+  // otherwise fall back to methodology-only questioning
+  let question: string;
+  let angleLabel = '';
+
+  if (interviewMap && interviewMap.type === 'default' && !hasResearchContext) {
+    // Breadth-first navigation: rotate through all 5 angles
+    const currentAngle = getCurrentInterviewAngle(interviewMap, messageCount);
+    angleLabel = currentAngle.label;
+
+    // Use angle-aware question generation
+    question = generateAngleQuestion(
+      currentAngle,
+      topicTitle,
+      lastUserMessage,
+      previousUserMessages,
+      messageCount,
+      methodology
+    );
+  } else {
+    // Research-driven or no map: use pure methodology-based questioning
+    question = generateQuestion(
+      methodology,
+      topicTitle,
+      lastUserMessage,
+      previousUserMessages,
+      messageCount,
+      topicIntent || 'explore'
+    );
+  }
 
   // Add methodology label as subtle context
   const methodLabel = METHODOLOGY_LABELS[methodology];
@@ -1605,13 +1792,25 @@ function generateAIResponse(
   // For later exchanges, include a subtle methodology indicator
   if (messageCount >= 3 && messageCount % 3 === 0) {
     // Every 3rd exchange, add a brief transition that shifts the angle
-    const transitions = [
-      `Let me shift our angle slightly here.`,
-      `I'd like to explore this from a different direction now.`,
-      `Let's approach this from a new perspective.`,
-      `I want to zoom into something specific.`,
-    ];
-    const transition = transitions[(messageCount / 3) % transitions.length];
+    let transition: string;
+    if (angleLabel) {
+      // Interview map angle transition — reference the specific angle we're moving to
+      const angleTransitions = [
+        `Let me shift our angle to explore your **${angleLabel.toLowerCase()}** perspective.`,
+        `I'd like to approach this from the **${angleLabel.toLowerCase()}** angle now.`,
+        `Let's look at this through the lens of **${angleLabel.toLowerCase()}**.`,
+        `I want to explore the **${angleLabel.toLowerCase()}** dimension of this topic.`,
+      ];
+      transition = angleTransitions[(messageCount / 3) % angleTransitions.length];
+    } else {
+      const transitions = [
+        `Let me shift our angle slightly here.`,
+        `I'd like to explore this from a different direction now.`,
+        `Let's approach this from a new perspective.`,
+        `I want to zoom into something specific.`,
+      ];
+      transition = transitions[(messageCount / 3) % transitions.length];
+    }
     return profileBridge
       ? `${reflection}\n\n${profileBridge}\n\n${transition}\n\n${question}`
       : `${reflection}\n\n${transition}\n\n${question}`;
