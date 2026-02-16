@@ -1,3 +1,30 @@
+## Session - 2026-02-16 (Agent handling Feature #150 - Rate limiting prevents API abuse)
+
+### Accomplished
+- Feature #150 (Rate limiting prevents API abuse): PASSING
+  - Created server/src/middleware/rateLimit.ts with two rate limiters:
+    - apiRateLimiter: 100 requests per 15-minute window on all /api/* routes
+    - authRateLimiter: 20 requests per 15-minute window on /api/auth/* routes
+  - Uses express-rate-limit v8.2.1 (already installed, added to package.json)
+  - Returns 429 Too Many Requests with error message and retry info
+  - Includes draft-7 standard RateLimit headers (RateLimit-Policy, RateLimit)
+  - Includes legacy X-RateLimit-* headers for backward compatibility
+  - Applied rate limiters in server/src/index.ts before route handlers
+  - Default keyGenerator handles IPv4 and IPv6 properly
+  - No mock data patterns, no custom key generator validation errors
+
+### Verification
+- TypeScript compiles clean (zero errors in rateLimit.ts and index.ts)
+- Server starts without errors
+- Health endpoint returns X-RateLimit-Limit: 100, X-RateLimit-Remaining: 99
+- RateLimit-Policy: 100;w=900 header present (draft-7)
+- No mock data patterns found
+- Client TypeScript compiles clean
+
+### Current Status
+- Feature #150 passing
+- Rate limiting active on all API endpoints
+
 ## Session - 2026-02-16 (Agent handling Feature #149 - Firebase Auth token verification on backend)
 
 ### Accomplished
