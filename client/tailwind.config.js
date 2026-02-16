@@ -30,6 +30,7 @@ export default {
         dark: {
           bg: '#0f172a',
           surface: '#1e293b',
+          card: '#1e293b',
           border: '#334155',
         },
       },
@@ -42,5 +43,23 @@ export default {
       },
     },
   },
+  safelist: [
+    // Force-generate dark mode classes for custom colors
+    // (needed because fast-glob may fail on paths with special characters)
+    'dark:bg-dark-bg',
+    'dark:bg-dark-surface',
+    'dark:bg-dark-border',
+    'dark:border-dark-border',
+    'dark:border-dark-bg',
+    'dark:text-dark-bg',
+    'dark:divide-dark-border',
+    'dark:to-dark-surface',
+    'bg-dark-bg',
+    'bg-dark-surface',
+    'bg-dark-border',
+    'border-dark-border',
+    'dark:bg-dark-card',
+    'dark:hover:bg-dark-surface',
+  ],
   plugins: [],
 };

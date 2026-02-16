@@ -8,8 +8,12 @@
   }
 
   body {
-    @apply font-sans text-gray-900 dark:text-gray-100 bg-white dark:bg-dark-bg;
+    @apply font-sans text-gray-900 bg-white;
     line-height: 1.6;
+  }
+
+  .dark body {
+    background-color: #0f172a;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -74,11 +78,20 @@
   }
 
   .btn-secondary {
-    @apply bg-gray-100 dark:bg-dark-surface text-gray-700 dark:text-gray-300
+    @apply bg-gray-100 text-gray-700
            px-4 py-2 rounded-lg font-medium
-           hover:bg-gray-200 dark:hover:bg-gray-700
+           hover:bg-gray-200
            focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2
            transition-colors duration-200;
+  }
+
+  .dark .btn-secondary {
+    background-color: #1e293b;
+    color: #d1d5db;
+  }
+
+  .dark .btn-secondary:hover {
+    background-color: #374151;
   }
 
   .btn-danger {
@@ -88,32 +101,62 @@
   }
 
   .card {
-    @apply bg-white dark:bg-dark-surface border border-gray-200 dark:border-dark-border
+    @apply bg-white border border-gray-200
            rounded-xl p-6 shadow-sm;
   }
 
+  .dark .card {
+    background-color: #1e293b;
+    border-color: #334155;
+  }
+
   .input-field {
-    @apply w-full px-3 py-2 border border-gray-300 dark:border-dark-border
-           rounded-lg bg-white dark:bg-dark-surface
-           text-gray-900 dark:text-gray-100
-           placeholder-gray-500 dark:placeholder-gray-400
+    @apply w-full px-3 py-2 border border-gray-300
+           rounded-lg bg-white
+           text-gray-900
+           placeholder-gray-500
            focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
            transition-colors duration-200;
   }
 
+  .dark .input-field {
+    border-color: #334155;
+    background-color: #1e293b;
+    color: #f3f4f6;
+  }
+
+  .dark .input-field::placeholder {
+    color: #9ca3af;
+  }
+
   .badge-verified {
     @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
-           bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200;
+           bg-green-100 text-green-800;
+  }
+
+  .dark .badge-verified {
+    background-color: rgba(34, 197, 94, 0.4);
+    color: #bbf7d0;
   }
 
   .badge-pending {
     @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
-           bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200;
+           bg-amber-100 text-amber-800;
+  }
+
+  .dark .badge-pending {
+    background-color: #78350f;
+    color: #fde68a;
   }
 
   .badge-rejected {
     @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
-           bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200;
+           bg-red-100 text-red-800;
+  }
+
+  .dark .badge-rejected {
+    background-color: #7f1d1d;
+    color: #fecaca;
   }
 
   /* Screen reader only text - visually hidden but accessible */

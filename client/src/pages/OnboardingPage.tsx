@@ -220,11 +220,15 @@ export default function OnboardingPage() {
         isValid = false;
       } else {
         const date = new Date(profileFields.dateOfBirth);
+        const minDate = new Date('1900-01-01');
         if (isNaN(date.getTime())) {
           errors.dateOfBirth = 'Invalid date';
           isValid = false;
         } else if (date > new Date()) {
           errors.dateOfBirth = 'Date of birth cannot be in the future';
+          isValid = false;
+        } else if (date < minDate) {
+          errors.dateOfBirth = 'Date of birth must be after January 1, 1900';
           isValid = false;
         }
       }
@@ -723,10 +727,14 @@ export default function OnboardingPage() {
                     value={profileFields.dateOfBirth}
                     onChange={(e) => handleFieldChange('dateOfBirth', e.target.value)}
                     className={`input-field ${fieldErrors.dateOfBirth ? 'border-red-500 dark:border-red-500' : ''}`}
+                    min="1900-01-01"
                     max={new Date().toISOString().split('T')[0]}
-                    aria-describedby={fieldErrors.dateOfBirth ? 'ob-dob-error' : undefined}
+                    aria-describedby={fieldErrors.dateOfBirth ? 'ob-dob-error' : 'ob-dob-hint'}
                     aria-invalid={fieldErrors.dateOfBirth ? true : undefined}
                   />
+                  <p id="ob-dob-hint" className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Must be between 1900 and today
+                  </p>
                   {fieldErrors.dateOfBirth && (
                     <p id="ob-dob-error" className="mt-1 text-xs text-red-500" role="alert">{fieldErrors.dateOfBirth}</p>
                   )}

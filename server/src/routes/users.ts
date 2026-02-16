@@ -94,15 +94,20 @@ usersRouter.put('/profile', async (req, res) => {
       errors.push('Notification preferences must be a JSON object');
     }
 
-    // Validate date format if provided
+    // Validate date format and range if provided
     if (dateOfBirth && dateOfBirth.trim().length > 0) {
       const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
       if (!dateRegex.test(dateOfBirth)) {
         errors.push('Date of birth must be in YYYY-MM-DD format');
       } else {
         const date = new Date(dateOfBirth);
+        const minDate = new Date('1900-01-01');
         if (isNaN(date.getTime())) {
           errors.push('Invalid date of birth');
+        } else if (date > new Date()) {
+          errors.push('Date of birth cannot be in the future');
+        } else if (date < minDate) {
+          errors.push('Date of birth must be after January 1, 1900');
         }
       }
     }
@@ -197,15 +202,20 @@ usersRouter.post('/onboarding', async (req, res) => {
     if (!occupation || occupation.trim().length === 0) errors.push('Occupation is required');
     if (!gender || gender.trim().length === 0) errors.push('Gender is required');
 
-    // Validate date format
+    // Validate date format and range
     if (dateOfBirth && dateOfBirth.trim().length > 0) {
       const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
       if (!dateRegex.test(dateOfBirth)) {
         errors.push('Date of birth must be in YYYY-MM-DD format');
       } else {
         const date = new Date(dateOfBirth);
+        const minDate = new Date('1900-01-01');
         if (isNaN(date.getTime())) {
           errors.push('Invalid date of birth');
+        } else if (date > new Date()) {
+          errors.push('Date of birth cannot be in the future');
+        } else if (date < minDate) {
+          errors.push('Date of birth must be after January 1, 1900');
         }
       }
     }
