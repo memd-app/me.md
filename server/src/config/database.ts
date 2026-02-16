@@ -260,6 +260,14 @@ function runMigrations() {
     sqlite.exec('ALTER TABLE sessions ADD COLUMN suggested_duration_minutes INTEGER');
     console.log('[me.md] Migration: added suggested_duration_minutes column to sessions table');
   }
+
+  // Add extraction_method column to insights table
+  const insightsInfo = sqlite.pragma('table_info(insights)') as Array<{ name: string }>;
+  const hasExtractionMethod = insightsInfo.some((col) => col.name === 'extraction_method');
+  if (!hasExtractionMethod) {
+    sqlite.exec("ALTER TABLE insights ADD COLUMN extraction_method TEXT DEFAULT 'ai'");
+    console.log('[me.md] Migration: added extraction_method column to insights table');
+  }
 }
 
 runMigrations();

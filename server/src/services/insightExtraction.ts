@@ -577,13 +577,61 @@ function deduplicateInsights(
 // Main Extraction Pipeline
 // ============================================
 
+/** Maximum number of AI retry attempts before falling back to rule-based extraction */
+const AI_RETRY_ATTEMPTS = 1;
+
+/**
+ * Attempt a single AI call with retry logic.
+ * Returns null only if both the initial call and retry fail.
+ */
+async function callClaudeForInsightsWithRetry(
+  systemPrompt: string,
+  userPrompt: string
+): Promise<Array<{ content: string; confidenceScore: number; category: string }> | null> {
+  // First attempt
+  const firstResult = await callClaudeForInsights(systemPrompt, userPrompt);
+  if (firstResult) return firstResult;
+
+  // Retry logic
+  for (let attempt = 1; attempt <= AI_RETRY_ATTEMPTS; attempt++) {
+    console.warn(`[me.md:insight-extraction] AI extraction attempt failed, retrying (${attempt}/${AI_RETRY_ATTEMPTS})...`);
+    // Brief delay before retry (500ms * attempt)
+    await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+    const retryResult = await callClaudeForInsights(systemPrompt, userPrompt);
+    if (retryResult) {
+      console.log(`[me.md:insight-extraction] AI extraction succeeded on retry attempt ${attempt}`);
+      return retryResult;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Apply confidence penalty to fallback-generated insights.
+ * Fallback insights are lower quality, so we reduce their confidence scores
+ * and cap them to signal that human review is especially important.
+ */
+function applyFallbackConfidencePenalty(insights: ExtractedInsight[]): ExtractedInsight[] {
+  const FALLBACK_CONFIDENCE_PENALTY = 15;
+  const FALLBACK_MAX_CONFIDENCE = 70;
+
+  return insights.map(insight => ({
+    ...insight,
+    confidenceScore: Math.min(
+      Math.max(insight.confidenceScore - FALLBACK_CONFIDENCE_PENALTY, 30),
+      FALLBACK_MAX_CONFIDENCE
+    ),
+  }));
+}
+
 /**
  * Extract insights from content using the unified pipeline.
  *
  * This is the main entry point for all insight extraction. It:
  * 1. Chunks large content if needed
- * 2. Attempts AI-powered extraction with Claude
- * 3. Falls back to rule-based extraction if AI is unavailable
+ * 2. Attempts AI-powered extraction with Claude (with retry)
+ * 3. Falls back to rule-based extraction if AI is unavailable (with logging/flagging)
  * 4. Deduplicates results and applies consistent formatting
  *
  * @param ctx - Extraction context with content, source type, and optional metadata
@@ -603,6 +651,10 @@ export async function extractInsights(ctx: ExtractionContext): Promise<Extracted
   const chunks = chunkContent(processedContent);
   console.log(`[me.md:insight-extraction] Content split into ${chunks.length} chunk(s)`);
 
+  // Track whether fallback was used for any chunk
+  let fallbackUsedForChunks = 0;
+  let aiSuccessForChunks = 0;
+
   // Try AI extraction first
   if (isAIAvailable()) {
     try {
@@ -611,9 +663,11 @@ export async function extractInsights(ctx: ExtractionContext): Promise<Extracted
 
       for (const chunk of chunks) {
         const userPrompt = buildUserPrompt(ctx, chunk);
-        const aiResult = await callClaudeForInsights(systemPrompt, userPrompt);
+        // Use retry-enabled version: tries once, then retries up to AI_RETRY_ATTEMPTS times
+        const aiResult = await callClaudeForInsightsWithRetry(systemPrompt, userPrompt);
 
         if (aiResult) {
+          aiSuccessForChunks++;
           for (const item of aiResult) {
             allInsights.push({
               ...item,
@@ -621,35 +675,47 @@ export async function extractInsights(ctx: ExtractionContext): Promise<Extracted
             });
           }
         } else {
-          // AI failed for this chunk, use fallback
-          console.log(`[me.md:insight-extraction] AI failed for chunk, falling back to rule-based`);
+          // AI failed even after retry for this chunk — use fallback with logging
+          fallbackUsedForChunks++;
+          console.warn(`[me.md:insight-extraction] ⚠️  FALLBACK ACTIVATED for chunk (sourceType=${ctx.sourceType}, topic="${ctx.topicTitle || 'unknown'}"): AI extraction failed after ${AI_RETRY_ATTEMPTS + 1} attempt(s). Using rule-based extraction — insights may be lower quality.`);
           const fallbackResults = extractInsightsFallback({
             ...ctx,
             content: chunk,
           });
-          allInsights.push(...fallbackResults);
+          // Apply confidence penalty to fallback insights
+          const penalizedResults = applyFallbackConfidencePenalty(fallbackResults);
+          allInsights.push(...penalizedResults);
         }
 
         // Stop if we have enough insights
         if (allInsights.length >= MAX_TOTAL_INSIGHTS) break;
       }
 
+      // Log summary of extraction methods used
+      if (fallbackUsedForChunks > 0) {
+        console.warn(`[me.md:insight-extraction] ⚠️  EXTRACTION SUMMARY: ${aiSuccessForChunks} chunk(s) via AI, ${fallbackUsedForChunks} chunk(s) via fallback. Fallback insights have reduced confidence scores and are flagged with extractionMethod='fallback'.`);
+      }
+
       if (allInsights.length > 0) {
         const deduplicated = deduplicateInsights(allInsights, ctx.existingVerifiedInsights);
-        console.log(`[me.md:insight-extraction] AI extraction complete: ${deduplicated.length} insights (from ${allInsights.length} raw)`);
+        console.log(`[me.md:insight-extraction] Extraction complete: ${deduplicated.length} insights (${deduplicated.filter(i => i.extractionMethod === 'ai').length} AI, ${deduplicated.filter(i => i.extractionMethod === 'fallback').length} fallback)`);
         return deduplicated.slice(0, MAX_TOTAL_INSIGHTS);
       }
     } catch (error: unknown) {
       const err = error as { message?: string };
-      console.warn(`[me.md:insight-extraction] AI extraction failed, using fallback: ${err.message || 'Unknown error'}`);
+      console.warn(`[me.md:insight-extraction] ⚠️  AI extraction pipeline failed entirely, using full fallback: ${err.message || 'Unknown error'}`);
     }
+  } else {
+    console.warn(`[me.md:insight-extraction] ⚠️  AI is not available (no API key or client). All insights will use rule-based fallback.`);
   }
 
-  // Fallback to rule-based extraction
-  console.log(`[me.md:insight-extraction] Using rule-based fallback extraction`);
+  // Fallback to rule-based extraction for ALL content
+  console.warn(`[me.md:insight-extraction] ⚠️  FULL FALLBACK ACTIVATED for sourceType=${ctx.sourceType}, topic="${ctx.topicTitle || 'unknown'}": All insights generated via rule-based extraction.`);
   const fallbackResults = extractInsightsFallback(ctx);
-  console.log(`[me.md:insight-extraction] Fallback extraction complete: ${fallbackResults.length} insights`);
-  return fallbackResults;
+  // Apply confidence penalty to all fallback insights
+  const penalizedResults = applyFallbackConfidencePenalty(fallbackResults);
+  console.log(`[me.md:insight-extraction] Fallback extraction complete: ${penalizedResults.length} insights (all flagged as fallback with reduced confidence)`);
+  return penalizedResults;
 }
 
 /**

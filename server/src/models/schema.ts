@@ -121,6 +121,7 @@ export const insights = sqliteTable('insights', {
   verificationStatus: text('verification_status').default('unverified'), // unverified | verified | rejected | re_verification_pending
   agreementScore: integer('agreement_score'), // 1-10
   privacyTier: text('privacy_tier').default('exportable'), // exportable | never_export
+  extractionMethod: text('extraction_method').default('ai'), // 'ai' | 'fallback' — how the insight was extracted
   sourceSessionId: text('source_session_id').references(() => sessions.id),
   verifiedAt: text('verified_at'),
   reVerifyAt: text('re_verify_at'),

@@ -154,6 +154,7 @@ notesRouter.post('/sessions/:sessionId/distill', async (req, res) => {
         userId,
         content: insight.content,
         confidenceScore: insight.confidenceScore,
+        extractionMethod: insight.extractionMethod || 'ai',
         verificationStatus: 'unverified',
         sourceSessionId: sessionId,
       }).returning().get();
