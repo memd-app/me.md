@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { db } from '../config/database.js';
 import { insights, users, topics } from '../models/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
+import { isAIAvailable, checkUserAIRateLimit } from '../services/ai.js';
+import Anthropic from '@anthropic-ai/sdk';
 
 export const sandboxRouter = Router();
 
@@ -112,8 +114,121 @@ function getProfileContext(userId: string): ProfileContext | null {
   };
 }
 
-// Generate a generic response to a prompt (no personal context)
-function generateGenericResponse(prompt: string): string {
+// ============================================
+// Anthropic Client (lazy init, same pattern as ai.ts)
+// ============================================
+let sandboxAnthropicClient: Anthropic | null = null;
+
+function getSandboxClient(): Anthropic | null {
+  if (sandboxAnthropicClient) return sandboxAnthropicClient;
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey || apiKey === 'your-anthropic-api-key' || apiKey.trim() === '') {
+    return null;
+  }
+
+  try {
+    sandboxAnthropicClient = new Anthropic({ apiKey });
+    return sandboxAnthropicClient;
+  } catch {
+    return null;
+  }
+}
+
+// ============================================
+// System prompts for sandbox comparison
+// ============================================
+
+/**
+ * Build the system prompt for the GENERIC response (no personal context).
+ * Claude should respond as a helpful but generic AI assistant with no knowledge of the user.
+ */
+function buildGenericSystemPrompt(): string {
+  return `You are a helpful AI assistant. Respond to the user's prompt directly and helpfully.
+
+## Important Rules
+- You do NOT know anything about the user. Use placeholders like [Your Name], [Name], etc.
+- Write in a neutral, professional tone
+- Be helpful and complete, but your response should be clearly generic — it could apply to anyone
+- Do NOT try to personalize or make assumptions about the user's style, preferences, or background
+- Keep your response concise (under 300 words)
+- If the prompt asks you to write something (email, introduction, etc.), produce the actual content — not instructions on how to write it`;
+}
+
+/**
+ * Build the system prompt for the PERSONALIZED response (with user's verified context).
+ * Claude should write AS IF it were the user, using their verified insights to match style and voice.
+ */
+function buildPersonalizedSystemPrompt(context: ProfileContext): string {
+  const parts: string[] = [];
+
+  parts.push(`You are an AI writing assistant for me.md, a personal knowledge system. You are writing on behalf of a specific user using their verified self-knowledge. Your goal is to produce content that genuinely sounds like the user — matching their communication style, tone, values, and perspective.`);
+
+  // User identity
+  if (context.userName) {
+    parts.push(`\n## User Identity`);
+    parts.push(`Name: ${context.userName}`);
+    if (context.occupation) parts.push(`Occupation: ${context.occupation}`);
+    if (context.location) parts.push(`Location: ${context.location}`);
+  }
+
+  // Communication style insights
+  if (context.communicationStyle.length > 0) {
+    parts.push(`\n## Communication Style (Verified Insights)`);
+    for (const insight of context.communicationStyle) {
+      parts.push(`- ${insight}`);
+    }
+  }
+
+  // Tone of voice insights
+  if (context.toneOfVoice.length > 0) {
+    parts.push(`\n## Tone of Voice (Verified Insights)`);
+    for (const insight of context.toneOfVoice) {
+      parts.push(`- ${insight}`);
+    }
+  }
+
+  // Personal traits and values
+  if (context.personalTraits.length > 0) {
+    parts.push(`\n## Personal Traits & Values (Verified Insights)`);
+    for (const insight of context.personalTraits) {
+      parts.push(`- ${insight}`);
+    }
+  }
+
+  // Strengths
+  if (context.strengths.length > 0) {
+    parts.push(`\n## Strengths & Expertise (Verified Insights)`);
+    for (const insight of context.strengths) {
+      parts.push(`- ${insight}`);
+    }
+  }
+
+  // Decision patterns
+  if (context.decisionPatterns.length > 0) {
+    parts.push(`\n## Decision-Making Patterns (Verified Insights)`);
+    for (const insight of context.decisionPatterns) {
+      parts.push(`- ${insight}`);
+    }
+  }
+
+  parts.push(`\n## Important Rules`);
+  parts.push(`- Write AS the user, not about the user. Use their name to sign off where appropriate.`);
+  parts.push(`- Match their communication style and tone based on the verified insights above.`);
+  parts.push(`- Incorporate their values, strengths, and decision-making patterns naturally.`);
+  parts.push(`- The response should sound authentically like this specific person — not like a generic AI.`);
+  parts.push(`- Keep your response concise (under 300 words).`);
+  parts.push(`- If the prompt asks you to write something (email, introduction, etc.), produce the actual content.`);
+  parts.push(`- DO NOT mention that you're an AI or that you're using verified insights. Just write naturally as the person.`);
+
+  return parts.join('\n');
+}
+
+// ============================================
+// Template-based fallbacks (used when API unavailable)
+// ============================================
+
+function generateGenericResponseFallback(prompt: string): string {
   const lowerPrompt = prompt.toLowerCase();
 
   if (lowerPrompt.includes('email') && lowerPrompt.includes('declin')) {
@@ -155,55 +270,6 @@ Best regards,
 [Your Name]`;
   }
 
-  if (lowerPrompt.includes('feedback') || lowerPrompt.includes('review')) {
-    return `Thank you for sharing this with me. Here are my thoughts:
-
-Overall, the work is solid. There are a few areas that could be improved:
-
-1. Consider adding more detail to the main sections
-2. The structure could be reorganized for better flow
-3. Some points could benefit from additional examples
-
-I hope this feedback is helpful. Let me know if you'd like to discuss any of these points further.`;
-  }
-
-  if (lowerPrompt.includes('explain') || lowerPrompt.includes('describe')) {
-    return `Here's an explanation:
-
-The topic you're asking about involves several key aspects. At its core, it relates to how different components work together to achieve a desired outcome.
-
-The main points to understand are:
-1. The foundational concepts that underpin the topic
-2. How these concepts are applied in practice
-3. The common challenges and how to address them
-
-If you need more specific information about any aspect, please let me know.`;
-  }
-
-  if (lowerPrompt.includes('plan') || lowerPrompt.includes('strategy')) {
-    return `Here's a suggested plan:
-
-Phase 1: Research and Analysis
-- Gather relevant information
-- Identify key stakeholders
-- Assess current state
-
-Phase 2: Planning
-- Define clear objectives
-- Set measurable milestones
-- Allocate resources
-
-Phase 3: Implementation
-- Execute according to plan
-- Monitor progress regularly
-- Make adjustments as needed
-
-Phase 4: Review
-- Evaluate outcomes
-- Document lessons learned
-- Plan next steps`;
-  }
-
   // Default generic response
   return `Here's my response to your prompt:
 
@@ -220,200 +286,67 @@ Best regards,
 [Your Name]`;
 }
 
-// Generate a personalized response incorporating user context
-function generatePersonalizedResponse(prompt: string, context: ProfileContext): string {
-  const lowerPrompt = prompt.toLowerCase();
+function generatePersonalizedResponseFallback(prompt: string, context: ProfileContext): string {
   const name = context.userName || 'there';
-
-  // Build style descriptors from verified insights
-  const styleHints: string[] = [];
-  if (context.communicationStyle.length > 0) {
-    styleHints.push(...context.communicationStyle.slice(0, 2));
-  }
-  if (context.toneOfVoice.length > 0) {
-    styleHints.push(...context.toneOfVoice.slice(0, 2));
-  }
-
-  // Determine tone from insights
-  const allInsights = [
-    ...context.communicationStyle,
-    ...context.toneOfVoice,
-    ...context.personalTraits,
-  ].join(' ').toLowerCase();
-
-  const isFormal = allInsights.includes('formal') || allInsights.includes('professional');
-  const isDirect = allInsights.includes('direct') || allInsights.includes('concise') || allInsights.includes('blunt');
-  const isWarm = allInsights.includes('warm') || allInsights.includes('friendly') || allInsights.includes('empathetic');
-  const isAnalytical = allInsights.includes('analytical') || allInsights.includes('data-driven') || allInsights.includes('logical');
-
   const occupation = context.occupation ? ` (${context.occupation})` : '';
-  const location = context.location ? ` based in ${context.location}` : '';
 
-  if (lowerPrompt.includes('email') && lowerPrompt.includes('declin')) {
-    if (isDirect) {
-      return `Subject: Can't Make the Meeting
-
-Hi [Name],
-
-I need to pass on this meeting - I've got a conflict I can't move.
-
-${context.personalTraits.length > 0 ? `I value being straightforward about scheduling, so I wanted to let you know right away rather than leaving you hanging.` : `I wanted to let you know as soon as possible so you can adjust plans accordingly.`}
-
-Happy to catch up on any key takeaways afterward, or we can find 15 minutes to sync separately if needed.
-
-${isWarm ? `Appreciate you thinking of me for this!` : `Thanks for understanding.`}
-
-${name}${occupation}`;
-    }
-
-    if (isWarm) {
-      return `Subject: So Sorry - Can't Make It to the Meeting
-
-Hi [Name],
-
-I really appreciate the invite, and I'm genuinely sorry I won't be able to join this time - I have a commitment I can't reschedule.
-
-${context.personalTraits.length > 0 ? `You know how much I value our collaboration, so please know this isn't a reflection of the importance of the discussion.` : `Please know I'm still very interested in the topic and would love to stay in the loop.`}
-
-Would you mind sharing the notes afterward? And if there's anything you'd like my input on beforehand, I'm happy to share my thoughts async.
-
-Looking forward to the next one!
-
-Warmly,
-${name}${location ? `\n${location}` : ''}`;
-    }
-
-    // Default personalized decline
-    return `Subject: Regrets - Unable to Attend
-
-Hi [Name],
-
-Thanks for the meeting invitation. Unfortunately, I have a scheduling conflict and won't be able to make it.
-
-${context.communicationStyle.length > 0
-  ? `Based on how I typically like to stay aligned with my team: could you share the key outcomes or action items? I want to make sure I'm up to speed.`
-  : `I'd appreciate if you could share any key outcomes or decisions from the meeting so I can stay aligned.`}
-
-${context.strengths.length > 0
-  ? `If there's a specific area where my perspective would be particularly valuable, I'm happy to provide written input ahead of time.`
-  : `Let me know if there's anything I can contribute asynchronously.`}
-
-Best,
-${name}${occupation}`;
-  }
-
-  if (lowerPrompt.includes('email') && (lowerPrompt.includes('thank') || lowerPrompt.includes('appreciation'))) {
-    return `Subject: Genuinely Grateful
-
-Hi [Name],
-
-I wanted to reach out personally to say thank you for your help with [topic].
-
-${isWarm ? `It really means a lot to me, and I don't want that to get lost in the shuffle of busy days.` : `Your contribution made a real difference.`}
-
-${context.personalTraits.length > 0
-  ? `${context.personalTraits[0]} - and your support here aligns perfectly with what I value most in a colleague.`
-  : `Your willingness to go above and beyond didn't go unnoticed.`}
-
-${isDirect ? `You made a real impact. Thank you.` : `I truly appreciate your time and effort, and I look forward to returning the favor.`}
-
-${isWarm ? 'Warmly,' : 'Best,'}
-${name}${occupation}`;
-  }
-
-  if (lowerPrompt.includes('introduce') || lowerPrompt.includes('introduction')) {
-    return `Hi there!
-
-I'm ${name}${occupation ? `, a ${context.occupation}` : ''}${location}.
-
-${context.personalTraits.length > 0
-  ? `What drives me: ${context.personalTraits[0]}`
-  : `I'm passionate about meaningful work and continuous growth.`}
-
-${context.strengths.length > 0
-  ? `My sweet spot is ${context.strengths[0].toLowerCase()}.`
-  : `I bring a blend of analytical thinking and creative problem-solving.`}
-
-${context.communicationStyle.length > 0
-  ? `When it comes to working together, here's what you should know about me: ${context.communicationStyle[0]}`
-  : `I believe in clear communication and collaborative problem-solving.`}
-
-${isWarm ? `I\'d love to connect and learn more about what you do!` : `Looking forward to connecting.`}
-
-${name}`;
-  }
-
-  if (lowerPrompt.includes('feedback') || lowerPrompt.includes('review')) {
-    return `Here are my thoughts:
-
-${isDirect
-  ? `I'll cut straight to it - here's what stands out:`
-  : isWarm
-    ? `I've gone through this carefully, and I want to start by saying there's a lot of good work here.`
-    : `I've reviewed this thoroughly. Here's my assessment:`}
-
-${isAnalytical
-  ? `**Strengths:**
-- [Specific strong points]
-
-**Areas for improvement:**
-- [Specific suggestions with rationale]
-
-**Recommendation:** [Clear next step]`
-  : `What's working well:
-- [Positive aspects]
-
-Where I see opportunity:
-- [Constructive suggestions]
-
-${context.decisionPatterns.length > 0
-  ? `My recommendation, based on how I typically evaluate these things: ${context.decisionPatterns[0].toLowerCase()}`
-  : `My overall take: focus on the highest-impact changes first.`}`}
-
-${isWarm ? `Happy to discuss any of this in more detail - always enjoy a good brainstorm!` : `Let me know if you'd like to dig deeper into any of these points.`}
-
-${name}`;
-  }
-
-  // Default personalized response
   return `Here's my take on this:
 
 ${context.personalTraits.length > 0
-  ? `Coming from my perspective - ${context.personalTraits[0].toLowerCase()} - here's how I see it:`
-  : `Based on my experience, here's how I'd approach this:`}
+    ? `Coming from my perspective - ${context.personalTraits[0].toLowerCase()} - here's how I see it:`
+    : `Based on my experience, here's how I'd approach this:`}
 
-${isDirect
-  ? `The key points:
-1. [Most important consideration]
-2. [Second priority]
-3. [Action item]`
-  : isAnalytical
-    ? `Let me break this down systematically:
-
-**Context:** [Background]
-**Analysis:** [Key factors]
-**Recommendation:** [Suggested approach]
-**Next steps:** [Actionable items]`
-    : `I've thought about this from a few angles:
-
-- First, consider [main point]
-- Building on that, [secondary point]
-- And practically speaking, [action item]`}
+I've thought about this from a few angles:
+- The most important consideration here is understanding the full picture
+- Building on that, applying what I know from experience
+- And practically speaking, taking concrete action
 
 ${context.strengths.length > 0
-  ? `\nDrawing on my experience in ${context.strengths[0].toLowerCase()}, I'd particularly emphasize the importance of [relevant aspect].`
-  : ''}
+    ? `Drawing on my experience in ${context.strengths[0].toLowerCase()}, I'd particularly emphasize attention to detail and thoughtful execution.`
+    : ''}
 
-${isWarm
-  ? `\nHope this helps! Always happy to chat more about it.`
-  : isDirect
-    ? `\nLet me know if you need anything else.`
-    : `\nFeel free to reach out if you'd like to discuss further.`}
+Feel free to reach out if you'd like to discuss further.
 
 ${name}${occupation}`;
 }
 
-// POST /api/sandbox/compare - Generate side-by-side comparison
+// ============================================
+// Claude API call helpers for sandbox
+// ============================================
+
+async function callClaudeForGenericResponse(client: Anthropic, prompt: string): Promise<string> {
+  const systemPrompt = buildGenericSystemPrompt();
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 1024,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  const textBlocks = response.content.filter(block => block.type === 'text');
+  return textBlocks.map(block => block.text).join('\n\n');
+}
+
+async function callClaudeForPersonalizedResponse(client: Anthropic, prompt: string, context: ProfileContext): Promise<string> {
+  const systemPrompt = buildPersonalizedSystemPrompt(context);
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 1024,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  const textBlocks = response.content.filter(block => block.type === 'text');
+  return textBlocks.map(block => block.text).join('\n\n');
+}
+
+// ============================================
+// Routes
+// ============================================
+
+// POST /api/sandbox/compare - Generate side-by-side comparison (non-streaming)
 sandboxRouter.post('/compare', async (req, res) => {
   try {
     const userId = req.headers['x-user-id'] as string;
@@ -431,34 +364,71 @@ sandboxRouter.post('/compare', async (req, res) => {
 
     // Get user's profile context from verified insights
     const context = getProfileContext(userId);
-
-    // Generate generic response (no context)
-    const genericOutput = generateGenericResponse(trimmedPrompt);
-
-    // Generate personalized response (with context)
-    let personalizedOutput: string;
-    if (context && (
+    const hasContext = !!(context && (
       context.communicationStyle.length > 0 ||
       context.toneOfVoice.length > 0 ||
       context.personalTraits.length > 0 ||
       context.strengths.length > 0
-    )) {
-      personalizedOutput = generatePersonalizedResponse(trimmedPrompt, context);
+    ));
+
+    const client = getSandboxClient();
+    const rateLimitCheck = checkUserAIRateLimit(userId);
+
+    let genericOutput: string;
+    let personalizedOutput: string;
+    let usedAI = false;
+
+    if (client && rateLimitCheck.allowed) {
+      // Use real Claude API for both responses
+      try {
+        console.log('[me.md:sandbox] Calling Claude API for generic + personalized comparison');
+
+        // Run both API calls in parallel for speed
+        const [genericResult, personalizedResult] = await Promise.all([
+          callClaudeForGenericResponse(client, trimmedPrompt),
+          hasContext && context
+            ? callClaudeForPersonalizedResponse(client, trimmedPrompt, context)
+            : Promise.resolve(null),
+        ]);
+
+        genericOutput = genericResult;
+        usedAI = true;
+
+        if (personalizedResult) {
+          personalizedOutput = personalizedResult;
+        } else if (!hasContext) {
+          personalizedOutput = `*Your me.md profile doesn't have enough verified insights yet to personalize this response.*\n\nTo see the difference context makes:\n1. Complete some interview sessions to generate insights\n2. Verify those insights in the Verification Queue\n3. Come back here to see how your verified context transforms generic outputs\n\nOnce you have verified insights about your communication style, tone, values, and strengths, this side will show a response that truly sounds like you.`;
+        } else {
+          personalizedOutput = genericOutput; // fallback
+        }
+
+        console.log('[me.md:sandbox] Claude API comparison generated successfully');
+      } catch (error: unknown) {
+        const err = error as { status?: number; message?: string };
+        console.warn(`[me.md:sandbox] Claude API error, falling back to templates: ${err.message || 'Unknown error'}`);
+        // Fall back to template-based responses
+        genericOutput = generateGenericResponseFallback(trimmedPrompt);
+        personalizedOutput = hasContext && context
+          ? generatePersonalizedResponseFallback(trimmedPrompt, context)
+          : `*Your me.md profile doesn't have enough verified insights yet.*`;
+      }
     } else {
-      // If no verified insights yet, explain that context is needed
-      personalizedOutput = `*Your me.md profile doesn't have enough verified insights yet to personalize this response.*\n\nTo see the difference context makes:\n1. Complete some interview sessions to generate insights\n2. Verify those insights in the Verification Queue\n3. Come back here to see how your verified context transforms generic outputs\n\nOnce you have verified insights about your communication style, tone, values, and strengths, this side will show a response that truly sounds like you.`;
+      // API key not configured or rate limited — use template fallback
+      if (!rateLimitCheck.allowed) {
+        console.warn('[me.md:sandbox] User rate limited, using template fallback');
+      }
+      genericOutput = generateGenericResponseFallback(trimmedPrompt);
+      personalizedOutput = hasContext && context
+        ? generatePersonalizedResponseFallback(trimmedPrompt, context)
+        : `*Your me.md profile doesn't have enough verified insights yet to personalize this response.*\n\nTo see the difference context makes:\n1. Complete some interview sessions to generate insights\n2. Verify those insights in the Verification Queue\n3. Come back here to see how your verified context transforms generic outputs\n\nOnce you have verified insights about your communication style, tone, values, and strengths, this side will show a response that truly sounds like you.`;
     }
 
     res.json({
       prompt: trimmedPrompt,
       genericOutput,
       personalizedOutput,
-      hasContext: !!(context && (
-        context.communicationStyle.length > 0 ||
-        context.toneOfVoice.length > 0 ||
-        context.personalTraits.length > 0 ||
-        context.strengths.length > 0
-      )),
+      hasContext,
+      usedAI,
       contextSummary: context ? {
         communicationInsights: context.communicationStyle.length,
         toneInsights: context.toneOfVoice.length,
@@ -471,6 +441,166 @@ sandboxRouter.post('/compare', async (req, res) => {
   } catch (error) {
     console.error('Sandbox compare error:', error);
     res.status(500).json({ error: 'Failed to generate comparison' });
+  }
+});
+
+// POST /api/sandbox/compare/stream - Generate side-by-side comparison with SSE streaming
+sandboxRouter.post('/compare/stream', async (req, res) => {
+  const userId = req.headers['x-user-id'] as string;
+  const { prompt } = req.body;
+
+  if (!userId) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+
+  if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+    return res.status(400).json({ error: 'Prompt is required' });
+  }
+
+  const trimmedPrompt = prompt.trim();
+
+  // Get user's profile context from verified insights
+  const context = getProfileContext(userId);
+  const hasContext = !!(context && (
+    context.communicationStyle.length > 0 ||
+    context.toneOfVoice.length > 0 ||
+    context.personalTraits.length > 0 ||
+    context.strengths.length > 0
+  ));
+
+  const client = getSandboxClient();
+  const rateLimitCheck = checkUserAIRateLimit(userId);
+
+  if (!client || !rateLimitCheck.allowed) {
+    // Fall back to non-streaming template response
+    const genericOutput = generateGenericResponseFallback(trimmedPrompt);
+    const personalizedOutput = hasContext && context
+      ? generatePersonalizedResponseFallback(trimmedPrompt, context)
+      : `*Your me.md profile doesn't have enough verified insights yet to personalize this response.*`;
+
+    // Still send as SSE events for consistent client handling
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+
+    // Send full responses as single chunks (template fallback)
+    res.write(`data: ${JSON.stringify({ type: 'generic_chunk', content: genericOutput })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: 'generic_done' })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: 'personalized_chunk', content: personalizedOutput })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: 'personalized_done' })}\n\n`);
+    res.write(`data: ${JSON.stringify({
+      type: 'complete',
+      hasContext,
+      usedAI: false,
+      contextSummary: context ? {
+        communicationInsights: context.communicationStyle.length,
+        toneInsights: context.toneOfVoice.length,
+        personalTraits: context.personalTraits.length,
+        strengths: context.strengths.length,
+        decisionPatterns: context.decisionPatterns.length,
+      } : null,
+      generatedAt: new Date().toISOString(),
+    })}\n\n`);
+    res.end();
+    return;
+  }
+
+  // Set up SSE response
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+
+  // Send initial metadata
+  res.write(`data: ${JSON.stringify({ type: 'start', hasContext })}\n\n`);
+
+  let aborted = false;
+  req.on('close', () => { aborted = true; });
+
+  try {
+    console.log('[me.md:sandbox] Starting streamed Claude comparison');
+
+    // Stream generic response
+    const genericSystemPrompt = buildGenericSystemPrompt();
+    const genericStream = client.messages.stream({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      system: genericSystemPrompt,
+      messages: [{ role: 'user', content: trimmedPrompt }],
+    });
+
+    for await (const event of genericStream) {
+      if (aborted) break;
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        res.write(`data: ${JSON.stringify({ type: 'generic_chunk', content: event.delta.text })}\n\n`);
+      }
+    }
+
+    if (!aborted) {
+      res.write(`data: ${JSON.stringify({ type: 'generic_done' })}\n\n`);
+    }
+
+    // Stream personalized response (or send context-needed message)
+    if (!aborted && hasContext && context) {
+      const personalizedSystemPrompt = buildPersonalizedSystemPrompt(context);
+      const personalizedStream = client.messages.stream({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1024,
+        system: personalizedSystemPrompt,
+        messages: [{ role: 'user', content: trimmedPrompt }],
+      });
+
+      for await (const event of personalizedStream) {
+        if (aborted) break;
+        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+          res.write(`data: ${JSON.stringify({ type: 'personalized_chunk', content: event.delta.text })}\n\n`);
+        }
+      }
+
+      if (!aborted) {
+        res.write(`data: ${JSON.stringify({ type: 'personalized_done' })}\n\n`);
+      }
+    } else if (!aborted) {
+      // No context available
+      const noContextMsg = `*Your me.md profile doesn't have enough verified insights yet to personalize this response.*\n\nTo see the difference context makes:\n1. Complete some interview sessions to generate insights\n2. Verify those insights in the Verification Queue\n3. Come back here to see how your verified context transforms generic outputs\n\nOnce you have verified insights about your communication style, tone, values, and strengths, this side will show a response that truly sounds like you.`;
+      res.write(`data: ${JSON.stringify({ type: 'personalized_chunk', content: noContextMsg })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'personalized_done' })}\n\n`);
+    }
+
+    if (!aborted) {
+      // Send completion event with metadata
+      res.write(`data: ${JSON.stringify({
+        type: 'complete',
+        hasContext,
+        usedAI: true,
+        contextSummary: context ? {
+          communicationInsights: context.communicationStyle.length,
+          toneInsights: context.toneOfVoice.length,
+          personalTraits: context.personalTraits.length,
+          strengths: context.strengths.length,
+          decisionPatterns: context.decisionPatterns.length,
+        } : null,
+        generatedAt: new Date().toISOString(),
+      })}\n\n`);
+
+      console.log('[me.md:sandbox] Streamed comparison complete');
+    }
+  } catch (error: unknown) {
+    const err = error as { status?: number; message?: string };
+    console.error(`[me.md:sandbox] Stream error: ${err.message || 'Unknown error'}`);
+
+    if (!aborted) {
+      res.write(`data: ${JSON.stringify({ type: 'error', message: 'AI generation failed. Please try again.' })}\n\n`);
+    }
+  } finally {
+    if (!aborted) {
+      res.end();
+    }
   }
 });
 
@@ -495,6 +625,7 @@ sandboxRouter.get('/context-status', async (req, res) => {
     res.json({
       hasContext: totalInsights > 0,
       totalCategorizedInsights: totalInsights,
+      aiAvailable: isAIAvailable(),
       categories: context ? {
         communicationStyle: context.communicationStyle.length,
         toneOfVoice: context.toneOfVoice.length,

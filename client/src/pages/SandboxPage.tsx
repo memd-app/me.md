@@ -8,6 +8,7 @@ interface ComparisonResult {
   genericOutput: string;
   personalizedOutput: string;
   hasContext: boolean;
+  usedAI: boolean;
   contextSummary: {
     communicationInsights: number;
     toneInsights: number;
@@ -21,6 +22,7 @@ interface ComparisonResult {
 interface ContextStatus {
   hasContext: boolean;
   totalCategorizedInsights: number;
+  aiAvailable: boolean;
   categories: {
     communicationStyle: number;
     toneOfVoice: number;
@@ -46,6 +48,11 @@ export default function SandboxPage() {
   const [result, setResult] = useState<ComparisonResult | null>(null);
   const [contextStatus, setContextStatus] = useState<ContextStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Streaming state
+  const [genericStreaming, setGenericStreaming] = useState('');
+  const [personalizedStreaming, setPersonalizedStreaming] = useState('');
+  const [genericDone, setGenericDone] = useState(false);
+  const [personalizedDone, setPersonalizedDone] = useState(false);
 
   // Fetch context status on mount
   useEffect(() => {
@@ -94,9 +101,15 @@ export default function SandboxPage() {
 
     setIsLoading(true);
     setError(null);
+    setResult(null);
+    setGenericStreaming('');
+    setPersonalizedStreaming('');
+    setGenericDone(false);
+    setPersonalizedDone(false);
 
     try {
-      const response = await fetch('/api/sandbox/compare', {
+      // Use the streaming endpoint
+      const response = await fetch('/api/sandbox/compare/stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -107,13 +120,107 @@ export default function SandboxPage() {
       });
 
       if (!response.ok) {
+        // Non-streaming error responses (401, 400, etc.)
         const errData = await response.json().catch(() => ({}));
         throw new Error(errData.error || `Server error: ${response.status}`);
       }
 
-      const data: ComparisonResult = await response.json();
-      if (!controller.signal.aborted) {
-        setResult(data);
+      // Parse the SSE stream
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let genericText = '';
+      let personalizedText = '';
+      let finalResult: Partial<ComparisonResult> = { prompt: prompt.trim() };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete SSE messages
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const dataStr = line.slice(6).trim();
+          if (!dataStr) continue;
+
+          try {
+            const event = JSON.parse(dataStr);
+
+            switch (event.type) {
+              case 'start':
+                // Initial metadata
+                break;
+
+              case 'generic_chunk':
+                genericText += event.content;
+                setGenericStreaming(genericText);
+                break;
+
+              case 'generic_done':
+                setGenericDone(true);
+                break;
+
+              case 'personalized_chunk':
+                personalizedText += event.content;
+                setPersonalizedStreaming(personalizedText);
+                break;
+
+              case 'personalized_done':
+                setPersonalizedDone(true);
+                break;
+
+              case 'complete':
+                finalResult = {
+                  ...finalResult,
+                  genericOutput: genericText,
+                  personalizedOutput: personalizedText,
+                  hasContext: event.hasContext,
+                  usedAI: event.usedAI,
+                  contextSummary: event.contextSummary,
+                  generatedAt: event.generatedAt,
+                };
+                if (!controller.signal.aborted) {
+                  setResult(finalResult as ComparisonResult);
+                }
+                break;
+
+              case 'error':
+                throw new Error(event.message || 'AI generation failed');
+            }
+          } catch (parseErr) {
+            // If it's not a parse error but a thrown error from inside switch, rethrow
+            if (parseErr instanceof Error && parseErr.message !== 'AI generation failed') {
+              // Only ignore JSON parse errors, not application errors
+              if (parseErr instanceof SyntaxError) continue;
+            }
+            throw parseErr;
+          }
+        }
+      }
+
+      // If we finished reading but never got a 'complete' event, build result from what we have
+      if (!finalResult.generatedAt && (genericText || personalizedText)) {
+        finalResult = {
+          ...finalResult,
+          genericOutput: genericText,
+          personalizedOutput: personalizedText,
+          hasContext: false,
+          usedAI: true,
+          contextSummary: null,
+          generatedAt: new Date().toISOString(),
+        };
+        if (!controller.signal.aborted) {
+          setResult(finalResult as ComparisonResult);
+        }
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
@@ -140,6 +247,14 @@ export default function SandboxPage() {
     }
   };
 
+  // Determine what to show in each column
+  const genericContent = result ? result.genericOutput : genericStreaming || null;
+  const personalizedContent = result ? result.personalizedOutput : personalizedStreaming || null;
+  const isGenericStreaming = isLoading && !genericDone && genericStreaming.length > 0;
+  const isPersonalizedStreaming = isLoading && !personalizedDone && personalizedStreaming.length > 0;
+  const isWaitingForGeneric = isLoading && !genericDone && genericStreaming.length === 0;
+  const isWaitingForPersonalized = isLoading && genericDone && !personalizedDone && personalizedStreaming.length === 0;
+
   return (
     <div className="max-w-6xl mx-auto">
       <div className="mb-6">
@@ -161,7 +276,9 @@ export default function SandboxPage() {
               <span className="font-medium">Context active:</span>{' '}
               {contextStatus.totalCategorizedInsights} verified insight{contextStatus.totalCategorizedInsights !== 1 ? 's' : ''} found across{' '}
               {contextStatus.categories ? Object.values(contextStatus.categories).filter(v => v > 0).length : 0} categories.
-              Personalized outputs will reflect your style.
+              {contextStatus.aiAvailable
+                ? ' AI-powered comparison is enabled.'
+                : ' Responses use template-based comparison (no API key configured).'}
             </span>
           ) : (
             <span>
@@ -240,11 +357,20 @@ export default function SandboxPage() {
             <span className="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 inline-block"></span>
             Without your context
           </h2>
-          {result ? (
+          {genericContent ? (
             <div className="prose dark:prose-invert prose-sm max-w-none">
               <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 leading-relaxed">
-                {result.genericOutput}
+                {genericContent}
+                {isGenericStreaming && <span className="inline-block w-1.5 h-4 bg-gray-400 dark:bg-gray-500 animate-pulse ml-0.5 align-text-bottom" />}
               </pre>
+            </div>
+          ) : isWaitingForGeneric ? (
+            <div className="text-gray-500 dark:text-gray-300 text-center py-8 flex items-center justify-center gap-2">
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Generating generic response...
             </div>
           ) : (
             <div className="text-gray-500 dark:text-gray-300 text-center py-8">
@@ -259,14 +385,15 @@ export default function SandboxPage() {
             <span className="w-2 h-2 rounded-full bg-primary-500 dark:bg-primary-400 inline-block"></span>
             With your me.md context
           </h2>
-          {result ? (
+          {personalizedContent ? (
             <div>
               <div className="prose dark:prose-invert prose-sm max-w-none">
                 <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 dark:text-gray-300 bg-primary-50 dark:bg-primary-900/20 p-4 rounded-lg border border-primary-200 dark:border-primary-800 leading-relaxed">
-                  {result.personalizedOutput}
+                  {personalizedContent}
+                  {isPersonalizedStreaming && <span className="inline-block w-1.5 h-4 bg-primary-400 dark:bg-primary-500 animate-pulse ml-0.5 align-text-bottom" />}
                 </pre>
               </div>
-              {result.contextSummary && result.hasContext && (
+              {result?.contextSummary && result.hasContext && (
                 <div className="mt-3 text-xs text-gray-500 dark:text-gray-300 flex flex-wrap gap-2">
                   <span className="font-medium">Context used:</span>
                   {result.contextSummary.communicationInsights > 0 && (
@@ -297,6 +424,18 @@ export default function SandboxPage() {
                 </div>
               )}
             </div>
+          ) : isWaitingForPersonalized ? (
+            <div className="text-gray-500 dark:text-gray-300 text-center py-8 flex items-center justify-center gap-2">
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Generating personalized response...
+            </div>
+          ) : isLoading ? (
+            <div className="text-gray-500 dark:text-gray-300 text-center py-8">
+              Waiting for generic response to finish...
+            </div>
           ) : (
             <div className="text-gray-500 dark:text-gray-300 text-center py-8">
               Run a comparison to see results
@@ -305,10 +444,22 @@ export default function SandboxPage() {
         </div>
       </div>
 
-      {/* Timestamp */}
+      {/* Timestamp and AI indicator */}
       {result && (
-        <div className="mt-4 text-xs text-gray-500 dark:text-gray-300 text-center">
-          Generated at {formatTime(result.generatedAt)}
+        <div className="mt-4 text-xs text-gray-500 dark:text-gray-300 text-center space-y-1">
+          <div>Generated at {formatTime(result.generatedAt)}</div>
+          {result.usedAI && (
+            <div className="flex items-center justify-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>
+              <span>Powered by Claude AI</span>
+            </div>
+          )}
+          {!result.usedAI && (
+            <div className="flex items-center justify-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-gray-400 inline-block"></span>
+              <span>Template-based (no API key configured)</span>
+            </div>
+          )}
         </div>
       )}
     </div>
