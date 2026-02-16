@@ -1,3 +1,37 @@
+## Session - 2026-02-16 (Agent handling Feature #232)
+
+### Accomplished
+- Feature #232 (Big Five Test - AI-Powered Insight Generation): PASSING ✅
+  - Created server/src/services/personalityInsights.ts with full Claude-powered analysis
+  - On test completion, domain scores, facet scores, and result text sent to Claude for analysis
+  - Claude generates 5-10 personality insights (per-domain + cross-domain observations)
+  - Each insight has category, claim, confidence level, and supporting evidence
+  - Insights stored in existing insights table, linked to a "Big Five Personality Assessment" topic
+  - If user has existing verified interview insights, they are included in Claude prompt for cross-referencing
+  - Claude highlights agreements and contradictions between test results and interview insights
+  - Generated insights appear on the results page in an 'AI Analysis' section with insight cards, badges, and links
+  - Insights enter the normal verification pipeline (unverified status, link to /app/verify)
+  - Added POST /api/assessment/:attemptId/generate-insights for manual retry
+
+### Files Changed
+- server/src/services/personalityInsights.ts (NEW): Core service with generatePersonalityInsights() and storePersonalityInsights()
+- server/src/routes/assessment.ts: Added async insight generation on completion + generate-insights endpoint + AI insights in results response
+- client/src/pages/AssessmentResultsPage.tsx: Added AI Analysis section with insight cards, agreements, contradictions, and verification CTA
+
+### Verification
+- Client TypeScript compiles with zero errors (tsc --noEmit)
+- Vite production build succeeds (656 modules transformed)
+- Server starts cleanly (database connected, schema initialized, health OK)
+- No mock data patterns found in any changed files
+- All data stored in real SQLite database via Drizzle ORM
+
+### Current Status
+- 232/236 features passing (98.3%)
+- Feature #232 marked as passing
+
+### What to Work on Next
+- Continue with remaining features from orchestrator
+
 ## Session - 2026-02-16 (Agent handling Feature #236)
 
 ### Accomplished
