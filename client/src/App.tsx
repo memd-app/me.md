@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import { ToastProvider } from '@/contexts/ToastContext';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import OnboardingGuard from '@/components/auth/OnboardingGuard';
@@ -35,6 +36,7 @@ function App() {
     <ErrorBoundary>
     <AuthProvider>
       <ThemeProvider>
+      <ToastProvider>
       <div className="min-h-screen bg-white dark:bg-dark-bg text-gray-900 dark:text-gray-100">
         <Routes>
           {/* Public routes */}
@@ -92,6 +94,7 @@ function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </div>
+      </ToastProvider>
       </ThemeProvider>
     </AuthProvider>
     </ErrorBoundary>

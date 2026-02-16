@@ -1,6 +1,7 @@
 import { useState, useMemo, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 
@@ -14,6 +15,7 @@ const INTENT_OPTIONS = [
 export default function CreateTopicPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { addToast } = useToast();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -107,6 +109,8 @@ export default function CreateTopicPage() {
 
       // Mark as submitted to prevent back-button resubmission
       setHasSubmitted(true);
+      // Show success toast notification
+      addToast('Topic created successfully!', 'success', 4000);
       // Use replace to remove the form page from history, preventing back+resubmit
       navigate('/app/topics', { replace: true });
     } catch (err) {
