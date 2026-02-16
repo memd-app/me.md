@@ -1,3 +1,65 @@
+## Session - 2026-02-16 (Agent handling Feature #189)
+
+### Accomplished
+- Feature #189 (Session timeout and token refresh works correctly): PASSING
+
+### Changes Made
+
+**Server - Token Refresh Endpoint:**
+- Added `POST /api/auth/refresh` endpoint in `server/src/routes/auth.ts`
+  - Accepts current Bearer token, validates it, revokes it, issues new token
+  - Returns new token, expiration time, and user data
+- Added `refreshSessionToken()` function in `server/src/middleware/auth.ts`
+  - Validates HMAC signature, looks up token in DB
+  - 24-hour grace period after expiry allows refresh of recently-expired tokens
+  - Verifies user still exists before issuing new token
+  - Revokes old token atomically before generating new one
+
+**Client - Automatic Token Refresh:**
+- Updated `client/src/contexts/AuthContext.tsx`:
+  - Stores `tokenExpiresAt` in localStorage (`memd_token_expires_at`)
+  - `calculateRefreshDelay()` computes when to refresh (at 80% of token lifetime)
+  - `scheduleTokenRefresh()` sets up automatic timer-based refresh
+  - `refreshToken()` calls server refresh endpoint, stores new token
+  - `saveSession()` centralizes token+user storage and schedules refresh
+  - All auth methods (login, register, Google) use `saveSession()` with refresh scheduling
+  - Session restoration on mount re-schedules refresh from stored expiry
+  - On refresh failure, shows SessionExpiredModal for graceful re-auth
+
+**Client - Session Expired Modal:**
+- Created `client/src/components/SessionExpiredModal.tsx`
+  - Displayed when token refresh fails (expired beyond grace period)
+  - Email/password re-auth form with validation and error handling
+  - "Sign Out" option to fully logout
+  - Uses existing Modal component, matches app design system
+  - Pre-fills email from current user context
+
+### Verification
+- TypeScript compiles with zero errors (client); server errors are pre-existing in graph.ts/sessions.ts (not auth)
+- Server starts cleanly, health check returns OK
+- Token refresh endpoint tested end-to-end:
+  - Register -> get token + expiresAt -> refresh -> new token works ✓
+  - Old token properly revoked after refresh (returns 401) ✓
+  - Invalid token rejected by refresh endpoint (returns 401) ✓
+  - No token provided to refresh endpoint (returns 401) ✓
+- No mock data patterns in client/src or server/src
+- Test user cleaned up after verification
+
+### Token Lifecycle Summary
+- Token issued on login/register/google-auth with 7-day expiration
+- Client schedules automatic refresh at 80% of token lifetime (~5.6 days)
+- Server refresh: validate old token -> revoke old -> issue new -> return new
+- Grace period: tokens can be refreshed up to 24h after expiry
+- If refresh fails (>24h expired, network error): SessionExpiredModal shown
+- User can re-authenticate via modal or sign out
+
+### Current Status
+- 194/209 features passing (92.8%)
+- Feature #189 marked as passing
+
+### What to Work on Next
+- Continue with next assigned features from orchestrator
+
 ## Session - 2026-02-16 (Agent handling Feature #188)
 
 ### Accomplished
