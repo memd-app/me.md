@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 function GoogleIcon() {
   return (
-    <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <path
         d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
         fill="#4285F4"
@@ -75,11 +75,11 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-bg px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-bg px-4" role="main" aria-label="Sign in page">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <Link to="/" className="text-3xl font-bold text-primary-600">
+          <Link to="/" className="text-3xl font-bold text-primary-600" aria-label="me.md - Go to home page">
             me.md
           </Link>
           <p className="mt-2 text-gray-600 dark:text-gray-400">
@@ -91,7 +91,7 @@ export default function LoginPage() {
         <div className="card">
           {error && (
             <div className="mb-5 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm flex items-start gap-2" role="alert">
-              <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+              <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
               </svg>
               <div>
@@ -106,6 +106,7 @@ export default function LoginPage() {
             onClick={handleGoogleSignIn}
             disabled={isGoogleLoading || isSubmitting}
             className="w-full flex items-center justify-center gap-3 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-card hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Sign in with Google"
           >
             {isGoogleLoading ? (
               <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />

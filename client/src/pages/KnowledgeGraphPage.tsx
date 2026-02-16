@@ -543,7 +543,7 @@ export default function KnowledgeGraphPage() {
   }
 
   return (
-    <div className="max-w-full mx-auto px-2">
+    <div className="max-w-full mx-auto px-2" role="region" aria-label="Knowledge Graph visualization">
       {/* Header */}
       <div className="mb-4 flex items-center justify-between flex-wrap gap-2">
         <div>
@@ -576,6 +576,7 @@ export default function KnowledgeGraphPage() {
           <button
             onClick={fetchGraph}
             className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            aria-label="Refresh knowledge graph"
           >
             Refresh
           </button>
@@ -600,17 +601,17 @@ export default function KnowledgeGraphPage() {
 
       {/* Error state */}
       {error && (
-        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm">
+        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm" role="alert">
           {error}
-          <button onClick={fetchGraph} className="ml-2 underline">Retry</button>
+          <button onClick={fetchGraph} className="ml-2 underline" aria-label="Retry loading knowledge graph">Retry</button>
         </div>
       )}
 
       {/* Loading state */}
       {loading && (
-        <div className="card" style={{ minHeight: '600px' }}>
+        <div className="card" style={{ minHeight: '600px' }} role="status" aria-label="Loading knowledge graph">
           <div className="flex flex-col items-center justify-center h-96">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mb-4"></div>
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mb-4" aria-hidden="true"></div>
             <p className="text-gray-600 dark:text-gray-400">Loading knowledge graph...</p>
           </div>
         </div>
@@ -627,6 +628,8 @@ export default function KnowledgeGraphPage() {
             ref={svgRef}
             className="w-full h-full"
             style={{ width: '100%', height: '100%' }}
+            role="img"
+            aria-label={`Knowledge graph with ${graphData?.stats?.topicCount || 0} topics, ${graphData?.stats?.conceptCount || 0} concepts, and ${graphData?.stats?.edgeCount || 0} connections`}
           />
 
           {/* Tooltip */}
