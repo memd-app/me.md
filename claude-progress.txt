@@ -1,3 +1,43 @@
+## Session - 2026-02-16 (Agent handling Feature #225)
+
+### Accomplished
+- Feature #225 (Remove Rule-Based Insight Extraction as Primary Path for Interviews): PASSING ✅
+  - Most server-side changes were already committed by Feature #226 agent (schema, migration, retry logic, confidence penalties, logging)
+  - Added UI indicators for fallback-generated insights in the Verification Queue
+
+### Changes Summary (Feature #225 builds on Feature #226 foundation)
+
+**Already committed by Feature #226 agent:**
+- **server/src/models/schema.ts**: Added `extractionMethod` column to insights table ('ai' | 'fallback')
+- **server/src/config/database.ts**: Migration to add `extraction_method` column to existing databases
+- **server/src/services/insightExtraction.ts**:
+  - Added `callClaudeForInsightsWithRetry()` — retries AI call once before falling back
+  - Added `applyFallbackConfidencePenalty()` — reduces confidence by 15 points, caps at 70 for fallback insights
+  - Enhanced logging with ⚠️ warnings when fallback activates (sourceType, topic name, attempt count)
+  - Extraction summary log showing AI vs fallback chunk counts
+- **server/src/routes/notes.ts**: Saves `extractionMethod` from extracted insights to database
+- **server/src/routes/import.ts**: Carries through and saves `extractionMethod` for import flow
+
+**Committed by this session (Feature #225):**
+- **client/src/pages/VerificationPage.tsx**: Added "Rule-based" amber badge indicator
+  - Shows in verification queue (individual cards)
+  - Shows in batch review mode (focused card)
+  - Shows in privacy settings view
+  - Badge has warning triangle icon with tooltip explaining rule-based extraction
+  - Only appears for insights with `extractionMethod === 'fallback'`
+
+### Verification
+- Client TypeScript compiles with zero errors
+- Vite production build succeeds (872.58 kB JS bundle)
+- Server starts cleanly, health check passes
+- `extraction_method` column appears in SQL queries (confirmed in server logs)
+- No mock data patterns found in client/src or server/src
+- 2 pre-existing server TS errors (in graph.ts and sessions.ts) — NOT related to this feature
+
+### Current Status
+- 225/226 features passing (99.6%)
+- Feature #225 marked as passing
+
 ## Session - 2026-02-16 (Agent handling Feature #224)
 
 ### Accomplished
