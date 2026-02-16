@@ -1,5 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { validateEmail } from '@/utils/validateEmail';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -11,8 +12,10 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setError(null);
 
-    if (!email.trim()) {
-      setError('Please enter your email address.');
+    // Validate email format
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setError(emailError);
       return;
     }
 

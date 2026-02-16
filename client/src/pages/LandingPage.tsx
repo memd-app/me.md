@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { isValidEmail } from '@/utils/validateEmail';
 
 export default function LandingPage() {
   const [waitlistEmail, setWaitlistEmail] = useState('');
@@ -11,7 +12,7 @@ export default function LandingPage() {
       e.preventDefault();
       setWaitlistError('');
 
-      if (!waitlistEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(waitlistEmail)) {
+      if (!waitlistEmail || !isValidEmail(waitlistEmail)) {
         setWaitlistError('Please enter a valid email address.');
         return;
       }

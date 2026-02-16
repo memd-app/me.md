@@ -1,6 +1,7 @@
 import { useState, useMemo, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { validateEmail } from '@/utils/validateEmail';
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
@@ -34,6 +35,13 @@ export default function RegisterPage() {
     e.preventDefault();
     clearError();
     setValidationError('');
+
+    // Validate email format
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setValidationError(emailError);
+      return;
+    }
 
     // Validate password
     const pwError = validatePassword(password);

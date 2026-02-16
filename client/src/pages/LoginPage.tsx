@@ -2,6 +2,7 @@ import { useState, FormEvent } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
+import { validateEmail } from '@/utils/validateEmail';
 
 function GoogleIcon() {
   return (
@@ -31,6 +32,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [validationError, setValidationError] = useState('');
   const { login, loginWithGoogle, error, clearError } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -40,12 +42,21 @@ export default function LoginPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     clearError();
+    setValidationError('');
 
     // Client-side validation before submitting
     if (!email.trim()) {
+      setValidationError('Email address is required');
+      return;
+    }
+    // Validate email format
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setValidationError(emailError);
       return;
     }
     if (!password) {
+      setValidationError('Password is required');
       return;
     }
 
@@ -90,10 +101,10 @@ export default function LoginPage() {
 
         {/* Form */}
         <div className="card">
-          {error && (
+          {(error || validationError) && (
             <ApiErrorAlert
-              message={error}
-              onDismiss={() => clearError()}
+              message={validationError || error || ''}
+              onDismiss={() => { clearError(); setValidationError(''); }}
               className="mb-5"
             />
           )}
@@ -137,11 +148,11 @@ export default function LoginPage() {
                 type="email"
                 required
                 value={email}
-                onChange={(e) => { setEmail(e.target.value); if (error) clearError(); }}
+                onChange={(e) => { setEmail(e.target.value); if (error) clearError(); if (validationError) setValidationError(''); }}
                 className="input-field"
                 placeholder="you@example.com"
                 autoComplete="email"
-                aria-describedby={error ? 'login-error' : undefined}
+                aria-describedby={(error || validationError) ? 'login-error' : undefined}
               />
             </div>
 
@@ -154,11 +165,11 @@ export default function LoginPage() {
                 type="password"
                 required
                 value={password}
-                onChange={(e) => { setPassword(e.target.value); if (error) clearError(); }}
+                onChange={(e) => { setPassword(e.target.value); if (error) clearError(); if (validationError) setValidationError(''); }}
                 className="input-field"
                 placeholder="Enter your password"
                 autoComplete="current-password"
-                aria-describedby={error ? 'login-error' : undefined}
+                aria-describedby={(error || validationError) ? 'login-error' : undefined}
               />
             </div>
 

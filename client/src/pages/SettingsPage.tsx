@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { formatSettingsDate, formatFullDate } from '@/utils/dateFormat';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
+import { isValidEmail } from '@/utils/validateEmail';
 
 const API_BASE = '/api';
 
@@ -598,8 +599,7 @@ export default function SettingsPage() {
 
     // Client-side email validation
     if (fieldKey === 'email') {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(editValue.trim())) {
+      if (!isValidEmail(editValue)) {
         setSaveStatus({ type: 'error', message: 'Please enter a valid email address' });
         return;
       }
