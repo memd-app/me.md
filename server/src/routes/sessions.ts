@@ -1190,20 +1190,47 @@ function generateOpeningMessage(title: string, description: string | null, inten
         message += ` I see you've already explored topics like ${topicNames}.`;
       }
 
-      // Reference directly related insights from connected topics
-      if (hasRelatedInsights) {
+      // Reference insights from multiple different topics to show cross-topic connections
+      if (hasVerifiedInsights) {
+        // Group insights by topic to show breadth of cross-topic knowledge
+        const insightsByTopic = new Map<string, Array<{ content: string; topicTitle: string; confidenceScore: number }>>();
+        for (const insight of profileContext.verifiedInsights) {
+          if (!insightsByTopic.has(insight.topicTitle)) {
+            insightsByTopic.set(insight.topicTitle, []);
+          }
+          insightsByTopic.get(insight.topicTitle)!.push(insight);
+        }
+
+        // Get up to 3 different topics' top insights for cross-referencing
+        const topicEntries = Array.from(insightsByTopic.entries()).slice(0, 3);
+
+        if (topicEntries.length >= 2) {
+          // Multiple topics: show cross-topic threads explicitly
+          message += ` I can see connections forming across your explorations:`;
+          for (const [topicName, topicInsights] of topicEntries) {
+            const bestInsight = topicInsights[0];
+            const snippet = bestInsight.content.length > 100
+              ? bestInsight.content.substring(0, 100) + '...'
+              : bestInsight.content;
+            message += `\n- From **"${topicName}"**: *"${snippet}"*`;
+          }
+          message += `\n\nI'll draw on these threads to help us find connections with **${title}**.`;
+        } else if (topicEntries.length === 1) {
+          const [topicName, topicInsights] = topicEntries[0];
+          const snippet = topicInsights[0].content.length > 120
+            ? topicInsights[0].content.substring(0, 120) + '...'
+            : topicInsights[0].content;
+          message += ` From your exploration of **"${topicName}"**, you've verified that *"${snippet}"*`;
+          if (profileContext.verifiedInsights.length > 1) {
+            message += ` — and you have ${profileContext.verifiedInsights.length - 1} other verified insight${profileContext.verifiedInsights.length > 2 ? 's' : ''} across your knowledge base`;
+          }
+          message += '.';
+        }
+      } else if (hasRelatedInsights) {
         const topInsight = profileContext.relatedInsights[0];
         message += ` From your work on **"${topInsight.topicTitle}"**, you've established that *"${topInsight.content.length > 120 ? topInsight.content.substring(0, 120) + '...' : topInsight.content}"*`;
         if (profileContext.relatedInsights.length > 1) {
           message += ` — along with ${profileContext.relatedInsights.length - 1} other verified insight${profileContext.relatedInsights.length > 2 ? 's' : ''} from related areas`;
-        }
-        message += '.';
-      } else if (hasVerifiedInsights) {
-        // Reference highest-confidence insight from any topic
-        const topInsight = profileContext.verifiedInsights[0];
-        message += ` From your exploration of **"${topInsight.topicTitle}"**, you've verified that *"${topInsight.content.length > 120 ? topInsight.content.substring(0, 120) + '...' : topInsight.content}"*`;
-        if (profileContext.verifiedInsights.length > 1) {
-          message += ` — and you have ${profileContext.verifiedInsights.length - 1} other verified insight${profileContext.verifiedInsights.length > 2 ? 's' : ''} across your knowledge base`;
         }
         message += '.';
       }
@@ -1485,8 +1512,12 @@ function generateAIResponse(
       : `${reflection}\n\n${transition}\n\n${question}`;
   }
 
-  // Every 2nd or 3rd message, inject a profile context bridge to connect to previous knowledge
-  if (profileBridge && (messageCount % 2 === 1 || messageCount <= 2)) {
+  // Inject profile context bridge to connect to previous knowledge from other topics
+  // Show cross-topic references frequently (every message except every 4th) when insights exist
+  const hasCrossTopicInsights = profileContext && profileContext.verifiedInsights.some(
+    i => i.topicTitle.toLowerCase() !== topicTitle.toLowerCase()
+  );
+  if (profileBridge && (hasCrossTopicInsights || messageCount % 2 === 1 || messageCount <= 2)) {
     return `${reflection}\n\n${profileBridge}\n\n${question}`;
   }
 
@@ -1502,10 +1533,16 @@ function generateProfileContextBridge(
 ): string {
   // Find the most relevant insight to the user's current message
   const lastMessageLower = lastUserMessage.toLowerCase();
-  const lastMessageWords = lastMessageLower.split(/\s+/).filter(w => w.length > 4);
+  const lastMessageWords = lastMessageLower.split(/\s+/).filter(w => w.length > 3);
+
+  // Prefer insights from DIFFERENT topics (cross-topic referencing)
+  const crossTopicInsights = profileContext.verifiedInsights.filter(
+    i => i.topicTitle.toLowerCase() !== topicTitle.toLowerCase()
+  );
+  const insightsPool = crossTopicInsights.length > 0 ? crossTopicInsights : profileContext.verifiedInsights;
 
   // Score insights by relevance to the current message
-  const scoredInsights = profileContext.verifiedInsights.map(insight => {
+  const scoredInsights = insightsPool.map(insight => {
     const insightLower = insight.content.toLowerCase();
     let score = 0;
     for (const word of lastMessageWords) {
@@ -1514,32 +1551,52 @@ function generateProfileContextBridge(
     // Boost related insights (from same/connected topics)
     const isRelated = profileContext.relatedInsights.some(r => r.content === insight.content);
     if (isRelated) score += 5;
+    // Boost cross-topic insights (different topic = more interesting connection)
+    if (insight.topicTitle.toLowerCase() !== topicTitle.toLowerCase()) score += 2;
+    // Boost high-confidence insights
+    if (insight.confidenceScore >= 75) score += 2;
     return { ...insight, relevanceScore: score };
-  }).filter(i => i.relevanceScore > 0)
-    .sort((a, b) => b.relevanceScore - a.relevanceScore);
+  }).sort((a, b) => b.relevanceScore - a.relevanceScore);
 
-  if (scoredInsights.length === 0) {
-    // No directly relevant insight found - try a general connection every few messages
-    if (messageCount <= 1 && profileContext.previousSessionTopics.length > 0) {
-      const relatedTopic = profileContext.previousSessionTopics[0];
-      return `I notice this connects to ground you've covered before — you previously explored **"${relatedTopic.title}"**, and I can see how those threads might weave together with what you're sharing about **${topicTitle}** now.`;
+  // Get the best insight - either word-matched or the highest scored cross-topic insight
+  let bestInsight = scoredInsights.find(i => i.relevanceScore > 0);
+
+  if (!bestInsight) {
+    // No word-matched insights - fall back to cross-topic insights proactively
+    // Cycle through different cross-topic insights based on messageCount
+    if (crossTopicInsights.length > 0) {
+      // Pick a different cross-topic insight each time based on message count
+      const insightIndex = messageCount % crossTopicInsights.length;
+      bestInsight = { ...crossTopicInsights[insightIndex], relevanceScore: 1 };
+    } else if (profileContext.previousSessionTopics.length > 0) {
+      // No verified insights from other topics - reference previous topics generally
+      const topicIndex = messageCount % profileContext.previousSessionTopics.length;
+      const relatedTopic = profileContext.previousSessionTopics[topicIndex];
+      const generalBridges = [
+        `I notice this connects to ground you've covered before — you previously explored **"${relatedTopic.title}"**, and I can see how those threads might weave together with what you're sharing about **${topicTitle}** now.`,
+        `What you're describing reminds me of themes from your work on **"${relatedTopic.title}"**. There seem to be connections between these areas of your experience.`,
+        `This resonates with what you explored in **"${relatedTopic.title}"** — I'm curious how your thinking on **${topicTitle}** builds on or contrasts with that earlier exploration.`,
+      ];
+      return generalBridges[messageCount % generalBridges.length];
+    } else {
+      return '';
     }
-    return '';
   }
 
-  // Pick the top-scoring insight
-  const bestInsight = scoredInsights[0];
   const insightSnippet = bestInsight.content.length > 100
     ? bestInsight.content.substring(0, 100) + '...'
     : bestInsight.content;
 
   // Generate the bridge text (varies by message count for variety)
+  // Each bridge explicitly references the source topic to show cross-topic connection
   const bridges = [
     `This connects to something you've already verified about yourself — from your exploration of **"${bestInsight.topicTitle}"**, you established: *"${insightSnippet}"* How does that relate to what you're sharing now about **${topicTitle}**?`,
     `Interestingly, your verified insight from **"${bestInsight.topicTitle}"** — *"${insightSnippet}"* — seems to resonate with what you're describing here. I'd love to understand how these threads connect for you.`,
     `I'm noticing a pattern here. In your work on **"${bestInsight.topicTitle}"**, you verified: *"${insightSnippet}"* There's a clear connection to what you're exploring in **${topicTitle}** right now.`,
     `This builds on something you've already articulated. From **"${bestInsight.topicTitle}"**: *"${insightSnippet}"* — and what you're sharing now adds another dimension to that understanding.`,
     `Your previous insight from **"${bestInsight.topicTitle}"** — *"${insightSnippet}"* — adds interesting context to what you're exploring here in **${topicTitle}**.`,
+    `I see a thread connecting your exploration of **"${bestInsight.topicTitle}"** to what we're discussing now. You verified: *"${insightSnippet}"* — this seems deeply relevant to **${topicTitle}**.`,
+    `Drawing on your verified self-knowledge from **"${bestInsight.topicTitle}"**: *"${insightSnippet}"* — there's a meaningful overlap with what you're sharing about **${topicTitle}** here.`,
   ];
 
   return bridges[messageCount % bridges.length];
