@@ -1,3 +1,54 @@
+## Session - 2026-02-16 (Agent handling Features #106, #180, #181)
+
+### Accomplished
+- Feature #106 (Dashboard recent activity feed shows latest actions): PASSING
+  - Enhanced GET /api/dashboard/activity to aggregate from 5 data sources:
+    1. Topic creation events (from topics table)
+    2. Session events - started/completed/paused (from sessions table)
+    3. Insight verification events - verified/rejected/edited (from verification_history table)
+    4. Note/distillation events (from notes table)
+    5. Bookmark events (from bookmarks table)
+  - All activities sorted newest-first across all sources, limited to top 20
+  - Updated DashboardPage.tsx: replaced "Session History" with "Recent Activity"
+  - Each activity type has distinct icon, color-coded dot, and badge label
+  - Supports 11 activity type configurations (topic_created, session_started, session_completed,
+    session_paused, insight_verified, insight_rejected, insight_edited, insight_action,
+    note_created, bookmark_added, export_profile)
+  - Removed unused SESSION_STATUS_LABELS, TypeScript compiles clean
+  - Vite build succeeds (765KB bundle)
+  - Tested with real data: topic creation and session completion appear in feed correctly
+  - No mock data patterns in codebase
+
+- Feature #180 (CRUD operations use unique test data and verify persistence): PASSING
+  - Verified full CRUD lifecycle with unique test data:
+    - CREATE: topic "TEST_CRUD_12345" created successfully with valid UUID
+    - READ: topic appears in GET /api/topics list and GET /api/topics/:id
+    - UPDATE: title changed to "TEST_CRUD_UPDATED_12345", persists on re-read
+    - DELETE: topic removed, GET returns 404, no longer in list
+  - Insights endpoint returns proper empty array for new user
+  - All 11/11 checks passed
+  - No mock data patterns in codebase
+
+- Feature #181 (Data that was not created by user does not appear): PASSING
+  - Registered fresh user and verified all 14 endpoints return empty:
+    - Topics list: empty
+    - Sessions list: empty
+    - Insights list: empty
+    - Notes list: empty
+    - Pending insights: empty
+    - Dashboard stats: all zeros (topics=0, sessions=0, insights=0)
+    - Activity feed: empty
+    - Bookmarks: empty
+    - Search: no results
+    - Knowledge graph: only 5 gap visualization nodes (type='gap', isUnexplored=true)
+      which are intentional UI placeholders, not user data
+  - All 14/14 checks passed
+  - No phantom or mock data detected
+
+### Current Status
+- 126/209 features passing (60.3%)
+- All 3 assigned features verified and marked passing
+
 ## Session - 2026-02-16 (Agent handling Features #103, #147, #148)
 
 ### Accomplished
