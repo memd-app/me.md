@@ -20,6 +20,7 @@ import { bookmarksRouter } from './routes/bookmarks.js';
 import { conflictsRouter } from './routes/conflicts.js';
 import { templatesRouter } from './routes/templates.js';
 import { sandboxRouter } from './routes/sandbox.js';
+import { waitlistRouter } from './routes/waitlist.js';
 import { authMiddleware, cleanupExpiredTokens } from './middleware/auth.js';
 import { apiRateLimiter, authRateLimiter } from './middleware/rateLimit.js';
 
@@ -45,6 +46,7 @@ app.use('/api/auth', authRateLimiter);
 // Public routes (no auth required)
 app.use('/api/health', healthRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/waitlist', waitlistRouter);
 
 // Protected routes (auth middleware validates Bearer token or x-user-id)
 app.use('/api/topics', authMiddleware, topicsRouter);

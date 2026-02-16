@@ -6,9 +6,11 @@ export default function LandingPage() {
   const [waitlistEmail, setWaitlistEmail] = useState('');
   const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
   const [waitlistError, setWaitlistError] = useState('');
+  const [waitlistMessage, setWaitlistMessage] = useState('');
+  const [waitlistLoading, setWaitlistLoading] = useState(false);
 
   const handleWaitlistSubmit = useCallback(
-    (e: React.FormEvent) => {
+    async (e: React.FormEvent) => {
       e.preventDefault();
       setWaitlistError('');
 
@@ -17,8 +19,28 @@ export default function LandingPage() {
         return;
       }
 
-      // In a real app this would POST to an API. For now, simulate success.
-      setWaitlistSubmitted(true);
+      setWaitlistLoading(true);
+      try {
+        const res = await fetch('/api/waitlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: waitlistEmail.trim() }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          setWaitlistError(data.error || 'Something went wrong. Please try again.');
+          return;
+        }
+
+        setWaitlistMessage(data.message || "You're on the list! We'll be in touch soon.");
+        setWaitlistSubmitted(true);
+      } catch {
+        setWaitlistError('Network error. Please check your connection and try again.');
+      } finally {
+        setWaitlistLoading(false);
+      }
     },
     [waitlistEmail],
   );
@@ -326,7 +348,7 @@ export default function LandingPage() {
               <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              You&apos;re on the list! We&apos;ll be in touch soon.
+              {waitlistMessage || "You\u2019re on the list! We\u2019ll be in touch soon."}
             </div>
           ) : (
             <form
@@ -355,9 +377,10 @@ export default function LandingPage() {
               </div>
               <button
                 type="submit"
-                className="w-full sm:w-auto whitespace-nowrap bg-white text-primary-600 px-6 py-3 rounded-lg font-semibold hover:bg-primary-50 transition-colors focus:outline-none focus:ring-2 focus:ring-white min-h-[48px]"
+                disabled={waitlistLoading}
+                className="w-full sm:w-auto whitespace-nowrap bg-white text-primary-600 px-6 py-3 rounded-lg font-semibold hover:bg-primary-50 transition-colors focus:outline-none focus:ring-2 focus:ring-white min-h-[48px] disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                Join Waitlist
+                {waitlistLoading ? 'Joining...' : 'Join Waitlist'}
               </button>
             </form>
           )}

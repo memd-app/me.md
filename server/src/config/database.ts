@@ -231,6 +231,12 @@ function initializeSchema() {
       expires_at TEXT NOT NULL,
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS waitlist_signups (
+      id TEXT PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
   `);
   console.log('[me.md] Database schema initialized');
 }
