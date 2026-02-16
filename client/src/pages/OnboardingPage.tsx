@@ -69,10 +69,18 @@ export default function OnboardingPage() {
   const { user, updateUser } = useAuth();
   const navigate = useNavigate();
 
-  const [currentStep, setCurrentStep] = useState<OnboardingStep>('welcome');
+  const [currentStep, setCurrentStepRaw] = useState<OnboardingStep>('welcome');
+  const [highestStepReached, setHighestStepReached] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+
+  // Wrapper around setCurrentStep that also tracks the highest step reached
+  const setCurrentStep = (step: OnboardingStep) => {
+    setCurrentStepRaw(step);
+    const stepIndex = STEPS.findIndex((s) => s.key === step);
+    setHighestStepReached((prev) => Math.max(prev, stepIndex));
+  };
 
   // Profile fields
   const [profileFields, setProfileFields] = useState<ProfileFields>({
@@ -110,7 +118,7 @@ export default function OnboardingPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
 
   const currentStepIndex = STEPS.findIndex((s) => s.key === currentStep);
-  const progressPercent = ((currentStepIndex + 1) / STEPS.length) * 100;
+  const progressPercent = ((Math.max(currentStepIndex, highestStepReached) + 1) / STEPS.length) * 100;
 
   // Track unsaved changes during onboarding flow
   const isOnboardingDirty = useMemo(() => {
@@ -620,7 +628,8 @@ export default function OnboardingPage() {
       {/* Step indicators */}
       <div className="flex justify-center gap-4 sm:gap-6 pt-2 pb-4">
         {STEPS.map((step, index) => {
-          const isCompleted = index < currentStepIndex;
+          // A step is completed if it's been visited (index <= highestStepReached) and is not the current step
+          const isCompleted = index <= highestStepReached && index !== currentStepIndex;
           const isCurrent = index === currentStepIndex;
           return (
             <div key={step.key} className="flex items-center gap-2">
