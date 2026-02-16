@@ -300,7 +300,7 @@ searchRouter.get('/', async (req, res) => {
     });
   } catch (error) {
     console.error('Search error:', error);
-    res.status(500).json({ error: 'Search failed', details: error instanceof Error ? error.message : 'Unknown error' });
+    res.status(500).json({ error: 'Search failed. Please try again later.' });
   }
 });
 

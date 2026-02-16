@@ -89,7 +89,7 @@ authRouter.post('/register', async (req, res) => {
     });
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ error: 'Failed to register user', details: error instanceof Error ? error.message : 'Unknown error' });
+    res.status(500).json({ error: 'Registration failed due to a server error. Please try again later.' });
   }
 });
 

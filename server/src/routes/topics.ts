@@ -300,7 +300,7 @@ topicsRouter.post('/', async (req, res) => {
     res.status(201).json({ topic: newTopic });
   } catch (error) {
     console.error('Create topic error:', error);
-    res.status(500).json({ error: 'Failed to create topic', details: error instanceof Error ? error.message : 'Unknown error' });
+    res.status(500).json({ error: 'Failed to create topic. Please try again later.' });
   }
 });
 

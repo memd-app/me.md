@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import ApiErrorAlert from '@/components/ApiErrorAlert';
 import { formatShortDate } from '@/utils/dateFormat';
 import * as d3 from 'd3';
 
@@ -630,10 +631,12 @@ export default function KnowledgeGraphPage() {
 
       {/* Error state */}
       {error && (
-        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm" role="alert">
-          {error}
-          <button onClick={handleRefreshGraph} className="ml-2 underline" aria-label="Retry loading knowledge graph">Retry</button>
-        </div>
+        <ApiErrorAlert
+          message={error}
+          onRetry={handleRefreshGraph}
+          onDismiss={() => setError(null)}
+          className="mb-4"
+        />
       )}
 
       {/* Loading state */}

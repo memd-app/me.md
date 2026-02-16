@@ -229,7 +229,7 @@ notesRouter.post('/sessions/:sessionId/distill', async (req, res) => {
     });
   } catch (error) {
     console.error('Distill session error:', error);
-    res.status(500).json({ error: 'Failed to distill session', details: error instanceof Error ? error.message : 'Unknown error' });
+    res.status(500).json({ error: 'Failed to distill session. Please try again later.' });
   }
 });
 

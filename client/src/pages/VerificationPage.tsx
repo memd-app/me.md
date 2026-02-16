@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import ApiErrorAlert from '@/components/ApiErrorAlert';
 import ConflictsSection from '../components/verification/ConflictsSection';
 import SwipeableCard from '../components/verification/SwipeableCard';
 import { formatDateTime as sharedFormatDateTime, formatShortDate } from '@/utils/dateFormat';
@@ -611,12 +612,11 @@ export default function VerificationPage() {
 
       {/* Error message */}
       {error && (
-        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 flex justify-between items-center">
-          <span>{error}</span>
-          <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700 dark:hover:text-red-300 ml-2">
-            &times;
-          </button>
-        </div>
+        <ApiErrorAlert
+          message={error}
+          onDismiss={() => setError(null)}
+          className="mb-4"
+        />
       )}
 
       {/* Verification stats */}

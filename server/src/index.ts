@@ -77,12 +77,11 @@ app.use('/api', authMiddleware, notesRouter);
 app.use('/api/mcp', authMiddleware, mcpRouter);
 // app.use('/api/export', exportRouter);
 
-// Error handling middleware
+// Error handling middleware — always returns user-friendly messages, never raw stack traces
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Unhandled error:', err.message);
   res.status(500).json({
-    error: 'Internal server error',
-    message: process.env.NODE_ENV === 'production' ? 'Something went wrong' : err.message,
+    error: 'The server encountered an unexpected error. Please try again in a moment. If the problem persists, contact support.',
   });
 });
 

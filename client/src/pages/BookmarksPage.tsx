@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import ApiErrorAlert from '@/components/ApiErrorAlert';
 import { formatShortDate, formatTime, formatDateTime } from '@/utils/dateFormat';
 
 interface BookmarkMessage {
@@ -148,9 +149,11 @@ export default function BookmarksPage() {
       </div>
 
       {error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm">
-          {error}
-        </div>
+        <ApiErrorAlert
+          message={error}
+          onDismiss={() => setError(null)}
+          className="mb-4"
+        />
       )}
 
       {bookmarks.length === 0 ? (

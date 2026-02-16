@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import ApiErrorAlert from '@/components/ApiErrorAlert';
 import { formatTime } from '@/utils/dateFormat';
 
 interface ComparisonResult {
@@ -224,10 +225,11 @@ export default function SandboxPage() {
 
       {/* Error display */}
       {error && (
-        <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm" role="alert" aria-live="assertive">
-          <span className="font-medium">Error:</span> {error}
-          <button onClick={() => setError(null)} className="ml-2 underline" aria-label="Dismiss error">Dismiss</button>
-        </div>
+        <ApiErrorAlert
+          message={error}
+          onDismiss={() => setError(null)}
+          className="mb-6"
+        />
       )}
 
       {/* Comparison results */}

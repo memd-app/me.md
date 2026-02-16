@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import ApiErrorAlert from '@/components/ApiErrorAlert';
 import { formatActivityDate } from '@/utils/dateFormat';
 
 interface CategoryCompleteness {
@@ -56,39 +57,43 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [fetchVersion, setFetchVersion] = useState(0);
+
+  const fetchDashboard = useCallback(async (signal?: AbortSignal) => {
+    if (!user) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [statsRes, activityRes] = await Promise.all([
+        fetch('/api/dashboard/stats', { headers: { 'x-user-id': user.id }, signal }),
+        fetch('/api/dashboard/activity', { headers: { 'x-user-id': user.id }, signal }),
+      ]);
+
+      if (!statsRes.ok || !activityRes.ok) {
+        throw new Error('The server encountered an unexpected error. Please try again in a moment. If the problem persists, contact support.');
+      }
+
+      const statsData = await statsRes.json();
+      setStats(statsData);
+
+      const activityData = await activityRes.json();
+      setActivity(activityData.activity || []);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      const message = err instanceof Error ? err.message : 'Failed to load dashboard data. Please try again.';
+      setError(message);
+      console.error('Failed to fetch dashboard data:', err);
+    } finally {
+      if (!signal?.aborted) setIsLoading(false);
+    }
+  }, [user]);
 
   useEffect(() => {
-    if (!user) return;
     const controller = new AbortController();
-
-    const fetchDashboard = async () => {
-      setIsLoading(true);
-      try {
-        const [statsRes, activityRes] = await Promise.all([
-          fetch('/api/dashboard/stats', { headers: { 'x-user-id': user.id }, signal: controller.signal }),
-          fetch('/api/dashboard/activity', { headers: { 'x-user-id': user.id }, signal: controller.signal }),
-        ]);
-
-        if (statsRes.ok) {
-          const statsData = await statsRes.json();
-          setStats(statsData);
-        }
-
-        if (activityRes.ok) {
-          const activityData = await activityRes.json();
-          setActivity(activityData.activity || []);
-        }
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-        console.error('Failed to fetch dashboard data:', err);
-      } finally {
-        if (!controller.signal.aborted) setIsLoading(false);
-      }
-    };
-
-    fetchDashboard();
+    fetchDashboard(controller.signal);
     return () => controller.abort();
-  }, [user]);
+  }, [fetchDashboard, fetchVersion]);
 
   const statCards = [
     {
@@ -213,6 +218,16 @@ export default function DashboardPage() {
             : 'Here\u2019s your knowledge overview'}
         </p>
       </div>
+
+      {/* Error state */}
+      {error && (
+        <ApiErrorAlert
+          message={error}
+          onRetry={() => { setError(null); setFetchVersion(v => v + 1); }}
+          onDismiss={() => setError(null)}
+          className="mb-6"
+        />
+      )}
 
       {/* New user get-started guidance */}
       {isNewUser && (

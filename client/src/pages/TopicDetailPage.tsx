@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import ApiErrorAlert from '@/components/ApiErrorAlert';
 import VerifiedBadge from '@/components/VerifiedBadge';
 import { formatDateTime, formatShortDate } from '@/utils/dateFormat';
 
@@ -101,6 +102,7 @@ export default function TopicDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [topicNotFound, setTopicNotFound] = useState(false);
+  const [fetchVersion, setFetchVersion] = useState(0);
   const [newUrl, setNewUrl] = useState('');
   const [isAddingUrl, setIsAddingUrl] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
@@ -162,7 +164,7 @@ export default function TopicDetailPage() {
 
     fetchTopic();
     return () => controller.abort();
-  }, [user, id]);
+  }, [user, id, fetchVersion]);
 
   // Helper to check if an API response indicates the topic was deleted
   const checkTopicDeleted = (status: number, errorMsg?: string): boolean => {
@@ -483,9 +485,12 @@ export default function TopicDetailPage() {
 
       {/* Error banner */}
       {error && (
-        <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 mb-6">
-          {error}
-        </div>
+        <ApiErrorAlert
+          message={error}
+          onRetry={() => { setError(null); setFetchVersion(v => v + 1); }}
+          onDismiss={() => setError(null)}
+          className="mb-6"
+        />
       )}
 
       {/* Save success message */}

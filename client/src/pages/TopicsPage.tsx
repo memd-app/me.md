@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import ApiErrorAlert from '@/components/ApiErrorAlert';
 import { formatShortDate } from '@/utils/dateFormat';
 
 const TOPICS_PER_PAGE = 10;
@@ -584,9 +585,12 @@ export default function TopicsPage() {
 
       {/* Error state */}
       {error && (
-        <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 mb-6">
-          {error}
-        </div>
+        <ApiErrorAlert
+          message={error}
+          onRetry={() => { setError(null); setFetchVersion(v => v + 1); }}
+          onDismiss={() => setError(null)}
+          className="mb-6"
+        />
       )}
 
       {/* Loading state - only shown on initial load, not background refreshes */}

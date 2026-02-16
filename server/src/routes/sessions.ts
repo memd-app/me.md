@@ -93,7 +93,7 @@ sessionsRouter.post('/', async (req, res) => {
     });
   } catch (error) {
     console.error('Create session error:', error);
-    res.status(500).json({ error: 'Failed to create session', details: error instanceof Error ? error.message : 'Unknown error' });
+    res.status(500).json({ error: 'Failed to create session. Please try again later.' });
   }
 });
 
@@ -157,7 +157,7 @@ sessionsRouter.post('/mini', async (req, res) => {
     });
   } catch (error) {
     console.error('Create mini session error:', error);
-    res.status(500).json({ error: 'Failed to create mini session', details: error instanceof Error ? error.message : 'Unknown error' });
+    res.status(500).json({ error: 'Failed to create mini session. Please try again later.' });
   }
 });
 
@@ -336,7 +336,7 @@ sessionsRouter.post('/:id/messages', async (req, res) => {
     });
   } catch (error) {
     console.error('Send message error:', error);
-    res.status(500).json({ error: 'Failed to send message', details: error instanceof Error ? error.message : 'Unknown error' });
+    res.status(500).json({ error: 'Failed to send message. Please try again.' });
   }
 });
 
@@ -413,7 +413,7 @@ sessionsRouter.post('/:id/messages/retry', async (req, res) => {
     });
   } catch (error) {
     console.error('Retry message error:', error);
-    res.status(500).json({ error: 'Failed to retry AI response', details: error instanceof Error ? error.message : 'Unknown error' });
+    res.status(500).json({ error: 'Failed to retry AI response. Please try again.' });
   }
 });
 
@@ -564,7 +564,7 @@ sessionsRouter.post('/:id/messages/stream', async (req, res) => {
     console.error('Stream message error:', error);
     // If headers haven't been sent yet, send JSON error
     if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed to send message', details: error instanceof Error ? error.message : 'Unknown error' });
+      res.status(500).json({ error: 'Failed to send message. Please try again.' });
     } else {
       // If already streaming, send error event
       res.write(`data: ${JSON.stringify({ type: 'error', error: 'Failed to generate response' })}\n\n`);

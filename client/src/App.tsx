@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import OnboardingGuard from '@/components/auth/OnboardingGuard';
 import AppLayout from '@/components/layout/AppLayout';
@@ -31,6 +32,7 @@ import ImportPage from '@/pages/ImportPage';
 
 function App() {
   return (
+    <ErrorBoundary>
     <AuthProvider>
       <ThemeProvider>
       <div className="min-h-screen bg-white dark:bg-dark-bg text-gray-900 dark:text-gray-100">
@@ -90,6 +92,7 @@ function App() {
       </div>
       </ThemeProvider>
     </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

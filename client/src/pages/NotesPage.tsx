@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import ApiErrorAlert from '@/components/ApiErrorAlert';
 import VerifiedBadge from '@/components/VerifiedBadge';
 import { formatRelativeTime, formatDateTime } from '@/utils/dateFormat';
 
@@ -465,9 +466,11 @@ export default function NotesPage() {
 
       {/* Error */}
       {error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300">
-          {error}
-        </div>
+        <ApiErrorAlert
+          message={error}
+          onDismiss={() => setError(null)}
+          className="mb-4"
+        />
       )}
 
       {/* Empty state */}
