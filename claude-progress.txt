@@ -1,3 +1,40 @@
+## Session - 2026-02-16 (Agent handling Features #133, #134, #135 - Temporal & Timezone)
+
+### Accomplished
+- Feature #133 (Timestamps display correctly in user timezone): PASSING
+  - Created shared `client/src/utils/dateFormat.ts` with 7 formatting functions
+  - All use browser's `toLocaleString`/`toLocaleDateString`/`toLocaleTimeString` with `undefined` locale
+  - Updated 14 files to use the shared utility: DashboardPage, TopicsPage, TopicDetailPage,
+    SessionPage, NotesPage, BookmarksPage, KnowledgeGraphPage, SandboxPage, ProfilePage,
+    SearchPage, VerificationPage, SettingsPage, ConflictsSection
+  - Removed per-file inline date formatting and local utility functions
+  - Verified with Playwright: timestamps render in user's local timezone
+
+- Feature #134 (Date picker constraints in onboarding): PASSING
+  - Added `min="1900-01-01"` and `max={today}` constraints to date input in OnboardingPage
+  - Added hint text: "Must be between 1900 and today" with proper ARIA
+  - Client-side validation rejects dates before 1900 and future dates
+  - Server-side validation in both `/api/users/onboarding` and `/api/users/profile` routes
+  - Fixed Tailwind CSS compilation: replaced `@apply` directives using custom dark classes
+    (dark:bg-dark-surface, etc.) with plain CSS `.dark` selectors in index.css
+  - DB storage verified: dateOfBirth saves as YYYY-MM-DD format correctly
+
+- Feature #135 (Date sorting works across month and year boundaries): PASSING
+  - Backend: Added `orderBy(desc(topics.createdAt))` to GET `/api/topics` endpoint
+  - Frontend: Verified existing `useMemo` sort using `new Date().getTime()` comparison works correctly
+  - Tested date boundaries: Dec 2024 → Jan 2025 (year), Feb 28 → Mar 01 (month),
+    11:59 PM → 12:01 AM (midnight), exact midnight handling
+  - ISO date strings sort correctly as text in SQLite (lexicographic = chronological)
+  - UI sort dropdown verified: Newest First, Oldest First, Name A-Z all working correctly
+
+### Key Fixes
+- Created shared dateFormat utility to eliminate duplicated date formatting across 14 files
+- Fixed Tailwind CSS `@apply` failures caused by apostrophe in project path breaking fast-glob
+- Added `safelist` to tailwind.config.js as additional safeguard for custom dark classes
+- Added proper server-side date range validation to prevent invalid birth dates
+
+---
+
 ## Session - 2026-02-16 (Agent handling Features #137, #138, #140 - Performance)
 
 ### Accomplished
