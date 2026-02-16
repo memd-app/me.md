@@ -239,34 +239,52 @@ export default function TopicsPage() {
       result = result.filter((t) => t.priority === priorityFilter);
     }
 
-    // Apply sorting
+    // Apply sorting with stable tiebreaker by ID to prevent item shifting when data changes
     result.sort((a, b) => {
+      let cmp = 0;
       switch (sortBy) {
         case 'name_asc':
-          return a.title.localeCompare(b.title);
+          cmp = a.title.localeCompare(b.title);
+          break;
         case 'name_desc':
-          return b.title.localeCompare(a.title);
+          cmp = b.title.localeCompare(a.title);
+          break;
         case 'date_newest':
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          cmp = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          break;
         case 'date_oldest':
-          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          break;
         case 'priority_high':
-          return (PRIORITY_ORDER[b.priority] || 0) - (PRIORITY_ORDER[a.priority] || 0);
+          cmp = (PRIORITY_ORDER[b.priority] || 0) - (PRIORITY_ORDER[a.priority] || 0);
+          break;
         case 'priority_low':
-          return (PRIORITY_ORDER[a.priority] || 0) - (PRIORITY_ORDER[b.priority] || 0);
+          cmp = (PRIORITY_ORDER[a.priority] || 0) - (PRIORITY_ORDER[b.priority] || 0);
+          break;
         default:
-          return 0;
+          cmp = 0;
       }
+      // Stable tiebreaker: sort by ID when primary sort key is equal
+      // This ensures consistent ordering even when data changes between fetches
+      if (cmp === 0) {
+        cmp = a.id.localeCompare(b.id);
+      }
+      return cmp;
     });
 
     return result;
   }, [topics, statusFilter, priorityFilter, sortBy, searchQuery]);
 
-  // Pagination computed values
+  // Pagination computed values with immediate clamping for consistency during data updates.
+  // Instead of clamping in a useEffect (which causes a render with stale page), we compute
+  // the effective page inline so the UI never shows an empty/invalid page.
   const totalFilteredTopics = filteredAndSortedTopics.length;
   const totalPages = Math.max(1, Math.ceil(totalFilteredTopics / TOPICS_PER_PAGE));
 
-  // Auto-clamp page when data changes (e.g., topic deleted makes last page empty)
+  // effectivePage is clamped immediately — no flash of empty page when items are deleted
+  const effectivePage = Math.min(currentPage, totalPages);
+
+  // Sync state if clamped (so URL param and state stay correct)
   useEffect(() => {
     if (currentPage > totalPages && totalPages > 0) {
       setCurrentPage(totalPages);
@@ -274,9 +292,9 @@ export default function TopicsPage() {
   }, [currentPage, totalPages]);
 
   const paginatedTopics = useMemo(() => {
-    const start = (currentPage - 1) * TOPICS_PER_PAGE;
+    const start = (effectivePage - 1) * TOPICS_PER_PAGE;
     return filteredAndSortedTopics.slice(start, start + TOPICS_PER_PAGE);
-  }, [filteredAndSortedTopics, currentPage]);
+  }, [filteredAndSortedTopics, effectivePage]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -299,17 +317,17 @@ export default function TopicsPage() {
         pages.push(i);
       }
     } else {
-      // Smart ellipsis
+      // Smart ellipsis — use effectivePage for consistent display during data updates
       pages.push(1);
-      if (currentPage > 3) {
+      if (effectivePage > 3) {
         pages.push('ellipsis');
       }
-      const start = Math.max(2, currentPage - 1);
-      const end = Math.min(totalPages - 1, currentPage + 1);
+      const start = Math.max(2, effectivePage - 1);
+      const end = Math.min(totalPages - 1, effectivePage + 1);
       for (let i = start; i <= end; i++) {
         pages.push(i);
       }
-      if (currentPage < totalPages - 2) {
+      if (effectivePage < totalPages - 2) {
         pages.push('ellipsis');
       }
       pages.push(totalPages);
@@ -665,20 +683,20 @@ export default function TopicsPage() {
             <div
               className="flex items-center justify-between pt-4 mt-2 border-t border-gray-200 dark:border-dark-border"
               data-testid="topics-pagination"
-              data-current-page={currentPage}
+              data-current-page={effectivePage}
               data-total-pages={totalPages}
               data-total-items={totalFilteredTopics}
             >
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                Showing {((currentPage - 1) * TOPICS_PER_PAGE) + 1}–{Math.min(currentPage * TOPICS_PER_PAGE, totalFilteredTopics)} of {totalFilteredTopics} topics
+                Showing {((effectivePage - 1) * TOPICS_PER_PAGE) + 1}–{Math.min(effectivePage * TOPICS_PER_PAGE, totalFilteredTopics)} of {totalFilteredTopics} topics
               </p>
               <nav className="flex items-center gap-1" aria-label="Topics pagination">
                 {/* Previous button */}
                 <button
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage <= 1}
+                  onClick={() => handlePageChange(effectivePage - 1)}
+                  disabled={effectivePage <= 1}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    currentPage <= 1
+                    effectivePage <= 1
                       ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
                       : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                   }`}
@@ -700,12 +718,12 @@ export default function TopicsPage() {
                       key={pageNum}
                       onClick={() => handlePageChange(pageNum)}
                       className={`min-w-[36px] px-2 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                        pageNum === currentPage
+                        pageNum === effectivePage
                           ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
                           : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                       }`}
                       aria-label={`Page ${pageNum}`}
-                      aria-current={pageNum === currentPage ? 'page' : undefined}
+                      aria-current={pageNum === effectivePage ? 'page' : undefined}
                     >
                       {pageNum}
                     </button>
@@ -714,10 +732,10 @@ export default function TopicsPage() {
 
                 {/* Next button */}
                 <button
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage >= totalPages}
+                  onClick={() => handlePageChange(effectivePage + 1)}
+                  disabled={effectivePage >= totalPages}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    currentPage >= totalPages
+                    effectivePage >= totalPages
                       ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
                       : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                   }`}
