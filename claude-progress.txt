@@ -1,3 +1,30 @@
+## Session - 2026-02-16 (Agent handling Feature #201)
+
+### Accomplished
+- Feature #201 (Notification preferences for re-verification reminders): PASSING
+  - Added `reVerificationReminders` toggle to Settings > Preferences > Notifications section
+  - Toggle defaults to `true` in the notification state
+  - Uses existing `saveNotificationPref` function to save via PUT /api/users/profile
+  - Notification preferences stored as JSON in `notification_preferences` column of users table
+  - Verified: enable (true) saves and reads back correctly via API
+  - Verified: disable (false) saves and reads back correctly via API
+  - Preferences sync from user profile on mount via useEffect
+  - TypeScript compiles cleanly (zero errors on client)
+  - Vite production build succeeds (654 modules transformed)
+  - No mock data patterns found in client/src or server/src
+
+### Verification
+- PUT /api/users/profile with `notificationPreferences: {reVerificationReminders: true}` → saved to DB
+- GET /api/users/profile → returns saved notification preferences including reVerificationReminders
+- Toggle ON/OFF both persist correctly
+- Client TypeScript: zero errors
+- Vite build: success (654 modules, no errors)
+- Mock data grep: clean (no hits in src/)
+
+### Current Status
+- 200/209 features passing (95.7%)
+- Feature #201 marked as passing
+
 ## Session - 2026-02-16 (Agent handling Feature #198)
 
 ### Accomplished
