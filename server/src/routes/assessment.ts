@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { db } from '../config/database.js';
-import { assessmentAttempts, assessmentAnswers, assessmentResults } from '../models/schema.js';
+import { assessmentAttempts, assessmentAnswers, assessmentResults, insights, topics, notes } from '../models/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import bigFiveService from '../services/bigfive.js';
 import type { BigFiveAnswer } from '../services/bigfive.js';
+import { generatePersonalityInsights, storePersonalityInsights } from '../services/personalityInsights.js';
 
 export const assessmentRouter = Router();
 
@@ -266,6 +267,39 @@ assessmentRouter.post('/:attemptId/complete', (req, res) => {
       .where(eq(assessmentAttempts.id, attemptId))
       .run();
 
+    // Build domain scores data for the response and insight generation
+    const domainScoresData = resultText.map(d => {
+      const domainKey = d.domain;
+      const domainScoreData = scores[domainKey];
+      const facetScores = domainScoreData?.facet || {};
+      return {
+        domain: domainKey,
+        domainScore: domainScoreData?.score || 0,
+        facetScores: {
+          facet1: facetScores['1']?.score ?? null,
+          facet2: facetScores['2']?.score ?? null,
+          facet3: facetScores['3']?.score ?? null,
+          facet4: facetScores['4']?.score ?? null,
+          facet5: facetScores['5']?.score ?? null,
+          facet6: facetScores['6']?.score ?? null,
+        },
+      };
+    });
+
+    // Fire off AI personality insight generation asynchronously (non-blocking)
+    generatePersonalityInsights(userId, attemptId, domainScoresData, resultText)
+      .then(insightsResult => {
+        if (insightsResult.generated && insightsResult.insights.length > 0) {
+          const stored = storePersonalityInsights(userId, attemptId, insightsResult);
+          console.log(`[me.md:assessment] Personality insights generated and stored: ${stored.insightIds.length} insights, note ${stored.noteId}`);
+        } else {
+          console.log('[me.md:assessment] No personality insights generated (AI unavailable or empty result)');
+        }
+      })
+      .catch(err => {
+        console.error('[me.md:assessment] Error in async personality insight generation:', err.message);
+      });
+
     res.json({
       attemptId,
       status: 'completed',
@@ -494,6 +528,84 @@ assessmentRouter.get('/:attemptId/results', (req, res) => {
       console.warn('[me.md:assessment] Could not generate result text:', e.message);
     }
 
+    // Fetch AI-generated personality insights for this attempt
+    let aiInsights: any[] = [];
+    let aiAgreements: string[] = [];
+    let aiContradictions: string[] = [];
+
+    try {
+      // Look for the assessment topic and note associated with this attempt
+      const assessmentTopic = db.select()
+        .from(topics)
+        .where(
+          and(
+            eq(topics.userId, userId),
+            eq(topics.title, 'Big Five Personality Assessment'),
+          )
+        )
+        .get();
+
+      if (assessmentTopic) {
+        // Find the note for this attempt (sessionId stores attemptId)
+        const assessmentNote = db.select()
+          .from(notes)
+          .where(
+            and(
+              eq(notes.sessionId, attemptId),
+              eq(notes.topicId, assessmentTopic.id),
+              eq(notes.userId, userId),
+            )
+          )
+          .get();
+
+        if (assessmentNote) {
+          // Get insights linked to this note
+          const noteInsights = db.select()
+            .from(insights)
+            .where(
+              and(
+                eq(insights.noteId, assessmentNote.id),
+                eq(insights.userId, userId),
+              )
+            )
+            .all();
+
+          aiInsights = noteInsights.map(i => ({
+            id: i.id,
+            content: i.content,
+            confidenceScore: i.confidenceScore,
+            verificationStatus: i.verificationStatus,
+            extractionMethod: i.extractionMethod,
+          }));
+
+          // Parse agreements/contradictions from the full analysis text
+          if (assessmentNote.contentFullAnalysis) {
+            const fullAnalysis = assessmentNote.contentFullAnalysis;
+
+            // Extract agreements
+            const agreementsMatch = fullAnalysis.match(/## Agreements with Interview Insights\n([\s\S]*?)(?=\n##|$)/);
+            if (agreementsMatch) {
+              aiAgreements = agreementsMatch[1]
+                .split('\n')
+                .filter((l: string) => l.startsWith('- '))
+                .map((l: string) => l.replace(/^- /, '').trim());
+            }
+
+            // Extract contradictions
+            const contradictionsMatch = fullAnalysis.match(/## Contradictions with Interview Insights\n([\s\S]*?)(?=\n##|$)/);
+            if (contradictionsMatch) {
+              aiContradictions = contradictionsMatch[1]
+                .split('\n')
+                .filter((l: string) => l.startsWith('- '))
+                .map((l: string) => l.replace(/^- (⚠️ )?/, '').trim());
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn('[me.md:assessment] Could not fetch AI insights:', e.message);
+    }
+
     res.json({
       attemptId: attempt.id,
       status: attempt.status,
@@ -512,9 +624,126 @@ assessmentRouter.get('/:attemptId/results', (req, res) => {
         },
       })),
       results: resultText,
+      aiAnalysis: {
+        insights: aiInsights,
+        agreements: aiAgreements,
+        contradictions: aiContradictions,
+        generated: aiInsights.length > 0,
+      },
     });
   } catch (err: any) {
     console.error('[me.md:assessment] Error fetching results:', err.message);
     res.status(500).json({ error: 'Failed to fetch assessment results' });
+  }
+});
+
+// ============================================
+// POST /api/assessment/:attemptId/generate-insights
+// ============================================
+// Manually trigger AI insight generation for a completed attempt.
+// Useful if the automatic generation on completion failed or wasn't available.
+assessmentRouter.post('/:attemptId/generate-insights', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string;
+    if (!userId) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { attemptId } = req.params;
+    const { language } = req.body || {};
+    const lang = language || 'en';
+
+    // Verify the attempt belongs to this user and is completed
+    const attempt = db.select()
+      .from(assessmentAttempts)
+      .where(and(
+        eq(assessmentAttempts.id, attemptId),
+        eq(assessmentAttempts.userId, userId),
+      ))
+      .get();
+
+    if (!attempt) {
+      res.status(404).json({ error: 'Assessment attempt not found' });
+      return;
+    }
+
+    if (attempt.status !== 'completed') {
+      res.status(400).json({ error: 'Assessment not yet completed' });
+      return;
+    }
+
+    // Get stored results
+    const storedResults = db.select()
+      .from(assessmentResults)
+      .where(eq(assessmentResults.attemptId, attemptId))
+      .all();
+
+    if (storedResults.length === 0) {
+      res.status(400).json({ error: 'No results found for this attempt' });
+      return;
+    }
+
+    // Reconstruct domain scores data
+    const domainScoresData = storedResults.map(r => ({
+      domain: r.domain,
+      domainScore: r.domainScore,
+      facetScores: {
+        facet1: r.facet1Score,
+        facet2: r.facet2Score,
+        facet3: r.facet3Score,
+        facet4: r.facet4Score,
+        facet5: r.facet5Score,
+        facet6: r.facet6Score,
+      },
+    }));
+
+    // Reconstruct scores for result text generation
+    const scores: Record<string, any> = {};
+    for (const r of storedResults) {
+      scores[r.domain] = {
+        score: r.domainScore,
+        count: 24,
+        result: r.domainScore > 3 ? 'high' : r.domainScore < 3 ? 'low' : 'neutral',
+        facet: {
+          '1': { score: r.facet1Score ?? 0, count: 4, result: (r.facet1Score ?? 0) > 3 ? 'high' : (r.facet1Score ?? 0) < 3 ? 'low' : 'neutral' },
+          '2': { score: r.facet2Score ?? 0, count: 4, result: (r.facet2Score ?? 0) > 3 ? 'high' : (r.facet2Score ?? 0) < 3 ? 'low' : 'neutral' },
+          '3': { score: r.facet3Score ?? 0, count: 4, result: (r.facet3Score ?? 0) > 3 ? 'high' : (r.facet3Score ?? 0) < 3 ? 'low' : 'neutral' },
+          '4': { score: r.facet4Score ?? 0, count: 4, result: (r.facet4Score ?? 0) > 3 ? 'high' : (r.facet4Score ?? 0) < 3 ? 'low' : 'neutral' },
+          '5': { score: r.facet5Score ?? 0, count: 4, result: (r.facet5Score ?? 0) > 3 ? 'high' : (r.facet5Score ?? 0) < 3 ? 'low' : 'neutral' },
+          '6': { score: r.facet6Score ?? 0, count: 4, result: (r.facet6Score ?? 0) > 3 ? 'high' : (r.facet6Score ?? 0) < 3 ? 'low' : 'neutral' },
+        },
+      };
+    }
+
+    let resultText: any[] = [];
+    try {
+      resultText = bigFiveService.getResultText(scores, lang);
+    } catch (e: any) {
+      console.warn('[me.md:assessment] Could not generate result text:', e.message);
+    }
+
+    // Generate insights
+    const insightsResult = await generatePersonalityInsights(userId, attemptId, domainScoresData, resultText);
+
+    if (!insightsResult.generated || insightsResult.insights.length === 0) {
+      res.status(503).json({ error: 'AI insight generation unavailable or returned no results' });
+      return;
+    }
+
+    // Store insights
+    const stored = storePersonalityInsights(userId, attemptId, insightsResult);
+
+    res.json({
+      message: 'Personality insights generated successfully',
+      insightCount: insightsResult.insights.length,
+      noteId: stored.noteId,
+      insightIds: stored.insightIds,
+      agreements: insightsResult.agreements,
+      contradictions: insightsResult.contradictions,
+    });
+  } catch (err: any) {
+    console.error('[me.md:assessment] Error generating insights:', err.message);
+    res.status(500).json({ error: 'Failed to generate personality insights' });
   }
 });

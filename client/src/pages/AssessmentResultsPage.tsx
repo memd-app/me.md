@@ -40,6 +40,21 @@ interface DomainScoreData {
   };
 }
 
+interface AIInsight {
+  id: string;
+  content: string;
+  confidenceScore: number;
+  verificationStatus: string;
+  extractionMethod: string;
+}
+
+interface AIAnalysisData {
+  insights: AIInsight[];
+  agreements: string[];
+  contradictions: string[];
+  generated: boolean;
+}
+
 interface AssessmentResultsData {
   attemptId: string;
   status: string;
@@ -47,6 +62,7 @@ interface AssessmentResultsData {
   completedAt: string;
   domainScores: DomainScoreData[];
   results: DomainResult[];
+  aiAnalysis?: AIAnalysisData;
 }
 
 // ============================================
@@ -436,6 +452,8 @@ export default function AssessmentResultsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<AssessmentResultsData | null>(null);
+  const [generatingInsights, setGeneratingInsights] = useState(false);
+  const [insightError, setInsightError] = useState<string | null>(null);
 
   // ============================================
   // Fetch results
@@ -474,6 +492,38 @@ export default function AssessmentResultsPage() {
   useEffect(() => {
     fetchResults();
   }, [fetchResults]);
+
+  // ============================================
+  // Generate AI Insights (manual trigger)
+  // ============================================
+
+  const handleGenerateInsights = useCallback(async () => {
+    if (!user || !attemptId) return;
+    setGeneratingInsights(true);
+    setInsightError(null);
+
+    try {
+      const res = await fetch(`/api/assessment/${attemptId}/generate-insights`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user.id,
+        },
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to generate insights');
+      }
+
+      // Refresh results to pick up new insights
+      await fetchResults();
+    } catch (err: any) {
+      setInsightError(err.message);
+    } finally {
+      setGeneratingInsights(false);
+    }
+  }, [user, attemptId, fetchResults]);
 
   // ============================================
   // Print handler
@@ -653,6 +703,152 @@ export default function AssessmentResultsPage() {
             animationDelay={200 + index * 150}
           />
         ))}
+      </div>
+
+      {/* AI Analysis Section */}
+      <div className="mb-8 print:mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <svg className="w-5 h-5 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+            AI Analysis
+          </h2>
+          {(!data.aiAnalysis || !data.aiAnalysis.generated || data.aiAnalysis.insights.length === 0) && (
+            <button
+              onClick={handleGenerateInsights}
+              disabled={generatingInsights}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed print:hidden"
+            >
+              {generatingInsights ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  Generate AI Insights
+                </>
+              )}
+            </button>
+          )}
+        </div>
+
+        {insightError && (
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
+            {insightError}
+          </div>
+        )}
+
+        {data.aiAnalysis && data.aiAnalysis.generated && data.aiAnalysis.insights.length > 0 ? (
+          <div className="space-y-4">
+            {/* Insight Cards */}
+            <div className="grid gap-3">
+              {data.aiAnalysis.insights.map((insight, idx) => (
+                <div
+                  key={insight.id || idx}
+                  className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed flex-1">
+                      {insight.content}
+                    </p>
+                    <div className="flex-shrink-0 flex items-center gap-2">
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                        insight.confidenceScore >= 85 ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
+                        insight.confidenceScore >= 70 ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' :
+                        'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                      }`}>
+                        {insight.confidenceScore}%
+                      </span>
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                        insight.verificationStatus === 'verified' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
+                        insight.verificationStatus === 'rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
+                        'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                      }`}>
+                        {insight.verificationStatus === 'unverified' ? 'Pending' : insight.verificationStatus}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Agreements */}
+            {data.aiAnalysis.agreements.length > 0 && (
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800 p-4">
+                <h3 className="text-sm font-semibold text-emerald-800 dark:text-emerald-300 mb-2 flex items-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Agreements with Interview Insights
+                </h3>
+                <ul className="space-y-1.5">
+                  {data.aiAnalysis.agreements.map((agreement, idx) => (
+                    <li key={idx} className="text-sm text-emerald-700 dark:text-emerald-300/80 flex items-start gap-2">
+                      <span className="text-emerald-500 mt-0.5 flex-shrink-0">&#8226;</span>
+                      {agreement}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Contradictions */}
+            {data.aiAnalysis.contradictions.length > 0 && (
+              <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800 p-4">
+                <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-2 flex items-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  Potential Contradictions
+                </h3>
+                <ul className="space-y-1.5">
+                  {data.aiAnalysis.contradictions.map((contradiction, idx) => (
+                    <li key={idx} className="text-sm text-amber-700 dark:text-amber-300/80 flex items-start gap-2">
+                      <span className="text-amber-500 mt-0.5 flex-shrink-0">&#8226;</span>
+                      {contradiction}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Verification CTA */}
+            {data.aiAnalysis.insights.some(i => i.verificationStatus === 'unverified') && (
+              <div className="flex justify-center print:hidden">
+                <Link
+                  to="/app/verify"
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Review &amp; Verify These Insights
+                </Link>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 p-6 text-center">
+            <svg className="w-10 h-10 text-gray-400 dark:text-gray-500 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+              {generatingInsights
+                ? 'Generating personalized personality insights...'
+                : 'AI personality insights have not been generated yet.'}
+            </p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              {generatingInsights
+                ? 'This may take a moment while Claude analyzes your scores.'
+                : 'Click "Generate AI Insights" to get personalized analysis of your Big Five results.'}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Footer Actions */}

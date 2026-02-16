@@ -1,0 +1,368 @@
+import Anthropic from '@anthropic-ai/sdk';
+import { db } from '../config/database.js';
+import { insights, notes, topics, assessmentResults } from '../models/schema.js';
+import { eq, and } from 'drizzle-orm';
+import { v4 as uuidv4 } from 'uuid';
+import { isAIAvailable } from './ai.js';
+
+// ============================================
+// Personality Insights Service
+// ============================================
+// Generates AI-powered personality insights from Big Five assessment scores.
+// Uses Claude to create rich, personalized insights that go beyond generic
+// result descriptions by contextualizing scores relative to the user's
+// existing knowledge graph.
+
+// Domain label mapping
+const DOMAIN_LABELS: Record<string, string> = {
+  N: 'Neuroticism',
+  E: 'Extraversion',
+  O: 'Openness to Experience',
+  A: 'Agreeableness',
+  C: 'Conscientiousness',
+};
+
+// Facet label mapping
+const FACET_LABELS: Record<string, string[]> = {
+  N: ['Anxiety', 'Anger', 'Depression', 'Self-Consciousness', 'Immoderation', 'Vulnerability'],
+  E: ['Friendliness', 'Gregariousness', 'Assertiveness', 'Activity Level', 'Excitement-Seeking', 'Cheerfulness'],
+  O: ['Imagination', 'Artistic Interests', 'Emotionality', 'Adventurousness', 'Intellect', 'Liberalism'],
+  A: ['Trust', 'Morality', 'Altruism', 'Cooperation', 'Modesty', 'Sympathy'],
+  C: ['Self-Efficacy', 'Orderliness', 'Dutifulness', 'Achievement-Striving', 'Self-Discipline', 'Cautiousness'],
+};
+
+export interface PersonalityInsight {
+  category: string;
+  claim: string;
+  confidence: number;
+  evidence: string;
+  crossReference?: string;
+}
+
+export interface PersonalityInsightsResult {
+  insights: PersonalityInsight[];
+  agreements: string[];
+  contradictions: string[];
+  generated: boolean;
+}
+
+/**
+ * Format domain scores into a human-readable summary for the AI prompt.
+ */
+function formatScoresForPrompt(domainScores: Array<{
+  domain: string;
+  domainScore: number;
+  facetScores: Record<string, number | null>;
+}>): string {
+  const lines: string[] = [];
+
+  for (const ds of domainScores) {
+    const domainLabel = DOMAIN_LABELS[ds.domain] || ds.domain;
+    const score = ds.domainScore;
+    const level = score >= 4 ? 'High' : score >= 3.5 ? 'Above Average' : score >= 2.5 ? 'Average' : score >= 2 ? 'Below Average' : 'Low';
+
+    lines.push(`\n### ${domainLabel} (${ds.domain}): ${score.toFixed(2)}/5 — ${level}`);
+
+    // Add facet breakdown
+    const facetLabels = FACET_LABELS[ds.domain] || [];
+    const facetEntries = Object.entries(ds.facetScores);
+    for (const [key, facetScore] of facetEntries) {
+      if (facetScore === null || facetScore === undefined) continue;
+      // key is like "facet1", "facet2", etc. - extract the number
+      const facetNum = parseInt(key.replace('facet', ''), 10);
+      const facetLabel = facetLabels[facetNum - 1] || `Facet ${facetNum}`;
+      const fLevel = facetScore >= 4 ? 'High' : facetScore >= 3 ? 'Moderate-High' : facetScore >= 2.5 ? 'Average' : 'Low';
+      lines.push(`  - ${facetLabel}: ${facetScore.toFixed(2)} (${fLevel})`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Format result text descriptions for the AI prompt.
+ */
+function formatResultTextForPrompt(resultText: any[]): string {
+  if (!resultText || resultText.length === 0) return '(No descriptive text available)';
+
+  return resultText.map(r => {
+    const parts = [`**${r.title || r.domain}**: ${r.text || r.description || r.shortDescription || ''}`];
+    if (r.facets && Array.isArray(r.facets)) {
+      for (const f of r.facets) {
+        if (f.text) {
+          parts.push(`  - ${f.title || `Facet ${f.facet}`}: ${f.text}`);
+        }
+      }
+    }
+    return parts.join('\n');
+  }).join('\n\n');
+}
+
+/**
+ * Generate AI-powered personality insights from Big Five scores.
+ * This is the main entry point called after test completion.
+ */
+export async function generatePersonalityInsights(
+  userId: string,
+  attemptId: string,
+  domainScores: Array<{
+    domain: string;
+    domainScore: number;
+    facetScores: Record<string, number | null>;
+  }>,
+  resultText: any[],
+): Promise<PersonalityInsightsResult> {
+  // Check if AI is available
+  if (!isAIAvailable()) {
+    console.log('[me.md:personality-insights] AI not available, skipping personality insight generation');
+    return { insights: [], agreements: [], contradictions: [], generated: false };
+  }
+
+  try {
+    // Fetch existing interview-derived insights for cross-referencing
+    const existingInsights = db.select({
+      content: insights.content,
+      confidenceScore: insights.confidenceScore,
+      verificationStatus: insights.verificationStatus,
+      topicTitle: topics.title,
+    })
+      .from(insights)
+      .leftJoin(topics, eq(insights.topicId, topics.id))
+      .where(
+        and(
+          eq(insights.userId, userId),
+          eq(insights.verificationStatus, 'verified'),
+        )
+      )
+      .all();
+
+    const hasExistingInsights = existingInsights.length > 0;
+
+    // Build the prompt
+    const scoresText = formatScoresForPrompt(domainScores);
+    const descriptionsText = formatResultTextForPrompt(resultText);
+
+    let existingInsightsContext = '';
+    if (hasExistingInsights) {
+      existingInsightsContext = `\n## Existing Verified Interview Insights\nThe user has the following verified insights from previous interview sessions. Use these to cross-reference and identify agreements or contradictions with the assessment results:\n\n${existingInsights.slice(0, 20).map(i =>
+        `- [From "${i.topicTitle}", confidence: ${i.confidenceScore}%]: "${i.content}"`
+      ).join('\n')}`;
+    }
+
+    const systemPrompt = `You are a personality psychologist and personal knowledge analyst for me.md, a personal knowledge system. Your job is to generate rich, personalized personality insights from Big Five (IPIP NEO-PI-R) assessment results.
+
+You produce structured JSON output. Be specific, nuanced, and grounded in the actual score data. Go beyond generic descriptions — offer genuine psychological insights that help the user understand themselves better.
+
+Output ONLY valid JSON with no markdown code fences, no explanation, and no commentary. Just the raw JSON object.`;
+
+    const userPrompt = `Analyze the following Big Five personality assessment results and generate personalized insights.
+
+## Domain and Facet Scores
+${scoresText}
+
+## Standard Result Descriptions
+${descriptionsText}
+${existingInsightsContext}
+
+## Instructions
+
+Generate 5-10 personality insights based on these assessment results. For each insight:
+
+1. **Per-domain insights** (one per domain): A nuanced interpretation of the domain score, highlighting the most notable facet patterns within that domain.
+2. **Cross-domain observations** (2-5): Identify interesting patterns ACROSS domains. For example:
+   - High Openness + Low Conscientiousness → creative but may struggle with follow-through
+   - High Agreeableness + Low Neuroticism → emotionally stable and empathetic
+   - High Conscientiousness + High Neuroticism → perfectionistic tendencies
+   - Look at specific facet combinations across domains too
+
+${hasExistingInsights ? `3. **Cross-reference with existing insights**: Compare the assessment results with the user's verified interview insights. Identify:
+   - **Agreements**: Where the test results align with what the user has previously expressed
+   - **Contradictions**: Where the test results suggest something different from the user's self-reported insights (these are especially valuable for self-discovery)` : ''}
+
+## Confidence Scoring
+- 70-80: Standard domain interpretation (straightforward reading of the score)
+- 80-90: Cross-domain pattern with moderate evidence (2+ domains supporting the insight)
+- 85-95: Strong cross-domain pattern confirmed by facet-level data${hasExistingInsights ? '\n- 90-95: Assessment insight that aligns with verified interview data' : ''}
+
+## Output Format (JSON object only)
+{
+  "insights": [
+    {
+      "category": "openness|conscientiousness|extraversion|agreeableness|neuroticism|cross_domain",
+      "claim": "A clear, declarative personality insight statement",
+      "confidence": 75,
+      "evidence": "Brief explanation of which scores support this (e.g., 'O: 4.2, O-Intellect: 4.5, combined with C: 3.8')"${hasExistingInsights ? ',\n      "crossReference": "Optional: reference to an existing interview insight that relates to this finding"' : ''}
+    }
+  ],
+  "agreements": [${hasExistingInsights ? '"List of brief statements where test results confirm existing insights"' : ''}],
+  "contradictions": [${hasExistingInsights ? '"List of brief statements where test results diverge from existing insights"' : ''}]
+}`;
+
+    // Call Claude API
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey || apiKey === 'your-anthropic-api-key' || apiKey.trim() === '') {
+      console.warn('[me.md:personality-insights] ANTHROPIC_API_KEY not configured');
+      return { insights: [], agreements: [], contradictions: [], generated: false };
+    }
+
+    const client = new Anthropic({ apiKey });
+
+    console.log(`[me.md:personality-insights] Calling Claude API for personality insight generation (${domainScores.length} domains, ${existingInsights.length} existing insights)`);
+
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4096,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    });
+
+    const textBlocks = response.content.filter(block => block.type === 'text');
+    const responseText = textBlocks.map(block => block.text).join('\n\n');
+
+    if (!responseText || responseText.trim().length === 0) {
+      console.warn('[me.md:personality-insights] Claude returned empty response');
+      return { insights: [], agreements: [], contradictions: [], generated: false };
+    }
+
+    console.log(`[me.md:personality-insights] Response received (${responseText.length} chars, ${response.usage.input_tokens} in / ${response.usage.output_tokens} out tokens)`);
+
+    // Parse the JSON response
+    let cleaned = responseText.trim();
+    if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
+    else if (cleaned.startsWith('```')) cleaned = cleaned.slice(3);
+    if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3);
+    cleaned = cleaned.trim();
+
+    const parsed = JSON.parse(cleaned);
+
+    // Validate and sanitize the response
+    const validCategories = ['openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism', 'cross_domain'];
+
+    const validInsights: PersonalityInsight[] = (parsed.insights || [])
+      .filter((item: any) => {
+        return typeof item === 'object' && item !== null &&
+          typeof item.claim === 'string' && item.claim.trim().length > 0 &&
+          typeof item.confidence === 'number';
+      })
+      .map((item: any) => ({
+        category: validCategories.includes(item.category) ? item.category : 'cross_domain',
+        claim: item.claim.substring(0, 500),
+        confidence: Math.min(Math.max(Math.round(item.confidence), 50), 95),
+        evidence: typeof item.evidence === 'string' ? item.evidence.substring(0, 500) : '',
+        crossReference: typeof item.crossReference === 'string' ? item.crossReference.substring(0, 500) : undefined,
+      }))
+      .slice(0, 10);
+
+    const agreements = Array.isArray(parsed.agreements)
+      ? parsed.agreements.filter((a: any) => typeof a === 'string').map((a: string) => a.substring(0, 300)).slice(0, 5)
+      : [];
+
+    const contradictions = Array.isArray(parsed.contradictions)
+      ? parsed.contradictions.filter((c: any) => typeof c === 'string').map((c: string) => c.substring(0, 300)).slice(0, 5)
+      : [];
+
+    console.log(`[me.md:personality-insights] Generated ${validInsights.length} insights, ${agreements.length} agreements, ${contradictions.length} contradictions`);
+
+    return {
+      insights: validInsights,
+      agreements,
+      contradictions,
+      generated: true,
+    };
+  } catch (error: any) {
+    console.error(`[me.md:personality-insights] Error generating insights: ${error.message}`);
+    return { insights: [], agreements: [], contradictions: [], generated: false };
+  }
+}
+
+/**
+ * Store generated personality insights in the database.
+ * Creates a special note and insight records with source='bigfive_assessment'.
+ */
+export function storePersonalityInsights(
+  userId: string,
+  attemptId: string,
+  insightsResult: PersonalityInsightsResult,
+): { noteId: string; insightIds: string[] } {
+  // We need a topic and a note to associate insights with.
+  // Check if a "Big Five Personality Assessment" topic already exists for this user.
+  let assessmentTopic = db.select()
+    .from(topics)
+    .where(
+      and(
+        eq(topics.userId, userId),
+        eq(topics.title, 'Big Five Personality Assessment'),
+      )
+    )
+    .get();
+
+  if (!assessmentTopic) {
+    // Create the assessment topic
+    const topicId = uuidv4();
+    assessmentTopic = db.insert(topics).values({
+      id: topicId,
+      userId,
+      title: 'Big Five Personality Assessment',
+      description: 'Personality insights generated from the Big Five (IPIP NEO-PI-R) assessment.',
+      tags: JSON.stringify(['personality', 'big-five', 'assessment', 'self-knowledge']),
+      status: 'extracted',
+      priority: 'medium',
+      intent: 'explore',
+      isPreset: false,
+      presetCategory: 'identity',
+    }).returning().get();
+
+    console.log(`[me.md:personality-insights] Created assessment topic: ${topicId}`);
+  }
+
+  const topicId = assessmentTopic.id;
+
+  // Create a note for this assessment's insights
+  const noteId = uuidv4();
+  const insightSummary = insightsResult.insights.map(i => `- **${i.category}**: ${i.claim}`).join('\n');
+  const agreementsSummary = insightsResult.agreements.length > 0
+    ? `\n\n## Agreements with Interview Insights\n${insightsResult.agreements.map(a => `- ${a}`).join('\n')}`
+    : '';
+  const contradictionsSummary = insightsResult.contradictions.length > 0
+    ? `\n\n## Contradictions with Interview Insights\n${insightsResult.contradictions.map(c => `- ⚠️ ${c}`).join('\n')}`
+    : '';
+
+  const fullAnalysis = `# AI Personality Analysis\n\nGenerated from Big Five assessment (attempt: ${attemptId}).\n\n## Key Insights\n${insightSummary}${agreementsSummary}${contradictionsSummary}`;
+
+  db.insert(notes).values({
+    id: noteId,
+    sessionId: attemptId, // Use attemptId as a pseudo-session reference
+    topicId,
+    userId,
+    title: `Big Five AI Analysis — ${new Date().toLocaleDateString()}`,
+    contentFullAnalysis: fullAnalysis,
+    contentBriefSummary: `Big Five personality analysis with ${insightsResult.insights.length} insights generated.`,
+    selectedFormat: 'full_analysis',
+  }).run();
+
+  console.log(`[me.md:personality-insights] Created assessment note: ${noteId}`);
+
+  // Store each insight in the insights table
+  const insightIds: string[] = [];
+
+  for (const insight of insightsResult.insights) {
+    const insightId = uuidv4();
+    insightIds.push(insightId);
+
+    db.insert(insights).values({
+      id: insightId,
+      noteId,
+      topicId,
+      userId,
+      content: insight.claim,
+      confidenceScore: insight.confidence,
+      verificationStatus: 'unverified',
+      extractionMethod: 'ai',
+      sourceSessionId: null,
+    }).run();
+  }
+
+  console.log(`[me.md:personality-insights] Stored ${insightIds.length} personality insights in database`);
+
+  return { noteId, insightIds };
+}
