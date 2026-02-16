@@ -212,9 +212,19 @@ export default function NewSessionPage() {
 
       {/* Select Topic */}
       <div className="card">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Choose a Topic
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Choose a Topic
+          </h2>
+          {user?.sessionLengthDefault && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300" title="Session length from your preferences">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {user.sessionLengthDefault} min
+            </span>
+          )}
+        </div>
         <p className="text-gray-600 dark:text-gray-300 mb-4">
           Select an existing topic to start an in-depth interview session.
         </p>

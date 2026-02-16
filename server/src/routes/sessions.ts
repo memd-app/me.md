@@ -32,6 +32,10 @@ sessionsRouter.post('/', async (req, res) => {
 
     const sessionId = uuidv4();
 
+    // Look up the user's session length default preference
+    const userRecord = db.select().from(users).where(eq(users.id, userId)).get();
+    const suggestedDuration = userRecord?.sessionLengthDefault ?? 15;
+
     // Parse reference URLs from the topic for pre-interview context
     const referenceUrls = parseJsonArray(topic.referenceUrls);
     const contextItems = parseJsonArray(topic.contextItems);
@@ -55,6 +59,7 @@ sessionsRouter.post('/', async (req, res) => {
       userId,
       status: 'active',
       isMiniSession: isMiniSession || false,
+      suggestedDurationMinutes: suggestedDuration,
       timeSpentSeconds: 0,
       researchData: researchData ? JSON.stringify(researchData) : null,
     }).returning().get();
@@ -122,6 +127,9 @@ sessionsRouter.post('/mini', async (req, res) => {
       priority: 'high',
     }).returning().get();
 
+    // For mini sessions, use 5 minutes as the suggested duration (quick win)
+    const suggestedDuration = 5; // Mini sessions are always ~5 minutes
+
     // Create the session with isMiniSession: true
     const sessionId = uuidv4();
     const newSession = db.insert(sessions).values({
@@ -130,6 +138,7 @@ sessionsRouter.post('/mini', async (req, res) => {
       userId,
       status: 'active',
       isMiniSession: true,
+      suggestedDurationMinutes: suggestedDuration,
       timeSpentSeconds: 0,
       researchData: null,
     }).returning().get();

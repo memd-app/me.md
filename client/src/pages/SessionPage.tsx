@@ -23,6 +23,7 @@ interface Session {
   userId: string;
   status: string;
   isMiniSession: boolean;
+  suggestedDurationMinutes: number | null;
   timeSpentSeconds: number;
   createdAt: string;
   updatedAt: string;
@@ -1689,6 +1690,15 @@ export default function SessionPage() {
           </div>
         </div>
         <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+          {/* Suggested duration badge */}
+          {session.suggestedDurationMinutes && (
+            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300" title={`Suggested duration: ${session.suggestedDurationMinutes} minutes`}>
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {session.suggestedDurationMinutes} min
+            </span>
+          )}
           <span className="hidden sm:inline text-xs text-gray-500 dark:text-gray-300">
             {messages.filter(m => m.role === 'user').length} messages
           </span>

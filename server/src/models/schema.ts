@@ -66,6 +66,7 @@ export const sessions = sqliteTable('sessions', {
   userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
   status: text('status').default('active'), // active | paused | completed | abandoned
   isMiniSession: integer('is_mini_session', { mode: 'boolean' }).default(false),
+  suggestedDurationMinutes: integer('suggested_duration_minutes'), // from user's session_length_default setting
   timeSpentSeconds: integer('time_spent_seconds').default(0),
   researchData: text('research_data'), // JSON
   interviewMap: text('interview_map'), // JSON

@@ -252,6 +252,14 @@ function runMigrations() {
     sqlite.exec('ALTER TABLE users ADD COLUMN password_hash TEXT');
     console.log('[me.md] Migration: added password_hash column to users table');
   }
+
+  // Add suggested_duration_minutes column to sessions table
+  const sessionsInfo = sqlite.pragma('table_info(sessions)') as Array<{ name: string }>;
+  const hasSuggestedDuration = sessionsInfo.some((col) => col.name === 'suggested_duration_minutes');
+  if (!hasSuggestedDuration) {
+    sqlite.exec('ALTER TABLE sessions ADD COLUMN suggested_duration_minutes INTEGER');
+    console.log('[me.md] Migration: added suggested_duration_minutes column to sessions table');
+  }
 }
 
 runMigrations();
