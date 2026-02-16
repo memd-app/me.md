@@ -90,7 +90,7 @@ export default function VerificationPage() {
   const [batchReviewed, setBatchReviewed] = useState(0);
   const [batchInsights, setBatchInsights] = useState<Insight[]>([]);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (signal?: AbortSignal) => {
     if (!user) return;
     try {
       setError(null);
@@ -98,12 +98,15 @@ export default function VerificationPage() {
       const [statsRes, pendingRes, verifiedRes] = await Promise.all([
         fetch('/api/insights/stats', {
           headers: { 'x-user-id': user.id },
+          signal,
         }),
         fetch('/api/insights/pending', {
           headers: { 'x-user-id': user.id },
+          signal,
         }),
         fetch('/api/insights?status=verified', {
           headers: { 'x-user-id': user.id },
+          signal,
         }),
       ]);
 
@@ -122,15 +125,18 @@ export default function VerificationPage() {
         setVerifiedInsights(verifiedData.insights || []);
       }
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error('Failed to fetch verification data:', err);
       setError('Failed to load verification queue');
     } finally {
-      setIsLoading(false);
+      if (!signal?.aborted) setIsLoading(false);
     }
   }, [user]);
 
   useEffect(() => {
-    fetchData();
+    const controller = new AbortController();
+    fetchData(controller.signal);
+    return () => controller.abort();
   }, [fetchData]);
 
   const handleApprove = async (insightId: string, reVerifyInterval?: string) => {

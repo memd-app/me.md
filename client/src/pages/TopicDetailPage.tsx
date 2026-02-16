@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import VerifiedBadge from '@/components/VerifiedBadge';
+import { formatDateTime, formatShortDate } from '@/utils/dateFormat';
 
 interface Topic {
   id: string;
@@ -117,6 +118,7 @@ export default function TopicDetailPage() {
 
   useEffect(() => {
     if (!user || !id) return;
+    const controller = new AbortController();
 
     const fetchTopic = async () => {
       setIsLoading(true);
@@ -126,6 +128,7 @@ export default function TopicDetailPage() {
         // Fetch topic details
         const topicRes = await fetch(`/api/topics/${id}`, {
           headers: { 'x-user-id': user.id },
+          signal: controller.signal,
         });
         if (topicRes.status === 404) {
           setTopicNotFound(true);
@@ -143,19 +146,22 @@ export default function TopicDetailPage() {
         // Fetch sessions for this topic
         const sessionsRes = await fetch(`/api/sessions?topicId=${id}`, {
           headers: { 'x-user-id': user.id },
+          signal: controller.signal,
         });
         if (sessionsRes.ok) {
           const sessionsData = await sessionsRes.json();
           setSessions(sessionsData.sessions || []);
         }
       } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
         setError(err instanceof Error ? err.message : 'Failed to load topic');
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) setIsLoading(false);
       }
     };
 
     fetchTopic();
+    return () => controller.abort();
   }, [user, id]);
 
   // Helper to check if an API response indicates the topic was deleted
@@ -948,7 +954,7 @@ export default function TopicDetailPage() {
                         </span>
                       </div>
                       <span className="text-sm text-gray-500 dark:text-gray-300">
-                        Started {new Date(session.createdAt).toLocaleString()}
+                        Started {formatDateTime(session.createdAt)}
                       </span>
                     </div>
                   </Link>
@@ -978,7 +984,7 @@ export default function TopicDetailPage() {
                         </span>
                       </div>
                       <span className="text-sm text-gray-500 dark:text-gray-300">
-                        Paused {new Date(session.updatedAt).toLocaleString()}
+                        Paused {formatDateTime(session.updatedAt)}
                       </span>
                     </div>
                   </Link>
@@ -1005,10 +1011,7 @@ export default function TopicDetailPage() {
                         </span>
                       </div>
                       <span className="text-sm text-gray-500 dark:text-gray-300">
-                        {session.completedAt
-                          ? new Date(session.completedAt).toLocaleString()
-                          : new Date(session.updatedAt).toLocaleString()
-                        }
+                        {formatDateTime(session.completedAt || session.updatedAt)}
                       </span>
                     </div>
                   </Link>
@@ -1076,7 +1079,7 @@ export default function TopicDetailPage() {
                     </div>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-300 mt-2">
-                    {new Date(insight.createdAt).toLocaleDateString()}
+                    {formatShortDate(insight.createdAt)}
                   </p>
                 </div>
               );

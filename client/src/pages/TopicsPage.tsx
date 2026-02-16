@@ -1,6 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatShortDate } from '@/utils/dateFormat';
+
+const TOPICS_PER_PAGE = 10;
 
 interface Topic {
   id: string;
@@ -93,32 +96,60 @@ export default function TopicsPage() {
   const [sortBy, setSortBy] = useState<SortOption>('date_newest');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(() => {
+    const pageParam = searchParams.get('page');
+    return pageParam ? Math.max(1, parseInt(pageParam, 10) || 1) : 1;
+  });
+  const [fetchVersion, setFetchVersion] = useState(0);
   const exploreCategory = searchParams.get('explore');
 
-  useEffect(() => {
+  const fetchTopics = useCallback(async (signal?: AbortSignal) => {
     if (!user) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/topics', {
+        headers: { 'x-user-id': user.id },
+        signal,
+      });
+      if (!res.ok) {
+        throw new Error('Failed to load topics');
+      }
+      const data = await res.json();
+      setTopics(data.topics || []);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      setError(err instanceof Error ? err.message : 'Failed to load topics');
+    } finally {
+      if (!signal?.aborted) setIsLoading(false);
+    }
+  }, [user]);
 
-    const fetchTopics = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const res = await fetch('/api/topics', {
-          headers: { 'x-user-id': user.id },
-        });
-        if (!res.ok) {
-          throw new Error('Failed to load topics');
-        }
-        const data = await res.json();
-        setTopics(data.topics || []);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load topics');
-      } finally {
-        setIsLoading(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchTopics(controller.signal);
+    return () => controller.abort();
+  }, [fetchTopics, fetchVersion]);
+
+  // Re-fetch topics when the page becomes visible again (e.g., returning from another tab)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        setFetchVersion(v => v + 1);
       }
     };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
-    fetchTopics();
-  }, [user]);
+  // Also re-fetch when window gets focus (covers tab switching in same browser)
+  useEffect(() => {
+    const handleFocus = () => {
+      setFetchVersion(v => v + 1);
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
 
   const hasActiveFilters = statusFilter !== 'all' || priorityFilter !== 'all';
 
@@ -126,7 +157,24 @@ export default function TopicsPage() {
     setStatusFilter('all');
     setPriorityFilter('all');
     setSortBy('date_newest');
+    setCurrentPage(1);
   };
+
+  // Sync page number to URL params
+  useEffect(() => {
+    const newParams = new URLSearchParams(searchParams);
+    if (currentPage > 1) {
+      newParams.set('page', String(currentPage));
+    } else {
+      newParams.delete('page');
+    }
+    // Only update if actually different to avoid infinite loops
+    const currentPageParam = searchParams.get('page');
+    const targetPageParam = currentPage > 1 ? String(currentPage) : null;
+    if (currentPageParam !== targetPageParam) {
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [currentPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filter and sort topics
   const filteredAndSortedTopics = useMemo(() => {
@@ -164,6 +212,61 @@ export default function TopicsPage() {
 
     return result;
   }, [topics, statusFilter, priorityFilter, sortBy]);
+
+  // Pagination computed values
+  const totalFilteredTopics = filteredAndSortedTopics.length;
+  const totalPages = Math.max(1, Math.ceil(totalFilteredTopics / TOPICS_PER_PAGE));
+
+  // Auto-clamp page when data changes (e.g., topic deleted makes last page empty)
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedTopics = useMemo(() => {
+    const start = (currentPage - 1) * TOPICS_PER_PAGE;
+    return filteredAndSortedTopics.slice(start, start + TOPICS_PER_PAGE);
+  }, [filteredAndSortedTopics, currentPage]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, priorityFilter, sortBy]);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    // Re-fetch fresh data when navigating pages to catch any data updates
+    setFetchVersion(v => v + 1);
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const getPageNumbers = (): (number | 'ellipsis')[] => {
+    const pages: (number | 'ellipsis')[] = [];
+    if (totalPages <= 7) {
+      // Show all pages if 7 or fewer
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Smart ellipsis
+      pages.push(1);
+      if (currentPage > 3) {
+        pages.push('ellipsis');
+      }
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+      if (currentPage < totalPages - 2) {
+        pages.push('ellipsis');
+      }
+      pages.push(totalPages);
+    }
+    return pages;
+  };
 
   const parseTags = (tagsStr: string | null): string[] => {
     if (!tagsStr) return [];
@@ -408,9 +511,9 @@ export default function TopicsPage() {
       )}
 
       {/* Topics list */}
-      {!isLoading && filteredAndSortedTopics.length > 0 && (
+      {!isLoading && paginatedTopics.length > 0 && (
         <div className="space-y-3">
-          {filteredAndSortedTopics.map((topic) => (
+          {paginatedTopics.map((topic) => (
             <Link
               key={topic.id}
               to={`/app/topics/${topic.id}`}
@@ -454,11 +557,76 @@ export default function TopicsPage() {
                   </div>
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-300 ml-4 shrink-0">
-                  {new Date(topic.createdAt).toLocaleDateString()}
+                  {formatShortDate(topic.createdAt)}
                 </div>
               </div>
             </Link>
           ))}
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-4 mt-2 border-t border-gray-200 dark:border-dark-border">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Showing {((currentPage - 1) * TOPICS_PER_PAGE) + 1}–{Math.min(currentPage * TOPICS_PER_PAGE, totalFilteredTopics)} of {totalFilteredTopics} topics
+              </p>
+              <nav className="flex items-center gap-1" aria-label="Topics pagination">
+                {/* Previous button */}
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage <= 1}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    currentPage <= 1
+                      ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
+                  aria-label="Previous page"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+
+                {/* Page numbers */}
+                {getPageNumbers().map((pageNum, idx) =>
+                  pageNum === 'ellipsis' ? (
+                    <span key={`ellipsis-${idx}`} className="px-2 py-1 text-gray-400 dark:text-gray-500 text-sm">
+                      ...
+                    </span>
+                  ) : (
+                    <button
+                      key={pageNum}
+                      onClick={() => handlePageChange(pageNum)}
+                      className={`min-w-[36px] px-2 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                        pageNum === currentPage
+                          ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      }`}
+                      aria-label={`Page ${pageNum}`}
+                      aria-current={pageNum === currentPage ? 'page' : undefined}
+                    >
+                      {pageNum}
+                    </button>
+                  )
+                )}
+
+                {/* Next button */}
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage >= totalPages}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    currentPage >= totalPages
+                      ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
+                  aria-label="Next page"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </nav>
+            </div>
+          )}
         </div>
       )}
 

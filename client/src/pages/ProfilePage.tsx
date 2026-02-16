@@ -93,13 +93,14 @@ export default function ProfilePage() {
   const previousInsightCount = useRef<number | null>(null);
   const isMounted = useRef(true);
 
-  const fetchSummary = useCallback(async (showLoadingState = true) => {
+  const fetchSummary = useCallback(async (showLoadingState = true, signal?: AbortSignal) => {
     if (!user) return;
     try {
       if (showLoadingState) setLoading(true);
       setError(null);
       const res = await fetch('/api/profile/summary', {
         headers: { 'x-user-id': user.id },
+        signal,
       });
       if (!res.ok) {
         throw new Error('Failed to fetch profile summary');
@@ -110,11 +111,12 @@ export default function ProfilePage() {
         previousInsightCount.current = data.summary.totalVerifiedInsights;
       }
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       if (isMounted.current) {
         setError(err instanceof Error ? err.message : 'Failed to load profile');
       }
     } finally {
-      if (isMounted.current && showLoadingState) {
+      if (isMounted.current && showLoadingState && !signal?.aborted) {
         setLoading(false);
       }
     }
@@ -123,8 +125,9 @@ export default function ProfilePage() {
   // Fetch on mount and when navigating back to this page
   useEffect(() => {
     isMounted.current = true;
-    fetchSummary();
-    return () => { isMounted.current = false; };
+    const controller = new AbortController();
+    fetchSummary(true, controller.signal);
+    return () => { isMounted.current = false; controller.abort(); };
   }, [fetchSummary, location.key]);
 
   // Auto-refresh when tab regains focus (user may have verified insights in another tab/page)

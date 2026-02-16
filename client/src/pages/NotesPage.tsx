@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, Fragment } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import VerifiedBadge from '@/components/VerifiedBadge';
+import { formatRelativeTime, formatDateTime } from '@/utils/dateFormat';
 
 type NoteFormat = 'full_analysis' | 'brief_summary' | 'decision_framework' | 'json';
 
@@ -49,36 +50,9 @@ const FORMAT_COLORS: Record<NoteFormat, string> = {
   json: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
 };
 
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffHours = diffMs / (1000 * 60 * 60);
-  const diffDays = diffMs / (1000 * 60 * 60 * 24);
-
-  if (diffHours < 1) {
-    const mins = Math.floor(diffMs / (1000 * 60));
-    return mins <= 1 ? 'Just now' : `${mins}m ago`;
-  }
-  if (diffHours < 24) {
-    return `${Math.floor(diffHours)}h ago`;
-  }
-  if (diffDays < 7) {
-    return `${Math.floor(diffDays)}d ago`;
-  }
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
-}
-
-function formatDateTime(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
+// Date formatting now uses shared utils from @/utils/dateFormat
+// formatRelativeTime replaces the old formatDate function
+// formatDateTime is imported from @/utils/dateFormat
 
 function getContentPreview(note: NoteListItem): string {
   const format = note.selectedFormat || 'full_analysis';
@@ -203,6 +177,7 @@ export default function NotesPage() {
 
   useEffect(() => {
     if (!user) return;
+    const controller = new AbortController();
 
     const fetchNotes = async () => {
       setIsLoading(true);
@@ -210,18 +185,21 @@ export default function NotesPage() {
       try {
         const res = await fetch('/api/notes', {
           headers: { 'x-user-id': user.id },
+          signal: controller.signal,
         });
         if (!res.ok) throw new Error('Failed to load notes');
         const data = await res.json();
         setNotes(data.notes || []);
       } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
         setError(err instanceof Error ? err.message : 'Failed to load notes');
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) setIsLoading(false);
       }
     };
 
     fetchNotes();
+    return () => controller.abort();
   }, [user]);
 
   const fetchNoteDetail = async (noteId: string) => {
@@ -563,7 +541,7 @@ export default function NotesPage() {
                     </span>
                     {/* Date */}
                     <span className="text-xs text-gray-500 dark:text-gray-300">
-                      {formatDate(note.createdAt)}
+                      {formatRelativeTime(note.createdAt)}
                     </span>
                   </div>
                   {/* Content preview */}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatShortDate, formatTime, formatDateTime } from '@/utils/dateFormat';
 
 interface BookmarkMessage {
   id: string;
@@ -39,6 +40,7 @@ export default function BookmarksPage() {
 
   useEffect(() => {
     if (!user) return;
+    const controller = new AbortController();
 
     const fetchBookmarks = async () => {
       setIsLoading(true);
@@ -46,6 +48,7 @@ export default function BookmarksPage() {
       try {
         const res = await fetch('/api/bookmarks', {
           headers: { 'x-user-id': user.id },
+          signal: controller.signal,
         });
 
         if (!res.ok) {
@@ -55,13 +58,15 @@ export default function BookmarksPage() {
         const data = await res.json();
         setBookmarks(data.bookmarks || []);
       } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
         setError(err instanceof Error ? err.message : 'Failed to load bookmarks');
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) setIsLoading(false);
       }
     };
 
     fetchBookmarks();
+    return () => controller.abort();
   }, [user]);
 
   const handleRemoveBookmark = async (bookmark: Bookmark) => {
@@ -180,11 +185,7 @@ export default function BookmarksPage() {
                     </h3>
                     <p className="text-xs text-gray-500 dark:text-gray-300">
                       {group.session?.createdAt
-                        ? new Date(group.session.createdAt).toLocaleDateString(undefined, {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                          })
+                        ? formatShortDate(group.session.createdAt)
                         : 'Unknown date'}
                       {' '}&middot;{' '}
                       {group.bookmarks.length} bookmark{group.bookmarks.length !== 1 ? 's' : ''}
@@ -229,7 +230,7 @@ export default function BookmarksPage() {
                           </span>
                           <span className="text-xs text-gray-500 dark:text-gray-300">
                             {bookmark.message?.createdAt
-                              ? new Date(bookmark.message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                              ? formatTime(bookmark.message.createdAt)
                               : ''}
                           </span>
                         </div>
@@ -240,13 +241,7 @@ export default function BookmarksPage() {
                         </p>
                         <div className="mt-2 text-xs text-gray-500 dark:text-gray-300">
                           Bookmarked {bookmark.createdAt
-                            ? new Date(bookmark.createdAt).toLocaleDateString(undefined, {
-                                year: 'numeric',
-                                month: 'short',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })
+                            ? formatDateTime(bookmark.createdAt)
                             : ''}
                         </div>
                       </div>

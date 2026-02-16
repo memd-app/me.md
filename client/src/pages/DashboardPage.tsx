@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatActivityDate } from '@/utils/dateFormat';
 
 interface CategoryCompleteness {
   category: string;
@@ -58,13 +59,14 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!user) return;
+    const controller = new AbortController();
 
     const fetchDashboard = async () => {
       setIsLoading(true);
       try {
         const [statsRes, activityRes] = await Promise.all([
-          fetch('/api/dashboard/stats', { headers: { 'x-user-id': user.id } }),
-          fetch('/api/dashboard/activity', { headers: { 'x-user-id': user.id } }),
+          fetch('/api/dashboard/stats', { headers: { 'x-user-id': user.id }, signal: controller.signal }),
+          fetch('/api/dashboard/activity', { headers: { 'x-user-id': user.id }, signal: controller.signal }),
         ]);
 
         if (statsRes.ok) {
@@ -77,13 +79,15 @@ export default function DashboardPage() {
           setActivity(activityData.activity || []);
         }
       } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
         console.error('Failed to fetch dashboard data:', err);
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) setIsLoading(false);
       }
     };
 
     fetchDashboard();
+    return () => controller.abort();
   }, [user]);
 
   const statCards = [
@@ -332,7 +336,6 @@ export default function DashboardPage() {
             <div className="absolute left-[19px] sm:left-[23px] top-4 bottom-4 w-0.5 bg-gray-200 dark:bg-gray-700" />
             <div className="space-y-1">
               {activity.map((item) => {
-                const activityDate = new Date(item.date);
                 const config = getActivityConfig(item.type);
                 return (
                   <div
@@ -356,17 +359,7 @@ export default function DashboardPage() {
                         </span>
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-300 mt-0.5">
-                        {activityDate.toLocaleDateString('en-US', {
-                          weekday: 'short',
-                          month: 'short',
-                          day: 'numeric',
-                          year: activityDate.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
-                        })}
-                        {' at '}
-                        {activityDate.toLocaleTimeString('en-US', {
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}
+                        {formatActivityDate(item.date)}
                       </p>
                     </div>
                   </div>

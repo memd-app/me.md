@@ -124,27 +124,34 @@ export default function KnowledgeGraphPage() {
   const simulationRef = useRef<d3.Simulation<GraphNode, GraphEdge> | null>(null);
 
   // Fetch graph data
-  const fetchGraph = useCallback(async () => {
+  const fetchGraph = useCallback(async (signal?: AbortSignal) => {
     if (!user) return;
     try {
       setLoading(true);
       setError(null);
       const res = await fetch('/api/graph', {
         headers: { 'x-user-id': user.id },
+        signal,
       });
       if (!res.ok) throw new Error('Failed to load graph data');
       const data = await res.json();
       setGraphData(data);
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'Failed to load graph');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [user]);
 
   useEffect(() => {
-    fetchGraph();
+    const controller = new AbortController();
+    fetchGraph(controller.signal);
+    return () => controller.abort();
   }, [fetchGraph]);
+
+  // Wrapper for click handlers (fetchGraph with signal conflicts with MouseEvent type)
+  const handleRefreshGraph = () => { fetchGraph(); };
 
   // Auto-refresh graph when page becomes visible (e.g., returning from Verification tab)
   // This ensures the graph reflects real-time changes when insights are verified
@@ -595,7 +602,7 @@ export default function KnowledgeGraphPage() {
             <span className="hidden sm:inline">Show </span>Concepts
           </label>
           <button
-            onClick={fetchGraph}
+            onClick={handleRefreshGraph}
             className="px-3 py-1.5 text-xs sm:text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors min-h-[36px]"
             aria-label="Refresh knowledge graph"
           >
@@ -624,7 +631,7 @@ export default function KnowledgeGraphPage() {
       {error && (
         <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm" role="alert">
           {error}
-          <button onClick={fetchGraph} className="ml-2 underline" aria-label="Retry loading knowledge graph">Retry</button>
+          <button onClick={handleRefreshGraph} className="ml-2 underline" aria-label="Retry loading knowledge graph">Retry</button>
         </div>
       )}
 
