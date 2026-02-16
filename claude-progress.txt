@@ -1,3 +1,43 @@
+## Session - 2026-02-16 (Agent handling Feature #216)
+
+### Accomplished
+- Feature #216 (Connect Import Data to Knowledge System): PASSING
+
+### Changes Made
+- **server/src/routes/import.ts**: Added processing pipeline for imported data
+  - `scoreExtractedInsight()` - scores statements based on personal markers (I am, I believe, I prefer, etc.)
+  - `extractInsightsFromChatgpt()` - processes structured sections, maps to categories
+  - `extractInsightsFromUrl()` - higher threshold (55) for non-personal URL content
+  - `extractInsightsFromText()` - processes plain text with medium threshold (48)
+  - `POST /api/import/:id/process` - atomically creates topic, session, note, and insights in SQLite transaction
+  - `GET /api/import/:id/insights` - retrieves insights from a processed import
+  - All insights created as unverified for human-in-the-loop verification
+  - Linter also added: `parseImportedContext()` helper, user verification, transaction wrapping for existing routes
+
+- **client/src/pages/ImportPage.tsx**: Updated import UI with processing flow
+  - "Extract Insights for Verification" button on each import result
+  - Processing spinner state during extraction
+  - Extracted insights display panel with confidence scores, category badges
+  - Links to verification queue and created topics
+  - Processed imports change from green to purple border styling
+
+- **server/src/routes/profile.ts**: Updated profile export to reference imported sources
+  - JSON export includes importedSources in rawData and metadata counts
+  - Markdown export appends "Imported Sources" section with type labels and insight counts
+
+- **client/.env.example**: Sanitized to remove real Firebase credentials, replaced with placeholders
+
+### Verified
+- Client TypeScript: clean
+- Server TypeScript: only pre-existing errors in graph.ts and sessions.ts
+- Vite build: succeeds (854.68 kB JS)
+- End-to-end: text import → 8 insights extracted → appeared in verification queue → verified → concept node created
+- End-to-end: ChatGPT import → 6 insights extracted
+- No mock data patterns found
+- Test data cleaned up
+
+---
+
 ## Session - 2026-02-16 (Agent handling Feature #210)
 
 ### Accomplished
