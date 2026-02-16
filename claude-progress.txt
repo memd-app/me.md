@@ -1,3 +1,44 @@
+## Session - 2026-02-16 (Agent handling Feature #169)
+
+### Accomplished
+- Feature #169 (Error feedback for all failing actions): PASSING
+  - **CreateTopicPage**: Improved validation error messages to be actionable
+    - Empty title: "Title is required. Please enter a descriptive name..."
+    - Title too long: "Title is too long. Please keep it under 200 characters."
+    - Not logged in: "You must be logged in to create a topic. Please sign in..."
+  - **SessionPage**: Added toast warning for empty message sends
+    - Import useToast, show "Please type a message before sending" warning
+    - Improved session load error messages (404, 401, generic)
+  - **ExportPage**: Added export readiness check with no-data warning
+    - New `/api/profile/export/status` server endpoint checks verified insight count
+    - Amber warning banner when no verified exportable data exists
+    - Step-by-step guidance with links to Topics and Verification pages
+    - Green readiness banner showing insight/topic counts when data exists
+    - Toast warning + inline error when user tries to export with no verified data
+  - **NewSessionPage**: Added deleted topic detection and topic load error handling
+    - 404 response from session creation removes stale topic from list + shows toast
+    - New `topicLoadError` state with retry button for failed topic fetch
+    - Improved mini session and topic session error messages
+    - Network error detection with actionable messaging
+  - **Server-side**: Improved validation messages
+    - Topics: title validation now catches whitespace-only strings, added length limit
+    - Sessions: "Topic not found" → actionable message about deleted topic
+    - Profile: new `/api/profile/export/status` endpoint for pre-export data check
+
+### Verification
+- TypeScript client compiles with zero errors
+- Server TypeScript has only pre-existing errors (graph.ts, sessions.ts:700) - not from this change
+- Server starts cleanly and health check passes
+- Export status endpoint responds correctly (404 for missing user)
+- No mock data patterns in client/src or server/src
+
+### Current Status
+- 180/209 features passing (86.1%)
+- Feature #169 marked as passing
+
+### What to Work on Next
+- Continue with next assigned features from orchestrator
+
 ## Session - 2026-02-16 (Agent handling Feature #168)
 
 ### Accomplished
