@@ -4,6 +4,7 @@ import { users, passwordResetTokens } from '../models/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
+import { generateSessionToken, revokeUserTokens, revokeToken, authMiddleware } from '../middleware/auth.js';
 
 export const authRouter = Router();
 
@@ -77,9 +78,14 @@ authRouter.post('/register', async (req, res) => {
     // Don't return password_hash in the response
     const { passwordHash: _ph, ...userWithoutPassword } = newUser;
 
+    // Generate a session token for the new user
+    const { token, expiresAt } = generateSessionToken(userId);
+
     res.status(201).json({
       message: 'User registered successfully',
       user: userWithoutPassword,
+      token,
+      tokenExpiresAt: expiresAt,
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -116,9 +122,14 @@ authRouter.post('/login', async (req, res) => {
     // Don't return password_hash in the response
     const { passwordHash: _ph, ...userWithoutPassword } = user;
 
+    // Generate a session token
+    const { token, expiresAt } = generateSessionToken(user.id);
+
     res.json({
       message: 'Login successful',
       user: userWithoutPassword,
+      token,
+      tokenExpiresAt: expiresAt,
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -126,10 +137,10 @@ authRouter.post('/login', async (req, res) => {
   }
 });
 
-// GET /api/auth/me - Get current user (dev mode: via query param or header)
-authRouter.get('/me', async (req, res) => {
+// GET /api/auth/me - Get current user (uses authMiddleware to validate Bearer token or x-user-id)
+authRouter.get('/me', authMiddleware, async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -203,9 +214,12 @@ authRouter.post('/google', async (req, res) => {
     const existingByUid = db.select().from(users).where(eq(users.firebaseUid, verifiedUid)).get();
     if (existingByUid) {
       const { passwordHash: _ph, ...userWithoutPassword } = existingByUid;
+      const { token, expiresAt } = generateSessionToken(existingByUid.id);
       return res.json({
         message: 'Login successful',
         user: userWithoutPassword,
+        token,
+        tokenExpiresAt: expiresAt,
       });
     }
 
@@ -221,9 +235,12 @@ authRouter.post('/google', async (req, res) => {
       const updated = db.select().from(users).where(eq(users.id, existingByEmail.id)).get();
       if (updated) {
         const { passwordHash: _ph, ...userWithoutPassword } = updated;
+        const { token, expiresAt } = generateSessionToken(updated.id);
         return res.json({
           message: 'Login successful',
           user: userWithoutPassword,
+          token,
+          tokenExpiresAt: expiresAt,
         });
       }
     }
@@ -243,10 +260,13 @@ authRouter.post('/google', async (req, res) => {
     }).returning().get();
 
     const { passwordHash: _ph, ...userWithoutPassword } = newUser;
+    const { token, expiresAt } = generateSessionToken(userId);
 
     res.status(201).json({
       message: 'User created via Google Sign-In',
       user: userWithoutPassword,
+      token,
+      tokenExpiresAt: expiresAt,
     });
   } catch (error) {
     console.error('Google auth error:', error);
@@ -254,8 +274,30 @@ authRouter.post('/google', async (req, res) => {
   }
 });
 
+// POST /api/auth/logout - Revoke the current session token
+authRouter.post('/logout', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.slice(7);
+      revokeToken(token);
+    }
+
+    // Also support revoking all tokens for a user
+    const userId = req.headers['x-user-id'] as string;
+    if (userId) {
+      revokeUserTokens(userId);
+    }
+
+    res.json({ message: 'Logged out successfully' });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({ error: 'Failed to logout' });
+  }
+});
+
 // POST /api/auth/verify-password - Verify user's password
-authRouter.post('/verify-password', async (req, res) => {
+authRouter.post('/verify-password', authMiddleware, async (req, res) => {
   try {
     const userId = req.headers['x-user-id'] as string || req.query.userId as string;
 
@@ -290,7 +332,7 @@ authRouter.post('/verify-password', async (req, res) => {
 });
 
 // PUT /api/auth/change-password - Change user's password
-authRouter.put('/change-password', async (req, res) => {
+authRouter.put('/change-password', authMiddleware, async (req, res) => {
   try {
     const userId = req.headers['x-user-id'] as string;
 
@@ -482,7 +524,7 @@ authRouter.post('/reset-password', async (req, res) => {
 });
 
 // DELETE /api/auth/account - Delete account (requires password confirmation)
-authRouter.delete('/account', async (req, res) => {
+authRouter.delete('/account', authMiddleware, async (req, res) => {
   try {
     const userId = req.headers['x-user-id'] as string || req.query.userId as string;
 
@@ -509,6 +551,9 @@ authRouter.delete('/account', async (req, res) => {
         return res.status(401).json({ error: 'Incorrect password' });
       }
     }
+
+    // Revoke all session tokens before deleting
+    revokeUserTokens(userId);
 
     // Delete the user (cascades to all related data)
     db.delete(users).where(eq(users.id, userId)).run();

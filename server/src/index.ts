@@ -20,6 +20,7 @@ import { bookmarksRouter } from './routes/bookmarks.js';
 import { conflictsRouter } from './routes/conflicts.js';
 import { templatesRouter } from './routes/templates.js';
 import { sandboxRouter } from './routes/sandbox.js';
+import { authMiddleware, cleanupExpiredTokens } from './middleware/auth.js';
 
 dotenv.config();
 
@@ -34,37 +35,39 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 
-// Routes
+// Public routes (no auth required)
 app.use('/api/health', healthRouter);
 app.use('/api/auth', authRouter);
-app.use('/api/topics', topicsRouter);
-app.use('/api/users', usersRouter);
-app.use('/api/import', importRouter);
-app.use('/api/sessions', sessionsRouter);
 
-app.use('/api/notes', notesRouter);
+// Protected routes (auth middleware validates Bearer token or x-user-id)
+app.use('/api/topics', authMiddleware, topicsRouter);
+app.use('/api/users', authMiddleware, usersRouter);
+app.use('/api/import', authMiddleware, importRouter);
+app.use('/api/sessions', authMiddleware, sessionsRouter);
+
+app.use('/api/notes', authMiddleware, notesRouter);
 
 // TODO: Add remaining routes as they are implemented
 // app.use('/api/messages', messagesRouter);
-app.use('/api/insights', insightsRouter);
-app.use('/api/graph', graphRouter);
-app.use('/api/profile', profileRouter);
-app.use('/api/sandbox', sandboxRouter);
-app.use('/api/search', searchRouter);
-app.use('/api/dashboard', dashboardRouter);
+app.use('/api/insights', authMiddleware, insightsRouter);
+app.use('/api/graph', authMiddleware, graphRouter);
+app.use('/api/profile', authMiddleware, profileRouter);
+app.use('/api/sandbox', authMiddleware, sandboxRouter);
+app.use('/api/search', authMiddleware, searchRouter);
+app.use('/api/dashboard', authMiddleware, dashboardRouter);
 
 // Bookmarks route (must be before /api catch-all notesRouter)
-app.use('/api/bookmarks', bookmarksRouter);
+app.use('/api/bookmarks', authMiddleware, bookmarksRouter);
 
 // Conflicts route
-app.use('/api/conflicts', conflictsRouter);
+app.use('/api/conflicts', authMiddleware, conflictsRouter);
 
 // Templates route (before catch-all notesRouter)
-app.use('/api/templates', templatesRouter);
+app.use('/api/templates', authMiddleware, templatesRouter);
 
 // Distillation routes (mounted under /api AFTER all more specific routes to prevent /:id catch-all conflicts)
-app.use('/api', notesRouter);
-app.use('/api/mcp', mcpRouter);
+app.use('/api', authMiddleware, notesRouter);
+app.use('/api/mcp', authMiddleware, mcpRouter);
 // app.use('/api/export', exportRouter);
 
 // Error handling middleware
@@ -97,6 +100,20 @@ app.listen(PORT, () => {
       console.error('[me.md] Periodic re-verification check failed:', err);
     }
   }, 15 * 60 * 1000);
+
+  // Clean up expired session tokens on startup and every hour
+  try {
+    cleanupExpiredTokens();
+  } catch (err) {
+    console.error('[me.md] Session token cleanup failed:', err);
+  }
+  setInterval(() => {
+    try {
+      cleanupExpiredTokens();
+    } catch (err) {
+      console.error('[me.md] Periodic session token cleanup failed:', err);
+    }
+  }, 60 * 60 * 1000);
 });
 
 export default app;

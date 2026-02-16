@@ -229,6 +229,17 @@ export const passwordResetTokens = sqliteTable('password_reset_tokens', {
 });
 
 // ============================================
+// Session Tokens (Auth)
+// ============================================
+export const sessionTokens = sqliteTable('session_tokens', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  tokenHash: text('token_hash').unique().notNull(),
+  expiresAt: text('expires_at').notNull(),
+  createdAt: text('created_at').default(sql`(datetime('now'))`),
+});
+
+// ============================================
 // Imported Files
 // ============================================
 export const importedFiles = sqliteTable('imported_files', {

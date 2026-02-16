@@ -29,6 +29,7 @@ interface AuthContextType {
   error: string | null;
   clearError: () => void;
   isFirebaseReady: boolean;
+  getAuthHeaders: () => Record<string, string>;
 }
 
 interface RegisterData {
@@ -45,6 +46,45 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const API_BASE = '/api';
 
+/**
+ * Get stored auth token from localStorage.
+ */
+function getStoredToken(): string | null {
+  return localStorage.getItem('memd_auth_token');
+}
+
+/**
+ * Store auth token in localStorage.
+ */
+function storeToken(token: string): void {
+  localStorage.setItem('memd_auth_token', token);
+}
+
+/**
+ * Clear auth token from localStorage.
+ */
+function clearToken(): void {
+  localStorage.removeItem('memd_auth_token');
+}
+
+/**
+ * Build auth headers for API requests.
+ * Uses Bearer token if available, falls back to x-user-id.
+ */
+function buildAuthHeaders(userId?: string): Record<string, string> {
+  const headers: Record<string, string> = {};
+  const token = getStoredToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  // Also include x-user-id for backward compatibility
+  const uid = userId || localStorage.getItem('memd_user_id');
+  if (uid) {
+    headers['x-user-id'] = uid;
+  }
+  return headers;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -52,13 +92,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const clearError = useCallback(() => setError(null), []);
 
+  const getAuthHeaders = useCallback((): Record<string, string> => {
+    return buildAuthHeaders(user?.id);
+  }, [user]);
+
   // Check for existing session on mount
   useEffect(() => {
     const storedUserId = localStorage.getItem('memd_user_id');
-    if (storedUserId) {
-      fetch(`${API_BASE}/auth/me`, {
-        headers: { 'x-user-id': storedUserId },
-      })
+    const storedToken = getStoredToken();
+    if (storedUserId || storedToken) {
+      const headers: Record<string, string> = {};
+      if (storedToken) {
+        headers['Authorization'] = `Bearer ${storedToken}`;
+      }
+      if (storedUserId) {
+        headers['x-user-id'] = storedUserId;
+      }
+
+      fetch(`${API_BASE}/auth/me`, { headers })
         .then((res) => {
           if (res.ok) return res.json();
           throw new Error('Session expired');
@@ -68,6 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         })
         .catch(() => {
           localStorage.removeItem('memd_user_id');
+          clearToken();
         })
         .finally(() => {
           setIsLoading(false);
@@ -105,6 +157,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await res.json();
       setUser(data.user);
       localStorage.setItem('memd_user_id', data.user.id);
+      // Store the session token
+      if (data.token) {
+        storeToken(data.token);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed. Please try again.';
       setError(message);
@@ -154,6 +210,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await res.json();
       setUser(data.user);
       localStorage.setItem('memd_user_id', data.user.id);
+      // Store the session token
+      if (data.token) {
+        storeToken(data.token);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Google sign-in failed';
       setError(message);
@@ -191,6 +251,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const resData = await res.json();
       setUser(resData.user);
       localStorage.setItem('memd_user_id', resData.user.id);
+      // Store the session token
+      if (resData.token) {
+        storeToken(resData.token);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Registration failed. Please try again.';
       setError(message);
@@ -201,15 +265,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    // Try to revoke token on the server
+    const headers = buildAuthHeaders(user?.id);
+    fetch(`${API_BASE}/auth/logout`, {
+      method: 'POST',
+      headers,
+    }).catch(() => {
+      // Ignore logout errors
+    });
+
     setUser(null);
     localStorage.removeItem('memd_user_id');
+    clearToken();
     // Also sign out of Firebase if configured
     if (isFirebaseConfigured && auth) {
       auth.signOut().catch(() => {
         // Ignore sign-out errors
       });
     }
-  }, []);
+  }, [user]);
 
   const updateUser = useCallback((userData: Partial<User>) => {
     setUser((prev) => prev ? { ...prev, ...userData } : null);
@@ -229,6 +303,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         error,
         clearError,
         isFirebaseReady: isFirebaseConfigured,
+        getAuthHeaders,
       }}
     >
       {children}
