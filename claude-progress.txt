@@ -1,3 +1,44 @@
+## Session - 2026-02-16 (Agent handling Feature #162)
+
+### Accomplished
+- Feature #162 (API 500 errors show user-friendly message): PASSING
+  - Created ErrorBoundary component wrapping entire app for React crash recovery
+    - Shows "Something went wrong" message with "Try Again" and "Go to Dashboard" buttons
+    - Catches unhandled rendering errors, prevents white screen of death
+    - Technical details available in development mode via expandable section
+  - Created ApiErrorAlert reusable component for user-friendly error display
+    - Maps raw/technical error messages to human-friendly alternatives
+    - Handles network errors, 500s, timeouts, syntax errors, type errors
+    - Includes retry button (optional onRetry prop) and dismiss button (optional onDismiss)
+    - Consistent styling with red alert, icon, and accessible role="alert"
+  - Created apiErrorHandler utility module
+    - ApiError class with HTTP status code
+    - friendlyErrorForStatus() maps status codes to user messages
+    - toApiError() processes failed fetch responses
+    - extractErrorMessage() extracts friendly message from any error type
+  - Updated 13 pages to use ApiErrorAlert component:
+    - DashboardPage, TopicsPage, TopicDetailPage, NewSessionPage
+    - KnowledgeGraphPage, SearchPage, VerificationPage, NotesPage
+    - TemplatesPage, BookmarksPage, SandboxPage, CreateTopicPage, LoginPage
+  - Added retry functionality to Dashboard, Topics, TopicDetail, KnowledgeGraph pages
+  - Backend improvements:
+    - Global error middleware now always returns user-friendly message
+    - Removed technical `details` field from all route-level 500 responses
+    - Fixed auth.ts, sessions.ts, notes.ts, search.ts, topics.ts routes
+  - No mock data patterns in codebase
+
+### Verification
+- TypeScript compiles with zero errors (client)
+- Vite build succeeds (648 modules, no errors)
+- Server starts and health check returns OK
+- No mock data patterns found
+
+### Current Status
+- Feature #162 passing
+- 173/209 features passing (82.8%)
+
+---
+
 ## Session - 2026-02-16 (Agent handling Feature #160)
 
 ### Accomplished
