@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 interface Topic {
   id: string;
@@ -197,8 +198,7 @@ export default function NewSessionPage() {
 
         {isLoadingTopics ? (
           <div className="text-center py-8">
-            <div className="animate-spin inline-block w-6 h-6 border-3 border-gray-200 border-t-primary-600 rounded-full mb-2" />
-            <p className="text-sm text-gray-500">Loading topics...</p>
+            <LoadingSpinner size="sm" message="Loading topics..." />
           </div>
         ) : topics.length === 0 ? (
           /* Empty state */

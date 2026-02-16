@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { formatShortDate } from '@/utils/dateFormat';
 
 interface SearchResult {
@@ -535,10 +536,7 @@ export default function SearchPage() {
 
       {/* Loading state */}
       {isLoading && (
-        <div className="card text-center py-8">
-          <div className="animate-spin inline-block w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full mb-3" />
-          <p className="text-gray-600 dark:text-gray-300">Searching...</p>
-        </div>
+        <LoadingSpinner card message="Searching..." />
       )}
 
       {/* Error state */}

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { formatShortDate, formatTime, formatDateTime } from '@/utils/dateFormat';
 
 interface BookmarkMessage {
@@ -128,7 +129,7 @@ export default function BookmarksPage() {
           </p>
         </div>
         <div className="flex justify-center py-12">
-          <div className="animate-spin w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full" />
+          <LoadingSpinner message="Loading bookmarks..." />
         </div>
       </div>
     );

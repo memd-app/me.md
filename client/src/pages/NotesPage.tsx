@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, Fragment } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 import VerifiedBadge from '@/components/VerifiedBadge';
 import { formatRelativeTime, formatDateTime } from '@/utils/dateFormat';
 
@@ -333,7 +334,7 @@ export default function NotesPage() {
         <div className="bg-white dark:bg-dark-surface rounded-xl border border-gray-200 dark:border-dark-border p-6 mb-4">
           {isLoadingDetail ? (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full" />
+              <LoadingSpinner message="Loading note..." />
             </div>
           ) : selectedFormat === 'json' ? (
             <pre className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg overflow-x-auto text-sm font-mono whitespace-pre-wrap text-gray-800 dark:text-gray-200">

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 import VerifiedBadge from '@/components/VerifiedBadge';
 import { formatDateTime, formatShortDate } from '@/utils/dateFormat';
 
@@ -437,10 +438,7 @@ export default function TopicDetailPage() {
   if (isLoading) {
     return (
       <div className="max-w-4xl mx-auto">
-        <div className="card text-center py-12">
-          <div className="animate-spin inline-block w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full mb-3" />
-          <p className="text-gray-600 dark:text-gray-300">Loading topic...</p>
-        </div>
+        <LoadingSpinner card message="Loading topic..." />
       </div>
     );
   }

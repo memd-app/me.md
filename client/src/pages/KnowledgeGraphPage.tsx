@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { formatShortDate } from '@/utils/dateFormat';
 import * as d3 from 'd3';
 
@@ -641,10 +642,9 @@ export default function KnowledgeGraphPage() {
 
       {/* Loading state */}
       {loading && (
-        <div className="card" style={{ minHeight: '600px' }} role="status" aria-label="Loading knowledge graph">
-          <div className="flex flex-col items-center justify-center h-96">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mb-4" aria-hidden="true"></div>
-            <p className="text-gray-600 dark:text-gray-300">Loading knowledge graph...</p>
+        <div className="card" style={{ minHeight: '600px' }}>
+          <div className="flex items-center justify-center h-96">
+            <LoadingSpinner size="lg" message="Loading knowledge graph..." />
           </div>
         </div>
       )}

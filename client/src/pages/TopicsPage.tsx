@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { formatShortDate } from '@/utils/dateFormat';
 
 const TOPICS_PER_PAGE = 10;
@@ -595,10 +596,7 @@ export default function TopicsPage() {
 
       {/* Loading state - only shown on initial load, not background refreshes */}
       {isLoading && topics.length === 0 && (
-        <div className="card text-center py-12">
-          <div className="animate-spin inline-block w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full mb-3" />
-          <p className="text-gray-600 dark:text-gray-300">Loading topics...</p>
-        </div>
+        <LoadingSpinner card message="Loading topics..." />
       )}
 
       {/* Subtle refreshing indicator for background re-fetches */}
