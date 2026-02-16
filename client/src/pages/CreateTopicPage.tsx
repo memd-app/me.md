@@ -12,6 +12,8 @@ const INTENT_OPTIONS = [
   { value: 'document', label: 'Document', description: 'Record knowledge for future reference' },
 ];
 
+const TITLE_MAX_LENGTH = 200;
+
 export default function CreateTopicPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -28,6 +30,11 @@ export default function CreateTopicPage() {
   const [error, setError] = useState<string | null>(null);
   const [isNetworkError, setIsNetworkError] = useState(false);
 
+  // Field-level validation state
+  const [titleTouched, setTitleTouched] = useState(false);
+  const [titleError, setTitleError] = useState<string | null>(null);
+  const [tagDuplicateHint, setTagDuplicateHint] = useState<string | null>(null);
+
   // Track whether any form field has been modified from defaults
   const isDirty = useMemo(() => {
     return (
@@ -42,12 +49,46 @@ export default function CreateTopicPage() {
   // Warn user about unsaved changes on page refresh/close (but not after successful submit)
   useUnsavedChangesWarning(isDirty && !hasSubmitted);
 
+  // Validate title and set field-level error
+  const validateTitle = (value: string): string | null => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return 'Title is required. Please enter a descriptive name for your topic.';
+    }
+    if (trimmed.length > TITLE_MAX_LENGTH) {
+      return `Title is too long (${trimmed.length}/${TITLE_MAX_LENGTH} characters). Please keep it under ${TITLE_MAX_LENGTH} characters.`;
+    }
+    return null;
+  };
+
+  const handleTitleChange = (value: string) => {
+    setTitle(value);
+    // Clear inline error once user starts typing valid content
+    if (titleTouched) {
+      const err = validateTitle(value);
+      setTitleError(err);
+    }
+  };
+
+  const handleTitleBlur = () => {
+    setTitleTouched(true);
+    const err = validateTitle(title);
+    setTitleError(err);
+  };
+
   const handleAddTag = () => {
     const trimmed = tagInput.trim().toLowerCase();
-    if (trimmed && !tags.includes(trimmed)) {
-      setTags([...tags, trimmed]);
+    if (!trimmed) return;
+    if (tags.includes(trimmed)) {
+      setTagDuplicateHint(`Tag "${trimmed}" already exists.`);
       setTagInput('');
+      // Auto-clear the duplicate hint after 3 seconds
+      setTimeout(() => setTagDuplicateHint(null), 3000);
+      return;
     }
+    setTagDuplicateHint(null);
+    setTags([...tags, trimmed]);
+    setTagInput('');
   };
 
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -74,13 +115,14 @@ export default function CreateTopicPage() {
       return;
     }
 
-    if (!title.trim()) {
-      setError('Title is required. Please enter a descriptive name for your topic (e.g., "My Leadership Style").');
-      return;
-    }
+    // Run field-level validation and show inline errors
+    setTitleTouched(true);
+    const titleValidationError = validateTitle(title);
+    setTitleError(titleValidationError);
 
-    if (title.trim().length > 200) {
-      setError('Title is too long. Please keep it under 200 characters.');
+    if (titleValidationError) {
+      // Also set form-level error for accessibility
+      setError(titleValidationError);
       return;
     }
 
@@ -180,16 +222,42 @@ export default function CreateTopicPage() {
               type="text"
               required
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="input-field"
+              onChange={(e) => handleTitleChange(e.target.value)}
+              onBlur={handleTitleBlur}
+              className={`input-field ${titleTouched && titleError ? 'border-red-500 dark:border-red-400 focus:ring-red-500 focus:border-red-500' : ''}`}
               placeholder="e.g., My Leadership Style"
+              maxLength={500}
+              aria-invalid={titleTouched && !!titleError}
+              aria-describedby={titleTouched && titleError ? 'title-error' : 'title-hint'}
             />
+            <div className="flex justify-between items-start mt-1">
+              {titleTouched && titleError ? (
+                <p id="title-error" className="text-xs text-red-600 dark:text-red-400" role="alert">
+                  {titleError}
+                </p>
+              ) : (
+                <p id="title-hint" className="text-xs text-gray-500 dark:text-gray-300">
+                  A short, descriptive name for your topic
+                </p>
+              )}
+              <span
+                className={`text-xs whitespace-nowrap ml-2 ${
+                  title.trim().length > TITLE_MAX_LENGTH
+                    ? 'text-red-600 dark:text-red-400 font-medium'
+                    : title.trim().length > TITLE_MAX_LENGTH * 0.8
+                    ? 'text-amber-600 dark:text-amber-400'
+                    : 'text-gray-400 dark:text-gray-500'
+                }`}
+              >
+                {title.trim().length}/{TITLE_MAX_LENGTH}
+              </span>
+            </div>
           </div>
 
           {/* Description */}
           <div>
             <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Description
+              Description <span className="text-gray-400 dark:text-gray-500 font-normal">(optional)</span>
             </label>
             <textarea
               id="description"
@@ -204,7 +272,7 @@ export default function CreateTopicPage() {
           {/* Tags */}
           <div>
             <label htmlFor="tags" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Tags
+              Tags <span className="text-gray-400 dark:text-gray-500 font-normal">(optional)</span>
             </label>
             <div className="flex flex-wrap gap-2 mb-2">
               {tags.map((tag) => (
@@ -243,15 +311,21 @@ export default function CreateTopicPage() {
                 Add
               </button>
             </div>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-300">
-              Press Enter or comma to add a tag
-            </p>
+            {tagDuplicateHint ? (
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400" role="status">
+                {tagDuplicateHint}
+              </p>
+            ) : (
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-300">
+                Press Enter or comma to add a tag. Duplicates are prevented.
+              </p>
+            )}
           </div>
 
           {/* Intent */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Intent
+              Intent <span className="text-gray-400 dark:text-gray-500 font-normal">(optional)</span>
             </label>
             <p className="text-xs text-gray-500 dark:text-gray-300 mb-2">
               Select what you want to achieve with this topic (optional)
@@ -286,7 +360,7 @@ export default function CreateTopicPage() {
           {/* Trigger */}
           <div>
             <label htmlFor="trigger" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Trigger
+              Trigger <span className="text-gray-400 dark:text-gray-500 font-normal">(optional)</span>
             </label>
             <textarea
               id="trigger"
@@ -321,6 +395,9 @@ export default function CreateTopicPage() {
                 setTrigger('');
                 setError(null);
                 setIsNetworkError(false);
+                setTitleTouched(false);
+                setTitleError(null);
+                setTagDuplicateHint(null);
               }}
               className="btn-secondary"
               disabled={isSubmitting}
