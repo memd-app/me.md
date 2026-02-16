@@ -1,3 +1,38 @@
+## Session - 2026-02-16 (Agent handling Feature #191)
+
+### Accomplished
+- Feature #191 (Waitlist signup collects and stores email): PASSING
+  - Created `waitlist_signups` table in database schema (id, email UNIQUE, created_at)
+  - Created `POST /api/waitlist` public endpoint (no auth required)
+  - Server-side email validation and normalization (trim, lowercase)
+  - Duplicate email handling: returns 200 with "already on the waitlist" message
+  - Missing/invalid email: returns 400 with appropriate error message
+  - Updated LandingPage.tsx frontend to call real `/api/waitlist` API
+  - Removed old simulated success ("In a real app this would POST to an API")
+  - Added loading state on submit button ("Joining..." while request in flight)
+  - Dynamic success messages from API response
+  - Registered waitlistRouter in server/src/index.ts as public route
+  - Data persists across server restart (verified)
+  - No mock data patterns in source code
+
+### Verification
+- TypeScript compiles cleanly for client (zero errors)
+- Server TypeScript has pre-existing errors in graph.ts/sessions.ts (not from this feature)
+- Server starts and health check returns OK with 18 tables (including waitlist_signups)
+- POST /api/waitlist with new email returns 201 with success message
+- POST /api/waitlist with duplicate email returns 200 with "already on waitlist" message
+- POST /api/waitlist with invalid email returns 400 error
+- POST /api/waitlist with missing email returns 400 error
+- Data persists across server restart (duplicate check confirmed after restart)
+- No mock data patterns found in waitlist.ts or LandingPage.tsx
+
+### Current Status
+- 195/209 features passing (93.3%)
+- Feature #191 marked as passing
+
+### What to Work on Next
+- Continue with next assigned features from orchestrator
+
 ## Session - 2026-02-16 (Agent handling Feature #189)
 
 ### Accomplished
