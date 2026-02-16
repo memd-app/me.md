@@ -20,6 +20,7 @@ export default function CreateTopicPage() {
   const [intent, setIntent] = useState('');
   const [trigger, setTrigger] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isNetworkError, setIsNetworkError] = useState(false);
 
@@ -49,6 +50,11 @@ export default function CreateTopicPage() {
     e.preventDefault();
     setError(null);
     setIsNetworkError(false);
+
+    // Prevent duplicate submissions (e.g., browser back + resubmit)
+    if (hasSubmitted || isSubmitting) {
+      return;
+    }
 
     if (!title.trim()) {
       setError('Title is required');
@@ -83,7 +89,10 @@ export default function CreateTopicPage() {
         throw new Error(data.error || 'Failed to create topic');
       }
 
-      navigate('/app/topics');
+      // Mark as submitted to prevent back-button resubmission
+      setHasSubmitted(true);
+      // Use replace to remove the form page from history, preventing back+resubmit
+      navigate('/app/topics', { replace: true });
     } catch (err) {
       // Detect network errors (fetch throws TypeError on network failure)
       const isNetwork = err instanceof TypeError ||
@@ -301,10 +310,10 @@ export default function CreateTopicPage() {
           <div className="flex gap-3 pt-2">
             <button
               type="submit"
-              disabled={isSubmitting || !title.trim()}
+              disabled={isSubmitting || hasSubmitted || !title.trim()}
               className="btn-primary flex-1"
             >
-              {isSubmitting ? 'Creating...' : 'Create Topic'}
+              {hasSubmitted ? 'Topic Created!' : isSubmitting ? 'Creating...' : 'Create Topic'}
             </button>
             <button
               type="button"
