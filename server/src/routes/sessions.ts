@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../config/database.js';
-import { sessions, messages, topics, conceptNodes, topicConnections, insights, users, notes } from '../models/schema.js';
+import { sessions, messages, topics, conceptNodes, topicConnections, insights, users, notes, bookmarks } from '../models/schema.js';
 import { eq, and, desc, ne, or } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -644,6 +644,68 @@ sessionsRouter.put('/:id', async (req, res) => {
   } catch (error) {
     console.error('Update session error:', error);
     res.status(500).json({ error: 'Failed to update session' });
+  }
+});
+
+// DELETE /api/sessions/:id - Delete a session and all related data (messages, bookmarks, notes, insights)
+sessionsRouter.delete('/:id', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const sessionId = req.params.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const session = db.select().from(sessions).where(
+      and(eq(sessions.id, sessionId), eq(sessions.userId, userId))
+    ).get();
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const topicId = session.topicId;
+
+    // Clear source_session_id references in insights from OTHER sessions
+    // (insights from THIS session will be cascade-deleted via notes)
+    db.update(insights).set({
+      sourceSessionId: null,
+    }).where(eq(insights.sourceSessionId, sessionId)).run();
+
+    // Delete the session - CASCADE handles:
+    // - messages (session_id ON DELETE CASCADE)
+    // - bookmarks (session_id ON DELETE CASCADE, and message_id ON DELETE CASCADE)
+    // - notes (session_id ON DELETE CASCADE)
+    // - insights via notes (note_id ON DELETE CASCADE)
+    // - insight_conflicts via insights (insight_a_id/b_id ON DELETE CASCADE)
+    // - verification_history via insights (insight_id ON DELETE CASCADE)
+    db.delete(sessions).where(eq(sessions.id, sessionId)).run();
+
+    // Count remaining sessions for this topic to update session count awareness
+    const remainingSessions = db.select().from(sessions).where(
+      eq(sessions.topicId, topicId)
+    ).all();
+
+    // If no sessions remain for this topic, optionally reset topic status to backlog
+    if (remainingSessions.length === 0) {
+      db.update(topics).set({
+        status: 'backlog',
+        updatedAt: new Date().toISOString(),
+      }).where(
+        and(eq(topics.id, topicId), eq(topics.userId, userId))
+      ).run();
+    }
+
+    res.json({
+      success: true,
+      message: 'Session and all related data deleted',
+      topicId,
+      remainingSessionsForTopic: remainingSessions.length,
+    });
+  } catch (error) {
+    console.error('Delete session error:', error);
+    res.status(500).json({ error: 'Failed to delete session' });
   }
 });
 
