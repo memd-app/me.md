@@ -121,7 +121,7 @@ export default function TemplatesPage() {
       <div className="max-w-4xl mx-auto">
         <div className="card text-center py-12">
           <div className="animate-spin inline-block w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full mb-3" />
-          <p className="text-gray-600 dark:text-gray-400">Loading templates...</p>
+          <p className="text-gray-600 dark:text-gray-300">Loading templates...</p>
         </div>
       </div>
     );
@@ -130,7 +130,7 @@ export default function TemplatesPage() {
   return (
     <div className="max-w-4xl mx-auto">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-6">
+      <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-300 mb-6">
         <Link to="/app/topics" className="hover:text-primary-600 dark:hover:text-primary-400">
           Topics
         </Link>
@@ -143,7 +143,7 @@ export default function TemplatesPage() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
           Use Case Templates
         </h1>
-        <p className="text-gray-600 dark:text-gray-400 max-w-2xl">
+        <p className="text-gray-600 dark:text-gray-300 max-w-2xl">
           Goal-oriented interview templates for specific AI use cases. Each template includes
           pre-configured prompts designed to extract knowledge that maps to common AI tasks.
         </p>
@@ -178,7 +178,7 @@ export default function TemplatesPage() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             No templates available
           </h2>
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="text-gray-600 dark:text-gray-300">
             Use case templates will appear here once they are created.
           </p>
         </div>
@@ -211,7 +211,7 @@ export default function TemplatesPage() {
                         {tagLabel}
                       </span>
                     </div>
-                    <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">
+                    <p className="text-gray-600 dark:text-gray-300 text-sm mb-3">
                       {template.description}
                     </p>
 
@@ -228,7 +228,7 @@ export default function TemplatesPage() {
                           {prompts.map((prompt, idx) => (
                             <li
                               key={idx}
-                              className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400"
+                              className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-300"
                             >
                               <span className="w-5 h-5 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 text-xs flex items-center justify-center shrink-0 mt-0.5 font-medium">
                                 {idx + 1}
@@ -269,7 +269,7 @@ export default function TemplatesPage() {
                               </>
                             )}
                           </button>
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                          <span className="text-xs text-gray-500 dark:text-gray-300">
                             Creates a new topic with template configuration
                           </span>
                         </div>
@@ -280,7 +280,7 @@ export default function TemplatesPage() {
                   {/* Expand indicator */}
                   <div className="shrink-0 mt-1">
                     <svg
-                      className={`w-5 h-5 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${
+                      className={`w-5 h-5 text-gray-500 dark:text-gray-300 transition-transform duration-200 ${
                         isSelected ? 'rotate-180' : ''
                       }`}
                       fill="none"
@@ -305,7 +305,7 @@ export default function TemplatesPage() {
           </svg>
           How Templates Work
         </h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
+        <p className="text-sm text-gray-600 dark:text-gray-300">
           Each template is designed around a specific AI use case. When you create a topic from a template,
           the interview session will use specialized prompts to extract exactly the knowledge that AI needs
           to replicate your style for that use case. The resulting insights are tagged with the AI use case

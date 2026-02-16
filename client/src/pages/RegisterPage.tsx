@@ -69,7 +69,7 @@ export default function RegisterPage() {
           <Link to="/" className="text-3xl font-bold text-primary-600">
             me.md
           </Link>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
+          <p className="mt-2 text-gray-600 dark:text-gray-300">
             Create your account
           </p>
         </div>
@@ -147,7 +147,7 @@ export default function RegisterPage() {
                   ) : (
                     <span className="w-3.5 h-3.5 flex items-center justify-center text-gray-400">•</span>
                   )}
-                  <span className={password.length > 0 || passwordTouched ? (passwordChecks.length ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400') : 'text-gray-500 dark:text-gray-400'}>
+                  <span className={password.length > 0 || passwordTouched ? (passwordChecks.length ? 'text-green-700 dark:text-green-300' : 'text-red-600 dark:text-red-400') : 'text-gray-600 dark:text-gray-300'}>
                     At least 8 characters
                   </span>
                 </div>
@@ -161,7 +161,7 @@ export default function RegisterPage() {
                   ) : (
                     <span className="w-3.5 h-3.5 flex items-center justify-center text-gray-400">•</span>
                   )}
-                  <span className={password.length > 0 || passwordTouched ? (passwordChecks.number ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400') : 'text-gray-500 dark:text-gray-400'}>
+                  <span className={password.length > 0 || passwordTouched ? (passwordChecks.number ? 'text-green-700 dark:text-green-300' : 'text-red-600 dark:text-red-400') : 'text-gray-600 dark:text-gray-300'}>
                     At least 1 number
                   </span>
                 </div>
@@ -175,7 +175,7 @@ export default function RegisterPage() {
                   ) : (
                     <span className="w-3.5 h-3.5 flex items-center justify-center text-gray-400">•</span>
                   )}
-                  <span className={password.length > 0 || passwordTouched ? (passwordChecks.special ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400') : 'text-gray-500 dark:text-gray-400'}>
+                  <span className={password.length > 0 || passwordTouched ? (passwordChecks.special ? 'text-green-700 dark:text-green-300' : 'text-red-600 dark:text-red-400') : 'text-gray-600 dark:text-gray-300'}>
                     At least 1 special character
                   </span>
                 </div>
@@ -208,7 +208,7 @@ export default function RegisterPage() {
           </form>
 
           <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-gray-600 dark:text-gray-300">
               Already have an account?{' '}
               <Link to="/login" className="text-primary-600 hover:text-primary-500 font-medium">
                 Sign in

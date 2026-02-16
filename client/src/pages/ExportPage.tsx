@@ -180,7 +180,7 @@ export default function ExportPage() {
     <div className="max-w-4xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Export Profile</h1>
-        <p className="mt-1 text-gray-600 dark:text-gray-400">
+        <p className="mt-1 text-gray-600 dark:text-gray-300">
           Export your verified profile as Markdown, JSON, or both formats
         </p>
       </div>
@@ -239,7 +239,7 @@ export default function ExportPage() {
               <p className={`text-sm ${
                 selectedFormat === option.value
                   ? 'text-blue-600 dark:text-blue-400'
-                  : 'text-gray-500 dark:text-gray-400'
+                  : 'text-gray-500 dark:text-gray-300'
               }`}>
                 {option.description}
               </p>
@@ -268,7 +268,7 @@ export default function ExportPage() {
                 ? 'Markdown File'
                 : 'JSON File'}
             </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-gray-600 dark:text-gray-300">
               {selectedFormat === 'both'
                 ? 'Downloads me.md and profile.json'
                 : selectedFormat === 'markdown'
@@ -307,7 +307,7 @@ export default function ExportPage() {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
               Copy to Clipboard
             </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-gray-600 dark:text-gray-300">
               Copy your profile as markdown directly to paste into any AI tool
             </p>
             {!isVerified && (
@@ -350,13 +350,13 @@ export default function ExportPage() {
                 <h3 id="verify-dialog-title" className="text-lg font-semibold text-gray-900 dark:text-white">
                   Verify Your Identity
                 </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-gray-500 dark:text-gray-300">
                   Export requires authentication confirmation
                 </p>
               </div>
             </div>
 
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
               To protect your data, please enter your password to confirm your identity before exporting.
             </p>
 

@@ -46,7 +46,7 @@ const PRIORITY_ICONS: Record<string, string> = {
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
-  low: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
+  low: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
   medium: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
   high: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
 };
@@ -198,10 +198,10 @@ export default function TopicsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Topics</h1>
-          <p className="mt-1 text-gray-600 dark:text-gray-400">
+          <p className="mt-1 text-gray-600 dark:text-gray-300">
             Manage your interview topics and knowledge areas
             {!isLoading && topics.length > 0 && (
-              <span className="ml-1 text-gray-500 dark:text-gray-500">
+              <span className="ml-1 text-gray-500 dark:text-gray-400">
                 ({topics.length} total)
               </span>
             )}
@@ -272,7 +272,7 @@ export default function TopicsPage() {
       <div className="card mb-6 !p-4">
         {/* Status Filter Row */}
         <div className="mb-3">
-          <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5 block">
+          <label className="text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider mb-1.5 block">
             Status
           </label>
           <div className="flex flex-wrap gap-2">
@@ -281,7 +281,7 @@ export default function TopicsPage() {
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 statusFilter === 'all'
                   ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50'
               }`}
             >
               All
@@ -296,7 +296,7 @@ export default function TopicsPage() {
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                   statusFilter === status
                     ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50'
                 }`}
               >
                 {STATUS_LABELS[status] || status}
@@ -312,7 +312,7 @@ export default function TopicsPage() {
         <div className="flex flex-wrap items-end gap-4">
           {/* Priority Filter */}
           <div className="flex-1 min-w-[200px]">
-            <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5 block">
+            <label className="text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider mb-1.5 block">
               Priority
             </label>
             <div className="flex flex-wrap gap-2">
@@ -321,7 +321,7 @@ export default function TopicsPage() {
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                   priorityFilter === 'all'
                     ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50'
                 }`}
               >
                 All
@@ -333,7 +333,7 @@ export default function TopicsPage() {
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                     priorityFilter === priority
                       ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50'
                   }`}
                 >
                   {PRIORITY_ICONS[priority]} {PRIORITY_LABELS[priority]}
@@ -347,7 +347,7 @@ export default function TopicsPage() {
 
           {/* Sort Selector */}
           <div className="min-w-[180px]">
-            <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5 block">
+            <label className="text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider mb-1.5 block">
               Sort by
             </label>
             <select
@@ -375,7 +375,7 @@ export default function TopicsPage() {
         {/* Active filter summary */}
         {hasActiveFilters && (
           <div className="mt-3 pt-3 border-t border-gray-200 dark:border-dark-border">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-gray-600 dark:text-gray-300">
               Showing {filteredAndSortedTopics.length} of {topics.length} topics
               {statusFilter !== 'all' && (
                 <span className="ml-1">
@@ -403,7 +403,7 @@ export default function TopicsPage() {
       {isLoading && (
         <div className="card text-center py-12">
           <div className="animate-spin inline-block w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full mb-3" />
-          <p className="text-gray-600 dark:text-gray-400">Loading topics...</p>
+          <p className="text-gray-600 dark:text-gray-300">Loading topics...</p>
         </div>
       )}
 
@@ -430,7 +430,7 @@ export default function TopicsPage() {
                     </span>
                   </div>
                   {topic.description && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-2">
+                    <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 mb-2">
                       {topic.description}
                     </p>
                   )}
@@ -446,14 +446,14 @@ export default function TopicsPage() {
                     {parseTags(topic.tags).map((tag) => (
                       <span
                         key={tag}
-                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
                       >
                         {tag}
                       </span>
                     ))}
                   </div>
                 </div>
-                <div className="text-xs text-gray-400 dark:text-gray-500 ml-4 shrink-0">
+                <div className="text-xs text-gray-500 dark:text-gray-300 ml-4 shrink-0">
                   {new Date(topic.createdAt).toLocaleDateString()}
                 </div>
               </div>
@@ -469,7 +469,7 @@ export default function TopicsPage() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             {hasActiveFilters ? 'No matching topics' : 'No topics yet'}
           </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
+          <p className="text-gray-600 dark:text-gray-300 mb-4">
             {hasActiveFilters
               ? 'No topics match the current filters. Try adjusting or clearing your filters.'
               : 'Create your first topic to start exploring your knowledge.'}

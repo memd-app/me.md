@@ -102,7 +102,7 @@ export default function SandboxPage() {
     <div className="max-w-6xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Context Sandbox</h1>
-        <p className="mt-1 text-gray-600 dark:text-gray-400">
+        <p className="mt-1 text-gray-600 dark:text-gray-300">
           Test how your personal context improves AI outputs. Enter a prompt and see the difference side by side.
         </p>
       </div>
@@ -149,7 +149,7 @@ export default function SandboxPage() {
 
         {/* Example prompts */}
         <div className="mt-3 flex flex-wrap gap-2">
-          <span className="text-xs text-gray-500 dark:text-gray-400 self-center">Try:</span>
+          <span className="text-xs text-gray-500 dark:text-gray-300 self-center">Try:</span>
           {EXAMPLE_PROMPTS.map((example, i) => (
             <button
               key={i}
@@ -193,7 +193,7 @@ export default function SandboxPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Generic output */}
         <div className="card">
-          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wide mb-3 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 inline-block"></span>
             Without your context
           </h2>
@@ -204,7 +204,7 @@ export default function SandboxPage() {
               </pre>
             </div>
           ) : (
-            <div className="text-gray-400 dark:text-gray-500 text-center py-8">
+            <div className="text-gray-500 dark:text-gray-300 text-center py-8">
               Run a comparison to see results
             </div>
           )}
@@ -224,7 +224,7 @@ export default function SandboxPage() {
                 </pre>
               </div>
               {result.contextSummary && result.hasContext && (
-                <div className="mt-3 text-xs text-gray-500 dark:text-gray-400 flex flex-wrap gap-2">
+                <div className="mt-3 text-xs text-gray-500 dark:text-gray-300 flex flex-wrap gap-2">
                   <span className="font-medium">Context used:</span>
                   {result.contextSummary.communicationInsights > 0 && (
                     <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
@@ -255,7 +255,7 @@ export default function SandboxPage() {
               )}
             </div>
           ) : (
-            <div className="text-gray-400 dark:text-gray-500 text-center py-8">
+            <div className="text-gray-500 dark:text-gray-300 text-center py-8">
               Run a comparison to see results
             </div>
           )}
@@ -264,7 +264,7 @@ export default function SandboxPage() {
 
       {/* Timestamp */}
       {result && (
-        <div className="mt-4 text-xs text-gray-400 dark:text-gray-500 text-center">
+        <div className="mt-4 text-xs text-gray-500 dark:text-gray-300 text-center">
           Generated at {new Date(result.generatedAt).toLocaleTimeString()}
         </div>
       )}

@@ -47,7 +47,7 @@ function SectionCard({
         {hasContent && (
           <span className="ml-auto flex items-center gap-2">
             <VerifiedBadge status="verified" size="sm" />
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+            <span className="text-xs font-medium text-gray-500 dark:text-gray-300">
               {section.content.length} insight{section.content.length !== 1 ? 's' : ''}
             </span>
           </span>
@@ -68,7 +68,7 @@ function SectionCard({
           </ul>
           {section.topicSources.length > 0 && (
             <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-gray-500 dark:text-gray-300">
                 <span className="font-medium">Sources:</span>{' '}
                 {section.topicSources.join(', ')}
               </p>
@@ -76,7 +76,7 @@ function SectionCard({
           )}
         </>
       ) : (
-        <p className="text-gray-500 dark:text-gray-400 italic">{emptyMessage}</p>
+        <p className="text-gray-500 dark:text-gray-300 italic">{emptyMessage}</p>
       )}
     </div>
   );
@@ -235,7 +235,7 @@ export default function ProfilePage() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
             Profile Summary
           </h1>
-          <p className="mt-1 text-gray-600 dark:text-gray-400">
+          <p className="mt-1 text-gray-600 dark:text-gray-300">
             Your auto-generated personal profile
             {summary && summary.totalVerifiedInsights > 0 && (
               <span className="ml-2 text-sm">
@@ -292,19 +292,19 @@ export default function ProfilePage() {
             <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
               {summary.totalVerifiedInsights}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Verified Insights</p>
+            <p className="text-xs text-gray-500 dark:text-gray-300">Verified Insights</p>
           </div>
           <div className="card text-center py-3">
             <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
               {summary.topicsExplored}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Topics Explored</p>
+            <p className="text-xs text-gray-500 dark:text-gray-300">Topics Explored</p>
           </div>
           <div className="card text-center py-3">
             <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
               {Object.values(summary.sections).filter(s => s.content.length > 0).length}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Profile Sections</p>
+            <p className="text-xs text-gray-500 dark:text-gray-300">Profile Sections</p>
           </div>
         </div>
       )}
@@ -316,7 +316,7 @@ export default function ProfilePage() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             No Verified Insights Yet
           </h2>
-          <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
+          <p className="text-gray-600 dark:text-gray-300 max-w-md mx-auto">
             Complete interview sessions and verify the extracted insights to build your
             personal profile. Each verified insight adds to your profile summary.
           </p>
@@ -369,7 +369,7 @@ export default function ProfilePage() {
 
       {/* Generated at timestamp */}
       {summary && summary.generatedAt && (
-        <p className="mt-6 text-xs text-gray-400 dark:text-gray-500 text-center">
+        <p className="mt-6 text-xs text-gray-500 dark:text-gray-300 text-center">
           Profile auto-generated from verified insights &middot; Last updated{' '}
           {new Date(summary.generatedAt).toLocaleString('en-US', {
             dateStyle: 'medium',

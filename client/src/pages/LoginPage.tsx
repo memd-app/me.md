@@ -82,7 +82,7 @@ export default function LoginPage() {
           <Link to="/" className="text-3xl font-bold text-primary-600" aria-label="me.md - Go to home page">
             me.md
           </Link>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
+          <p className="mt-2 text-gray-600 dark:text-gray-300">
             Sign in to your account
           </p>
         </div>
@@ -122,7 +122,7 @@ export default function LoginPage() {
               <div className="w-full border-t border-gray-200 dark:border-gray-700" />
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-3 bg-white dark:bg-dark-card text-gray-500 dark:text-gray-400">
+              <span className="px-3 bg-white dark:bg-dark-card text-gray-500 dark:text-gray-300">
                 or continue with email
               </span>
             </div>
@@ -178,7 +178,7 @@ export default function LoginPage() {
           </div>
 
           <div className="mt-4 text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-gray-600 dark:text-gray-300">
               Don&apos;t have an account?{' '}
               <Link to="/register" className="text-primary-600 hover:text-primary-500 font-medium">
                 Sign up

@@ -324,7 +324,7 @@ export default function SearchPage() {
     <div className="max-w-4xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Search</h1>
-        <p className="mt-1 text-gray-600 dark:text-gray-400">
+        <p className="mt-1 text-gray-600 dark:text-gray-300">
           Search across topics, insights, session transcripts, and notes
         </p>
       </div>
@@ -361,7 +361,7 @@ export default function SearchPage() {
 
       {/* Type Filters */}
       <div className="flex flex-wrap gap-2 mb-4">
-        <span className="text-sm text-gray-500 dark:text-gray-400 py-1">Type:</span>
+        <span className="text-sm text-gray-500 dark:text-gray-300 py-1">Type:</span>
         {FILTERS.map((f) => (
           <button
             key={f.value}
@@ -396,7 +396,7 @@ export default function SearchPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Verification Status filter */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-300 mb-1">
                 Verification Status
               </label>
               <select
@@ -412,7 +412,7 @@ export default function SearchPage() {
 
             {/* Date From */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-300 mb-1">
                 Date From
               </label>
               <input
@@ -425,7 +425,7 @@ export default function SearchPage() {
 
             {/* Date To */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-300 mb-1">
                 Date To
               </label>
               <input
@@ -438,7 +438,7 @@ export default function SearchPage() {
 
             {/* Confidence Score */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-300 mb-1">
                 Min Confidence: {minConfidence}%
               </label>
               <input
@@ -476,7 +476,7 @@ export default function SearchPage() {
       {/* Active filters summary */}
       {hasAnyActiveFilters && hasSearched && (
         <div className="flex flex-wrap gap-1.5 mb-4">
-          <span className="text-xs text-gray-500 dark:text-gray-400 py-0.5">Active filters:</span>
+          <span className="text-xs text-gray-500 dark:text-gray-300 py-0.5">Active filters:</span>
           {activeFilter !== 'all' && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200">
               Type: {activeFilter}
@@ -515,7 +515,7 @@ export default function SearchPage() {
       {isLoading && (
         <div className="card text-center py-8">
           <div className="animate-spin inline-block w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full mb-3" />
-          <p className="text-gray-600 dark:text-gray-400">Searching...</p>
+          <p className="text-gray-600 dark:text-gray-300">Searching...</p>
         </div>
       )}
 
@@ -529,7 +529,7 @@ export default function SearchPage() {
 
       {/* Results count */}
       {hasSearched && !isLoading && !error && (
-        <div className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+        <div className="mb-4 text-sm text-gray-500 dark:text-gray-300">
           {total > 0 ? (
             <>
               Found <span className="font-medium text-gray-900 dark:text-white">{total}</span>{' '}
@@ -603,12 +603,12 @@ export default function SearchPage() {
                       </span>
                     )}
                     {result.confidenceScore !== undefined && (
-                      <span className="text-xs text-gray-400 dark:text-gray-500">
+                      <span className="text-xs text-gray-500 dark:text-gray-300">
                         {result.confidenceScore}% confidence
                       </span>
                     )}
                     {result.createdAt && (
-                      <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto">
+                      <span className="text-xs text-gray-500 dark:text-gray-300 ml-auto">
                         {formatDate(result.createdAt)}
                       </span>
                     )}
@@ -620,14 +620,14 @@ export default function SearchPage() {
                   </h3>
 
                   {/* Snippet with highlighting */}
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 line-clamp-2">
                     {highlightMatch(result.snippet, query)}
                   </p>
 
                   {/* Topic context and navigation hint */}
                   <div className="flex items-center gap-2 mt-1">
                     {result.topicTitle && result.type !== 'topic' && (
-                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                      <p className="text-xs text-gray-500 dark:text-gray-300">
                         📋 {result.topicTitle}
                       </p>
                     )}
@@ -649,10 +649,10 @@ export default function SearchPage() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             Start searching
           </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
+          <p className="text-gray-600 dark:text-gray-300 mb-4">
             Type in the search bar to find topics, insights, session transcripts, and notes.
           </p>
-          <div className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
+          <div className="text-sm text-gray-500 dark:text-gray-300 space-y-1">
             <p>💡 <span className="font-medium">Tip:</span> Try searching for a topic name, a keyword from an interview, or an insight.</p>
             <p>🔧 Use the <span className="font-medium">More Filters</span> button for advanced filtering by verification status, date, or confidence.</p>
           </div>
@@ -666,7 +666,7 @@ export default function SearchPage() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             No results found
           </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
+          <p className="text-gray-600 dark:text-gray-300 mb-4">
             No results found for &quot;{query}&quot;
             {activeFilter !== 'all' && (
               <> in <span className="font-medium">{activeFilter}</span></>
@@ -674,7 +674,7 @@ export default function SearchPage() {
             {hasActiveAdvancedFilters && <> with the active filters</>}
             .
           </p>
-          <div className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
+          <div className="text-sm text-gray-500 dark:text-gray-300 space-y-1">
             <p>Try the following:</p>
             <ul className="list-disc list-inside text-left max-w-sm mx-auto space-y-1">
               <li>Check your spelling</li>

@@ -117,7 +117,7 @@ export default function BookmarksPage() {
       <div className="max-w-4xl mx-auto">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Bookmarks</h1>
-          <p className="mt-1 text-gray-600 dark:text-gray-400">
+          <p className="mt-1 text-gray-600 dark:text-gray-300">
             Your saved aha moments from interview sessions
           </p>
         </div>
@@ -132,7 +132,7 @@ export default function BookmarksPage() {
     <div className="max-w-4xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Bookmarks</h1>
-        <p className="mt-1 text-gray-600 dark:text-gray-400">
+        <p className="mt-1 text-gray-600 dark:text-gray-300">
           Your saved aha moments from interview sessions
           {bookmarks.length > 0 && (
             <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">
@@ -154,7 +154,7 @@ export default function BookmarksPage() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             No bookmarks yet
           </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
+          <p className="text-gray-600 dark:text-gray-300 mb-4">
             Star messages during interview sessions to save important moments here.
           </p>
           <Link
@@ -178,7 +178,7 @@ export default function BookmarksPage() {
                     <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
                       {group.topic?.title || 'Unknown Topic'}
                     </h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                    <p className="text-xs text-gray-500 dark:text-gray-300">
                       {group.session?.createdAt
                         ? new Date(group.session.createdAt).toLocaleDateString(undefined, {
                             year: 'numeric',
@@ -227,7 +227,7 @@ export default function BookmarksPage() {
                           }`}>
                             {bookmark.message?.role === 'assistant' ? 'AI Interviewer' : 'You'}
                           </span>
-                          <span className="text-xs text-gray-400 dark:text-gray-500">
+                          <span className="text-xs text-gray-500 dark:text-gray-300">
                             {bookmark.message?.createdAt
                               ? new Date(bookmark.message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                               : ''}
@@ -238,7 +238,7 @@ export default function BookmarksPage() {
                             ? cleanMarkdown(truncateContent(bookmark.message.content))
                             : 'Message no longer available'}
                         </p>
-                        <div className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+                        <div className="mt-2 text-xs text-gray-500 dark:text-gray-300">
                           Bookmarked {bookmark.createdAt
                             ? new Date(bookmark.createdAt).toLocaleDateString(undefined, {
                                 year: 'numeric',

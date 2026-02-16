@@ -76,7 +76,7 @@ export default function ResetPasswordPage() {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
               Invalid Reset Link
             </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
               This password reset link is invalid or missing. Please request a new one.
             </p>
             <Link to="/forgot-password" className="btn-primary inline-block">
@@ -96,7 +96,7 @@ export default function ResetPasswordPage() {
           <Link to="/" className="text-3xl font-bold text-primary-600">
             me.md
           </Link>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
+          <p className="mt-2 text-gray-600 dark:text-gray-300">
             Set a new password
           </p>
         </div>
@@ -113,7 +113,7 @@ export default function ResetPasswordPage() {
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                 Password Reset Successful
               </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
                 Your password has been reset successfully. You can now sign in with your new password.
               </p>
               <button
@@ -190,7 +190,7 @@ export default function ResetPasswordPage() {
               </form>
 
               <div className="mt-6 text-center">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-gray-600 dark:text-gray-300">
                   Remember your password?{' '}
                   <Link to="/login" className="text-primary-600 hover:text-primary-500 font-medium">
                     Sign in
@@ -217,7 +217,7 @@ function PasswordCheck({ passed, label }: { passed: boolean; label: string }) {
           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-2a6 6 0 100-12 6 6 0 000 12z" clipRule="evenodd" />
         </svg>
       )}
-      <span className={passed ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}>
+      <span className={passed ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-300'}>
         {label}
       </span>
     </div>

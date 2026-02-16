@@ -152,7 +152,7 @@ function SimpleMarkdown({ content }: { content: string }) {
         }
         if (trimmed.startsWith('> ')) {
           return (
-            <blockquote key={i} className="border-l-4 border-primary-300 dark:border-primary-600 pl-3 py-1 my-1 italic text-gray-600 dark:text-gray-400">
+            <blockquote key={i} className="border-l-4 border-primary-300 dark:border-primary-600 pl-3 py-1 my-1 italic text-gray-600 dark:text-gray-300">
               {renderInlineMarkdown(trimmed.slice(2))}
             </blockquote>
           );
@@ -288,7 +288,7 @@ export default function NotesPage() {
     return (
       <div className="max-w-4xl mx-auto">
         {/* Breadcrumb */}
-        <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-4">
+        <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-300 mb-4">
           <button
             onClick={handleBackToList}
             className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
@@ -306,7 +306,7 @@ export default function NotesPage() {
               <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-1">
                 {selectedNote.title || 'Untitled Note'}
               </h1>
-              <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+              <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-gray-300">
                 <Link
                   to={`/app/topics/${selectedNote.topicId}`}
                   className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors flex items-center gap-1"
@@ -340,7 +340,7 @@ export default function NotesPage() {
                 className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
                   selectedFormat === fmt
                     ? 'bg-primary-100 text-primary-800 dark:bg-primary-900/40 dark:text-primary-300'
-                    : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                 }`}
               >
                 <span className="mr-1.5">{FORMAT_ICONS[fmt]}</span>
@@ -380,7 +380,7 @@ export default function NotesPage() {
                   <div className="flex-1">
                     <p className="text-sm text-gray-800 dark:text-gray-200">{insight.content}</p>
                     <div className="flex items-center gap-3 mt-1.5">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                      <span className="text-xs text-gray-500 dark:text-gray-300">
                         Confidence: {insight.confidenceScore}%
                       </span>
                       <VerifiedBadge status={insight.verificationStatus} />
@@ -434,7 +434,7 @@ export default function NotesPage() {
           </svg>
           Notes
         </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <p className="text-sm text-gray-500 dark:text-gray-300 mt-1">
           {notes.length} note{notes.length !== 1 ? 's' : ''} from distilled sessions
         </p>
       </div>
@@ -463,7 +463,7 @@ export default function NotesPage() {
               className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
                 filterFormat === 'all'
                   ? 'bg-primary-100 text-primary-800 dark:bg-primary-900/40 dark:text-primary-300'
-                  : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
             >
               All
@@ -475,7 +475,7 @@ export default function NotesPage() {
                 className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
                   filterFormat === fmt
                     ? 'bg-primary-100 text-primary-800 dark:bg-primary-900/40 dark:text-primary-300'
-                    : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                 }`}
               >
                 {FORMAT_ICONS[fmt]} {FORMAT_LABELS[fmt]}
@@ -499,7 +499,7 @@ export default function NotesPage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
           <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No notes yet</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 max-w-md mx-auto">
+          <p className="text-sm text-gray-500 dark:text-gray-300 mb-4 max-w-md mx-auto">
             Notes are created when you finish and distill a session. Start a session to begin building your knowledge base.
           </p>
           <Link
@@ -515,7 +515,7 @@ export default function NotesPage() {
       {notes.length > 0 && filteredNotes.length === 0 && (
         <div className="text-center py-12 bg-white dark:bg-dark-surface rounded-xl border border-gray-200 dark:border-dark-border">
           <div className="text-3xl mb-2">&#128269;</div>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-gray-500 dark:text-gray-300">
             No notes match your search or filter.
           </p>
           <button
@@ -532,7 +532,7 @@ export default function NotesPage() {
         <div className="space-y-3">
           {/* Results count when filtered */}
           {(filterFormat !== 'all' || searchQuery.trim()) && (
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-xs text-gray-500 dark:text-gray-300">
               Showing {filteredNotes.length} of {notes.length} notes
             </p>
           )}
@@ -555,23 +555,23 @@ export default function NotesPage() {
                       {FORMAT_LABELS[note.selectedFormat] || 'Full Analysis'}
                     </span>
                     {/* Topic */}
-                    <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 truncate max-w-[200px]">
+                    <span className="text-xs text-gray-500 dark:text-gray-300 flex items-center gap-1 truncate max-w-[200px]">
                       <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                       </svg>
                       {note.topicTitle}
                     </span>
                     {/* Date */}
-                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                    <span className="text-xs text-gray-500 dark:text-gray-300">
                       {formatDate(note.createdAt)}
                     </span>
                   </div>
                   {/* Content preview */}
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 line-clamp-2">
+                  <p className="text-sm text-gray-500 dark:text-gray-300 mt-2 line-clamp-2">
                     {getContentPreview(note)}
                   </p>
                 </div>
-                <svg className="w-4 h-4 text-gray-400 dark:text-gray-500 group-hover:text-primary-500 transition-colors shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-gray-500 dark:text-gray-300 group-hover:text-primary-500 transition-colors shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </div>

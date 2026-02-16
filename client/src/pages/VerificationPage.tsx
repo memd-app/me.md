@@ -501,7 +501,7 @@ export default function VerificationPage() {
       case 're_verification_triggered':
         return 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800';
       default:
-        return 'text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/30 border-gray-200 dark:border-gray-800';
+        return 'text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/30 border-gray-200 dark:border-gray-800';
     }
   };
 
@@ -538,7 +538,7 @@ export default function VerificationPage() {
   };
 
   const getConfidenceColor = (score: number | null) => {
-    if (!score) return 'text-gray-500 dark:text-gray-400';
+    if (!score) return 'text-gray-500 dark:text-gray-300';
     if (score >= 80) return 'text-green-600 dark:text-green-400';
     if (score >= 60) return 'text-amber-600 dark:text-amber-400';
     return 'text-red-600 dark:text-red-400';
@@ -574,7 +574,7 @@ export default function VerificationPage() {
       <div className="max-w-4xl mx-auto">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Verification Queue</h1>
-          <p className="mt-1 text-gray-600 dark:text-gray-400">Review and verify AI-extracted insights</p>
+          <p className="mt-1 text-gray-600 dark:text-gray-300">Review and verify AI-extracted insights</p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           {[1, 2, 3].map(i => (
@@ -601,7 +601,7 @@ export default function VerificationPage() {
     <div className="max-w-4xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Verification Queue</h1>
-        <p className="mt-1 text-gray-600 dark:text-gray-400">
+        <p className="mt-1 text-gray-600 dark:text-gray-300">
           Review and verify AI-extracted insights
         </p>
       </div>
@@ -620,32 +620,36 @@ export default function VerificationPage() {
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
         <div className="card text-center">
           <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{stats.pending}</p>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Pending Review</p>
+          <p className="text-sm text-gray-500 dark:text-gray-300">Pending Review</p>
         </div>
         <div className="card text-center">
           <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.verified}</p>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Verified</p>
+          <p className="text-sm text-gray-500 dark:text-gray-300">Verified</p>
         </div>
         <div className="card text-center">
           <p className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.rejected}</p>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Rejected</p>
+          <p className="text-sm text-gray-500 dark:text-gray-300">Rejected</p>
         </div>
         <div className="card text-center">
           <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
             {verifiedInsights.filter(i => i.privacyTier === 'never_export').length}
           </p>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Never Export</p>
+          <p className="text-sm text-gray-500 dark:text-gray-300">Never Export</p>
         </div>
       </div>
 
       {/* View tabs */}
-      <div className="flex gap-2 mb-6 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex gap-2 mb-6 border-b border-gray-200 dark:border-gray-700" role="tablist" aria-label="Verification views">
         <button
           onClick={() => setActiveView('verification')}
+          role="tab"
+          aria-selected={activeView === 'verification'}
+          aria-controls="verification-panel"
+          id="verification-tab"
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
             activeView === 'verification'
               ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-              : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              : 'border-transparent text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300'
           }`}
         >
           Verification Queue
@@ -657,10 +661,14 @@ export default function VerificationPage() {
         </button>
         <button
           onClick={() => setActiveView('privacy')}
+          role="tab"
+          aria-selected={activeView === 'privacy'}
+          aria-controls="privacy-panel"
+          id="privacy-tab"
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
             activeView === 'privacy'
               ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-              : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              : 'border-transparent text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300'
           }`}
         >
           Privacy Settings
@@ -689,13 +697,13 @@ export default function VerificationPage() {
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                 No verified insights yet
               </h2>
-              <p className="text-gray-600 dark:text-gray-400">
+              <p className="text-gray-600 dark:text-gray-300">
                 Verify insights in the Verification Queue to manage their privacy settings here.
               </p>
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-sm text-gray-500 dark:text-gray-300">
                 {verifiedInsights.length} verified insight{verifiedInsights.length !== 1 ? 's' : ''} &mdash;{' '}
                 <span className="text-green-600 dark:text-green-400 font-medium">
                   {verifiedInsights.filter(i => i.privacyTier !== 'never_export').length} exportable
@@ -783,7 +791,7 @@ export default function VerificationPage() {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
               Batch Review Complete!
             </h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-2">
+            <p className="text-gray-600 dark:text-gray-300 mb-2">
               You reviewed <span className="font-bold text-green-600 dark:text-green-400">{batchReviewed}</span> out of {batchTotal} insights.
             </p>
             <div className="flex items-center justify-center gap-3 mt-4">
@@ -824,7 +832,7 @@ export default function VerificationPage() {
                   </div>
                   <button
                     onClick={exitBatchReview}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 bg-white dark:bg-gray-800 rounded-md border border-gray-300 dark:border-gray-600 transition-colors"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-200 bg-white dark:bg-gray-800 rounded-md border border-gray-300 dark:border-gray-600 transition-colors"
                   >
                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -936,7 +944,7 @@ export default function VerificationPage() {
                     </span>
                   )}
                   {insight.createdAt && (
-                    <span className="text-gray-400 dark:text-gray-500">
+                    <span className="text-gray-500 dark:text-gray-300">
                       {formatDate(insight.createdAt)}
                     </span>
                   )}
@@ -945,7 +953,7 @@ export default function VerificationPage() {
                 {/* Agreement Scale */}
                 <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                    <span className="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center gap-1">
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                       </svg>
@@ -974,7 +982,7 @@ export default function VerificationPage() {
                               }`
                             : insight.agreementScore !== null && score <= insight.agreementScore
                               ? `${getAgreementColor(score)} text-white opacity-60`
-                              : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600'
+                              : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                         } ${agreementUpdating === insight.id ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
                         title={`Set agreement to ${score}/10`}
                       >
@@ -1030,7 +1038,7 @@ export default function VerificationPage() {
                     {/* Skip button for batch mode */}
                     <button
                       onClick={advanceBatch}
-                      className="ml-auto inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                      className="ml-auto inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                     >
                       Skip
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1053,14 +1061,14 @@ export default function VerificationPage() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             No insights to verify
           </h2>
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="text-gray-600 dark:text-gray-300">
             Complete interview sessions to generate insights for verification.
           </p>
         </div>
       ) : (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-gray-500 dark:text-gray-300">
               {pendingInsights.length} insight{pendingInsights.length !== 1 ? 's' : ''} awaiting review
             </p>
             {pendingInsights.length >= 2 && (
@@ -1075,6 +1083,13 @@ export default function VerificationPage() {
               </button>
             )}
           </div>
+          {/* Keyboard navigation hint */}
+          <p className="text-xs text-gray-400 dark:text-gray-500 hidden lg:block" aria-hidden="true">
+            <kbd className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 font-mono text-[10px]">Tab</kbd> to navigate cards,{' '}
+            <kbd className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 font-mono text-[10px]">A</kbd> to approve,{' '}
+            <kbd className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 font-mono text-[10px]">R</kbd> to reject,{' '}
+            <kbd className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 font-mono text-[10px]">Tab</kbd> into card for Edit/History buttons
+          </p>
           {pendingInsights.map(insight => {
             const isReVerification = insight.verificationStatus === 're_verification_pending';
             return (
@@ -1085,6 +1100,8 @@ export default function VerificationPage() {
               rightLabel="Approve"
               leftLabel="Reject"
               disabled={actionInProgress === insight.id || editState?.insightId === insight.id}
+              tabIndex={0}
+              ariaLabel={`Insight: ${insight.content.substring(0, 80)}${insight.content.length > 80 ? '...' : ''}. Press A to approve, R to reject, or Tab to action buttons.`}
             >
             <div
               className={`card border transition-colors ${
@@ -1108,7 +1125,7 @@ export default function VerificationPage() {
                     </span>
                   )}
                   {insight.reVerifyInterval && (
-                    <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto">
+                    <span className="text-xs text-gray-500 dark:text-gray-300 ml-auto">
                       Schedule: {getIntervalLabel(insight.reVerifyInterval)}
                     </span>
                   )}
@@ -1123,6 +1140,7 @@ export default function VerificationPage() {
                       ref={editTextareaRef}
                       value={editState.editedContent}
                       onChange={(e) => setEditState({ ...editState, editedContent: e.target.value })}
+                      aria-label="Edit insight content"
                       className="w-full px-3 py-2 text-gray-900 dark:text-white bg-white dark:bg-gray-800 border border-blue-400 dark:border-blue-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-y min-h-[80px] leading-relaxed"
                       rows={3}
                       disabled={editSaving}
@@ -1136,7 +1154,8 @@ export default function VerificationPage() {
                       <button
                         onClick={handleSaveEdit}
                         disabled={editSaving || editState.editedContent.trim() === '' || editState.editedContent.trim() === insight.content}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+                        aria-label="Save edited insight"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
                       >
                         {editSaving ? (
                           <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
@@ -1153,11 +1172,12 @@ export default function VerificationPage() {
                       <button
                         onClick={handleCancelEdit}
                         disabled={editSaving}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 text-sm font-medium rounded-lg transition-colors"
+                        aria-label="Cancel editing"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
                       >
                         Cancel
                       </button>
-                      <span className="text-xs text-gray-400 dark:text-gray-500 ml-2">
+                      <span className="text-xs text-gray-500 dark:text-gray-300 ml-2">
                         Press Escape to cancel
                       </span>
                     </div>
@@ -1191,7 +1211,7 @@ export default function VerificationPage() {
 
                 {/* Source session reference */}
                 {insight.sourceSessionId && (
-                  <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
+                  <span className="flex items-center gap-1 text-gray-500 dark:text-gray-300">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                     </svg>
@@ -1201,7 +1221,7 @@ export default function VerificationPage() {
 
                 {/* Date */}
                 {insight.createdAt && (
-                  <span className="text-gray-400 dark:text-gray-500">
+                  <span className="text-gray-500 dark:text-gray-300">
                     {formatDate(insight.createdAt)}
                   </span>
                 )}
@@ -1233,7 +1253,7 @@ export default function VerificationPage() {
               {/* Agreement Scale 1-10 */}
               <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-300 flex items-center gap-1">
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
@@ -1262,7 +1282,7 @@ export default function VerificationPage() {
                             }`
                           : insight.agreementScore !== null && score <= insight.agreementScore
                             ? `${getAgreementColor(score)} text-white opacity-60`
-                            : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600'
+                            : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                       } ${agreementUpdating === insight.id ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
                       title={`Set agreement to ${score}/10`}
                     >
@@ -1274,12 +1294,13 @@ export default function VerificationPage() {
 
               {/* Action buttons - hidden during edit mode */}
               {editState?.insightId !== insight.id && (
-                <div className="flex items-center gap-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                <div className="flex items-center gap-3 pt-3 border-t border-gray-100 dark:border-gray-700" role="group" aria-label="Insight actions">
                   {/* Quick approve button */}
                   <button
                     onClick={() => handleApprove(insight.id)}
                     disabled={actionInProgress === insight.id}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-sm font-medium rounded-lg transition-colors"
+                    aria-label="Approve this insight"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
                   >
                     {actionInProgress === insight.id ? (
                       <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
@@ -1298,7 +1319,8 @@ export default function VerificationPage() {
                   <button
                     onClick={() => handleStartEdit(insight)}
                     disabled={actionInProgress === insight.id}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-700 rounded-lg transition-colors"
+                    aria-label="Edit this insight"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-700 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -1311,8 +1333,11 @@ export default function VerificationPage() {
                     <button
                       onClick={() => setIntervalDropdownOpen(intervalDropdownOpen === insight.id ? null : insight.id)}
                       disabled={actionInProgress === insight.id}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors border border-gray-300 dark:border-gray-600"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
                       title="Set re-verification interval and approve"
+                      aria-label="Schedule re-verification interval"
+                      aria-expanded={intervalDropdownOpen === insight.id}
+                      aria-haspopup="true"
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1325,9 +1350,9 @@ export default function VerificationPage() {
 
                     {/* Dropdown menu */}
                     {intervalDropdownOpen === insight.id && (
-                      <div className="absolute bottom-full mb-1 left-0 z-10 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
+                      <div className="absolute bottom-full mb-1 left-0 z-10 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg" role="menu" aria-label="Re-verification interval options">
                         <div className="p-2 border-b border-gray-100 dark:border-gray-700">
-                          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          <p className="text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                             Approve with re-verification interval
                           </p>
                         </div>
@@ -1336,10 +1361,11 @@ export default function VerificationPage() {
                             <button
                               key={option.value}
                               onClick={() => handleApprove(insight.id, option.value)}
-                              className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                              role="menuitem"
+                              className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:bg-gray-50 dark:focus:bg-gray-700"
                             >
                               <p className="text-sm font-medium text-gray-900 dark:text-white">{option.label}</p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">{option.description}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-300">{option.description}</p>
                             </button>
                           ))}
                         </div>
@@ -1351,7 +1377,8 @@ export default function VerificationPage() {
                   <button
                     onClick={() => handleReject(insight.id)}
                     disabled={actionInProgress === insight.id}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white text-sm font-medium rounded-lg transition-colors"
+                    aria-label="Reject this insight"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1362,10 +1389,12 @@ export default function VerificationPage() {
                   {/* History button - pushed to the right */}
                   <button
                     onClick={() => handleToggleHistory(insight.id)}
-                    className={`ml-auto inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    aria-label={`View verification history${historyState?.insightId === insight.id ? ' (open)' : ''}`}
+                    aria-expanded={historyState?.insightId === insight.id}
+                    className={`ml-auto inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${
                       historyState?.insightId === insight.id
                         ? 'text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/40 border border-indigo-300 dark:border-indigo-600'
-                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                        : 'text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                     }`}
                     title="View verification history"
                   >
@@ -1388,7 +1417,7 @@ export default function VerificationPage() {
                   </h4>
 
                   {historyState.loading ? (
-                    <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                    <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-300">
                       <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
@@ -1396,7 +1425,7 @@ export default function VerificationPage() {
                       Loading history...
                     </div>
                   ) : historyState.entries.length === 0 ? (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+                    <p className="text-sm text-gray-500 dark:text-gray-300 italic">
                       No verification history yet. This insight has not been verified, edited, or rejected.
                     </p>
                   ) : (
@@ -1420,11 +1449,11 @@ export default function VerificationPage() {
                                 <span className={`text-sm font-medium ${getActionColor(entry.action).split(' ').slice(0, 2).join(' ')}`}>
                                   {getActionLabel(entry.action)}
                                 </span>
-                                <span className="text-xs text-gray-400 dark:text-gray-500">
+                                <span className="text-xs text-gray-500 dark:text-gray-300">
                                   {formatDateTime(entry.createdAt)}
                                 </span>
                                 {idx === historyState.entries.length - 1 && (
-                                  <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                                  <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300">
                                     Latest
                                   </span>
                                 )}
@@ -1435,7 +1464,7 @@ export default function VerificationPage() {
                                 <div className="mt-1.5 space-y-1">
                                   <div className="text-xs">
                                     <span className="text-red-500 dark:text-red-400 font-medium">Before: </span>
-                                    <span className="text-gray-600 dark:text-gray-400 line-through">{entry.previousContent}</span>
+                                    <span className="text-gray-600 dark:text-gray-300 line-through">{entry.previousContent}</span>
                                   </div>
                                   <div className="text-xs">
                                     <span className="text-green-500 dark:text-green-400 font-medium">After: </span>
@@ -1446,7 +1475,7 @@ export default function VerificationPage() {
 
                               {/* Show info for re-verification triggers */}
                               {entry.action === 're_verification_triggered' && entry.newContent && (
-                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-300">
                                   {entry.newContent}
                                 </p>
                               )}

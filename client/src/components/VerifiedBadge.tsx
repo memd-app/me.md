@@ -41,7 +41,7 @@ const STATUS_CONFIG: Record<string, {
     label: 'Pending',
     ariaLabel: 'Pending verification',
     bgClass: 'bg-gray-100 dark:bg-gray-700',
-    textClass: 'text-gray-600 dark:text-gray-400',
+    textClass: 'text-gray-600 dark:text-gray-200',
     icon: 'none',
   },
 };

@@ -585,7 +585,7 @@ export default function OnboardingPage() {
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
                 index <= currentStepIndex
                   ? 'bg-primary-600 text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-300'
               }`}
             >
               {index < currentStepIndex ? (
@@ -600,7 +600,7 @@ export default function OnboardingPage() {
               className={`text-sm font-medium hidden sm:inline ${
                 index <= currentStepIndex
                   ? 'text-primary-600 dark:text-primary-400'
-                  : 'text-gray-400 dark:text-gray-500'
+                  : 'text-gray-500 dark:text-gray-300'
               }`}
             >
               {step.label}
@@ -630,7 +630,7 @@ export default function OnboardingPage() {
                     <span className="text-2xl" role="img" aria-label="Create">💬</span>
                   </div>
                   <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Create</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
                     AI-guided conversations extract your personal knowledge through proven questioning methods.
                   </p>
                 </div>
@@ -640,7 +640,7 @@ export default function OnboardingPage() {
                     <span className="text-2xl" role="img" aria-label="Verify">✅</span>
                   </div>
                   <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Verify</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
                     You&apos;re in full control. Review and verify every insight before it becomes part of your profile.
                   </p>
                 </div>
@@ -650,7 +650,7 @@ export default function OnboardingPage() {
                     <span className="text-2xl" role="img" aria-label="Manage">🧠</span>
                   </div>
                   <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Manage</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
                     Build a living knowledge graph and export your context for any AI tool.
                   </p>
                 </div>
@@ -666,7 +666,7 @@ export default function OnboardingPage() {
                 <button
                   onClick={handleSkipOnboarding}
                   disabled={isSubmitting}
-                  className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                  className="text-sm text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
                 >
                   Skip for now
                 </button>
@@ -680,7 +680,7 @@ export default function OnboardingPage() {
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 text-center">
                 Tell us about yourself
               </h2>
-              <p className="text-gray-600 dark:text-gray-400 mb-6 text-center">
+              <p className="text-gray-600 dark:text-gray-300 mb-6 text-center">
                 This helps personalize your AI interviews and knowledge extraction.
               </p>
 
@@ -810,7 +810,7 @@ export default function OnboardingPage() {
                   type="button"
                   onClick={handleSkipOnboarding}
                   disabled={isSubmitting}
-                  className="w-full text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors mt-2"
+                  className="w-full text-sm text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300 transition-colors mt-2"
                 >
                   Skip for now
                 </button>
@@ -824,7 +824,7 @@ export default function OnboardingPage() {
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 text-center">
                 Import existing context
               </h2>
-              <p className="text-gray-600 dark:text-gray-400 mb-6 text-center">
+              <p className="text-gray-600 dark:text-gray-300 mb-6 text-center">
                 Optionally import content to give the AI more context about you. This step is optional.
               </p>
 
@@ -836,7 +836,7 @@ export default function OnboardingPage() {
                   className={`flex-1 py-2.5 px-3 text-sm font-medium border-b-2 transition-colors ${
                     activeImportTab === 'url'
                       ? 'border-primary-600 text-primary-600 dark:text-primary-400'
-                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                      : 'border-transparent text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300'
                   }`}
                 >
                   <span className="flex items-center justify-center gap-1.5">
@@ -852,7 +852,7 @@ export default function OnboardingPage() {
                   className={`flex-1 py-2.5 px-3 text-sm font-medium border-b-2 transition-colors ${
                     activeImportTab === 'text'
                       ? 'border-primary-600 text-primary-600 dark:text-primary-400'
-                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                      : 'border-transparent text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300'
                   }`}
                 >
                   <span className="flex items-center justify-center gap-1.5">
@@ -868,7 +868,7 @@ export default function OnboardingPage() {
                   className={`flex-1 py-2.5 px-3 text-sm font-medium border-b-2 transition-colors ${
                     activeImportTab === 'file'
                       ? 'border-primary-600 text-primary-600 dark:text-primary-400'
-                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                      : 'border-transparent text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300'
                   }`}
                 >
                   <span className="flex items-center justify-center gap-1.5">
@@ -883,7 +883,7 @@ export default function OnboardingPage() {
               {/* URL Import Tab */}
               {activeImportTab === 'url' && (
                 <div className="bg-white dark:bg-dark-card rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                  <p className="text-xs text-gray-500 dark:text-gray-300 mb-4">
                     Add links to your blog, portfolio, LinkedIn, or any page about you
                   </p>
 
@@ -927,7 +927,7 @@ export default function OnboardingPage() {
               {/* Paste Text Tab */}
               {activeImportTab === 'text' && (
                 <div className="bg-white dark:bg-dark-card rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                  <p className="text-xs text-gray-500 dark:text-gray-300 mb-4">
                     Paste text about yourself - a bio, interests, resume excerpt, or anything that describes you
                   </p>
 
@@ -952,7 +952,7 @@ export default function OnboardingPage() {
                       rows={5}
                     />
                     {pasteText.trim().length > 0 && (
-                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                      <p className="text-xs text-gray-500 dark:text-gray-300">
                         {pasteText.trim().length} characters
                       </p>
                     )}
@@ -984,7 +984,7 @@ export default function OnboardingPage() {
               {/* File Upload Tab */}
               {activeImportTab === 'file' && (
                 <div className="bg-white dark:bg-dark-card rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                  <p className="text-xs text-gray-500 dark:text-gray-300 mb-4">
                     Upload a text file, markdown, CSV, JSON, or PDF (max 5MB)
                   </p>
 
@@ -1012,17 +1012,17 @@ export default function OnboardingPage() {
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                           </svg>
-                          <span className="text-sm text-gray-600 dark:text-gray-400">Uploading and processing...</span>
+                          <span className="text-sm text-gray-600 dark:text-gray-300">Uploading and processing...</span>
                         </div>
                       ) : (
                         <div className="flex flex-col items-center gap-2">
-                          <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <svg className="w-8 h-8 text-gray-500 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                           </svg>
-                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                          <span className="text-sm text-gray-600 dark:text-gray-300">
                             Click to select a file
                           </span>
-                          <span className="text-xs text-gray-400 dark:text-gray-500">
+                          <span className="text-xs text-gray-500 dark:text-gray-300">
                             .txt, .md, .csv, .json, .pdf
                           </span>
                         </div>
@@ -1060,12 +1060,12 @@ export default function OnboardingPage() {
                             <span className="font-medium text-sm text-gray-900 dark:text-white">
                               {result.title || 'Untitled'}
                             </span>
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300">
                               {result.source === 'url' ? 'URL' : result.source === 'text' ? 'Text' : 'File'}
                             </span>
                           </div>
                           {result.url && (
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 truncate">
+                            <p className="text-xs text-gray-500 dark:text-gray-300 mb-2 truncate">
                               {result.url}
                             </p>
                           )}
@@ -1117,7 +1117,7 @@ export default function OnboardingPage() {
                 type="button"
                 onClick={handleSkipOnboarding}
                 disabled={isSubmitting}
-                className="w-full text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors mt-4"
+                className="w-full text-sm text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300 transition-colors mt-4"
               >
                 Skip for now
               </button>
@@ -1130,10 +1130,10 @@ export default function OnboardingPage() {
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 text-center">
                 Choose your starter topics
               </h2>
-              <p className="text-gray-600 dark:text-gray-400 mb-2 text-center">
+              <p className="text-gray-600 dark:text-gray-300 mb-2 text-center">
                 Select 3-5 topics to explore first. These will guide your initial AI interviews.
               </p>
-              <p className="text-sm text-gray-500 dark:text-gray-500 mb-6 text-center">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 text-center">
                 {selectedTopicTitles.size} selected {selectedTopicTitles.size >= 3 && selectedTopicTitles.size <= 5 ? '✓' : selectedTopicTitles.size > 5 ? '(consider narrowing down)' : `(select at least ${3 - selectedTopicTitles.size} more)`}
               </p>
 
@@ -1149,7 +1149,7 @@ export default function OnboardingPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Loading topics...</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-300">Loading topics...</p>
                 </div>
               ) : (
                 <>
@@ -1160,7 +1160,7 @@ export default function OnboardingPage() {
                       className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                         activeCategory === null
                           ? 'bg-primary-600 text-white'
-                          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                       }`}
                     >
                       All ({presetTopics.length})
@@ -1176,7 +1176,7 @@ export default function OnboardingPage() {
                           className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                             activeCategory === cat
                               ? 'bg-primary-600 text-white'
-                              : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                              : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                           }`}
                         >
                           {info.icon} {info.label} ({count})
@@ -1224,7 +1224,7 @@ export default function OnboardingPage() {
                           }`}>
                             {preset.title}
                           </h4>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
+                          <p className="text-xs text-gray-500 dark:text-gray-300 line-clamp-2">
                             {preset.description}
                           </p>
                         </button>
@@ -1256,7 +1256,7 @@ export default function OnboardingPage() {
                 type="button"
                 onClick={handleSkipOnboarding}
                 disabled={isSubmitting || isSavingTopics}
-                className="w-full text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors mt-4"
+                className="w-full text-sm text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300 transition-colors mt-4"
               >
                 Skip for now
               </button>

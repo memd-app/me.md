@@ -98,7 +98,7 @@ function PrivacyTab({ userId }: { userId: string }) {
       {/* Privacy overview card */}
       <div className="card">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Privacy Settings</h2>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+        <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
           Control which verified insights are included in exports. Items marked as &quot;Never Export&quot; will be
           excluded from all export formats, MCP access, and profile sharing.
         </p>
@@ -107,7 +107,7 @@ function PrivacyTab({ userId }: { userId: string }) {
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 text-center">
             <p className="text-2xl font-bold text-gray-900 dark:text-white">{insights.length}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Total Verified</p>
+            <p className="text-xs text-gray-500 dark:text-gray-300">Total Verified</p>
           </div>
           <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center">
             <p className="text-2xl font-bold text-green-700 dark:text-green-300">{exportableCount}</p>
@@ -139,7 +139,7 @@ function PrivacyTab({ userId }: { userId: string }) {
               className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
                 filter === f
                   ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                  : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
               }`}
             >
               {f === 'all' ? `All (${insights.length})` :
@@ -161,7 +161,7 @@ function PrivacyTab({ userId }: { userId: string }) {
           </div>
         ) : filteredInsights.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-gray-500 dark:text-gray-400">
+            <p className="text-gray-500 dark:text-gray-300">
               {insights.length === 0
                 ? 'No verified insights yet. Verify insights to manage their privacy settings.'
                 : 'No insights match this filter.'}
@@ -176,7 +176,7 @@ function PrivacyTab({ userId }: { userId: string }) {
                     <p className="text-sm text-gray-900 dark:text-gray-100 line-clamp-2">
                       {insight.content}
                     </p>
-                    <div className="mt-1 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+                    <div className="mt-1 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-300">
                       {insight.topicTitle && <span>Topic: {insight.topicTitle}</span>}
                       {insight.confidenceScore != null && <span>Confidence: {insight.confidenceScore}%</span>}
                       <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
@@ -819,7 +819,7 @@ export default function SettingsPage() {
     <div className="max-w-4xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Settings</h1>
-        <p className="mt-1 text-gray-600 dark:text-gray-400">
+        <p className="mt-1 text-gray-600 dark:text-gray-300">
           Manage your account, preferences, and privacy
         </p>
       </div>
@@ -833,7 +833,7 @@ export default function SettingsPage() {
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               activeTab === tab.id
                 ? 'border-primary-600 text-primary-600 dark:text-primary-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                : 'border-transparent text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
           >
             {tab.label}
@@ -877,7 +877,7 @@ export default function SettingsPage() {
                   <div key={field.key} className="py-4 first:pt-0 last:pb-0">
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
-                        <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        <label className="block text-sm font-medium text-gray-500 dark:text-gray-300 mb-1">
                           {field.label}
                         </label>
 
@@ -945,7 +945,7 @@ export default function SettingsPage() {
 
                 {/* Member since */}
                 <div className="py-4">
-                  <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  <label className="block text-sm font-medium text-gray-500 dark:text-gray-300 mb-1">
                     Member Since
                   </label>
                   <p className="text-gray-900 dark:text-gray-100">
@@ -954,7 +954,7 @@ export default function SettingsPage() {
                 </div>
               </div>
             ) : (
-              <p className="text-gray-500 dark:text-gray-400">Unable to load profile data.</p>
+              <p className="text-gray-500 dark:text-gray-300">Unable to load profile data.</p>
             )}
           </div>
 
@@ -977,7 +977,7 @@ export default function SettingsPage() {
             </div>
 
             {!showChangePassword ? (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-sm text-gray-500 dark:text-gray-300">
                 Update your password to keep your account secure.
               </p>
             ) : (
@@ -1064,7 +1064,7 @@ export default function SettingsPage() {
           {/* Danger Zone */}
           <div className="card border-red-200 dark:border-red-800">
             <h2 className="text-lg font-semibold text-red-600 dark:text-red-400 mb-2">Danger Zone</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
               Permanently delete your account and all associated data. This action cannot be undone.
             </p>
 
@@ -1142,7 +1142,7 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-gray-900 dark:text-white">Theme</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-gray-500 dark:text-gray-300">
                   Current theme: <span className="font-medium capitalize">{theme}</span>
                 </p>
               </div>
@@ -1201,7 +1201,7 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-gray-900 dark:text-white">Session Length</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Default interview session duration</p>
+                <p className="text-sm text-gray-500 dark:text-gray-300">Default interview session duration</p>
               </div>
               <select
                 className="input-field w-auto"
@@ -1224,7 +1224,7 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-gray-900 dark:text-white">Session Reminders</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Get reminded about scheduled interview sessions</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-300">Get reminded about scheduled interview sessions</p>
                 </div>
                 <button
                   onClick={() => saveNotificationPref('sessionReminders', !notifications.sessionReminders)}
@@ -1245,7 +1245,7 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-gray-900 dark:text-white">Verification Alerts</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Get notified when insights need re-verification</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-300">Get notified when insights need re-verification</p>
                 </div>
                 <button
                   onClick={() => saveNotificationPref('verificationAlerts', !notifications.verificationAlerts)}
@@ -1266,7 +1266,7 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-gray-900 dark:text-white">Insight Updates</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Get notified about new insights from sessions</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-300">Get notified about new insights from sessions</p>
                 </div>
                 <button
                   onClick={() => saveNotificationPref('insightUpdates', !notifications.insightUpdates)}
@@ -1299,7 +1299,7 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">MCP Access Permissions</h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
                   Control which AI agents can access your verified personal context via the Model Context Protocol.
                 </p>
               </div>
@@ -1332,7 +1332,7 @@ export default function SettingsPage() {
             {showAddForm && (
               <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-dark-border">
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Add New Agent Connection</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                <p className="text-xs text-gray-500 dark:text-gray-300 mb-3">
                   Enter the name of the AI agent or application that should have access to your personal context.
                 </p>
                 <div className="flex items-center gap-2">
@@ -1385,8 +1385,8 @@ export default function SettingsPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                   </svg>
                 </div>
-                <p className="text-gray-500 dark:text-gray-400 font-medium">No MCP connections configured yet</p>
-                <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+                <p className="text-gray-500 dark:text-gray-300 font-medium">No MCP connections configured yet</p>
+                <p className="text-sm text-gray-500 dark:text-gray-300 mt-1">
                   Add an AI agent to allow it to access your verified personal context.
                 </p>
                 {!showAddForm && (
@@ -1412,13 +1412,13 @@ export default function SettingsPage() {
                             className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                               perm.isEnabled
                                 ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                                : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
+                                : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300'
                             }`}
                           >
                             {perm.isEnabled ? 'Active' : 'Disabled'}
                           </span>
                         </div>
-                        <div className="mt-1 flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                        <div className="mt-1 flex items-center gap-4 text-xs text-gray-500 dark:text-gray-300">
                           <span>Added: {formatMcpDate(perm.createdAt)}</span>
                           <span>Last accessed: {formatMcpDate(perm.lastAccessedAt)}</span>
                         </div>
@@ -1461,14 +1461,14 @@ export default function SettingsPage() {
           {/* MCP Tools Test */}
           <div className="card">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">MCP Tools</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
               Test the MCP tools that AI agents use to access your verified context.
             </p>
 
             {/* search_knowledge tool */}
             <div className="mb-6">
               <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">search_knowledge</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+              <p className="text-xs text-gray-500 dark:text-gray-300 mb-2">
                 Search across your verified, exportable insights by keyword.
               </p>
               <div className="flex items-center gap-2 mb-3">
@@ -1492,17 +1492,17 @@ export default function SettingsPage() {
               </div>
               {searchResults !== null && (
                 <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-dark-border p-3">
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-300 mb-2">
                     {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} found
                   </p>
                   {searchResults.length === 0 ? (
-                    <p className="text-sm text-gray-400 dark:text-gray-500 italic">No matching verified insights found.</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-300 italic">No matching verified insights found.</p>
                   ) : (
                     <div className="space-y-2">
                       {searchResults.map((r) => (
                         <div key={r.id} className="bg-white dark:bg-gray-900 rounded p-2 border border-gray-100 dark:border-gray-700">
                           <p className="text-sm text-gray-900 dark:text-gray-100">{r.content}</p>
-                          <div className="mt-1 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+                          <div className="mt-1 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-300">
                             <span>Topic: {r.topicTitle || 'Unknown'}</span>
                             <span>Confidence: {r.confidenceScore}%</span>
                           </div>
@@ -1517,7 +1517,7 @@ export default function SettingsPage() {
             {/* get_context_summary tool */}
             <div>
               <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">get_context_summary</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+              <p className="text-xs text-gray-500 dark:text-gray-300 mb-2">
                 Generate a portable markdown summary of your verified personal context.
               </p>
               <button
@@ -1529,7 +1529,7 @@ export default function SettingsPage() {
               </button>
               {contextSummary && (
                 <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-dark-border p-3">
-                  <div className="flex items-center gap-3 mb-2 text-xs text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center gap-3 mb-2 text-xs text-gray-500 dark:text-gray-300">
                     <span>{contextSummary.totalInsights} verified insight{contextSummary.totalInsights !== 1 ? 's' : ''}</span>
                     <span>{contextSummary.topics.length} topic{contextSummary.topics.length !== 1 ? 's' : ''}</span>
                   </div>
@@ -1571,13 +1571,13 @@ export default function SettingsPage() {
               </div>
               <h3 id="add-dialog-title" className="text-lg font-semibold text-gray-900 dark:text-white">Enable Agent Access</h3>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
               Are you sure you want to grant MCP access to:
             </p>
             <p className="text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700/50 rounded px-3 py-2 mb-4">
               {newAgentName.trim()}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">
+            <p className="text-xs text-gray-500 dark:text-gray-300 mb-6">
               This agent will be able to access your verified, exportable personal context through the Model Context Protocol.
             </p>
             <div className="flex justify-end gap-3">
@@ -1624,7 +1624,7 @@ export default function SettingsPage() {
                 {confirmToggle.currentEnabled ? 'Disable' : 'Enable'} Agent Access
               </h3>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
               {confirmToggle.currentEnabled
                 ? 'Are you sure you want to disable MCP access for:'
                 : 'Are you sure you want to enable MCP access for:'}
@@ -1632,7 +1632,7 @@ export default function SettingsPage() {
             <p className="text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700/50 rounded px-3 py-2 mb-4">
               {confirmToggle.agentName}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">
+            <p className="text-xs text-gray-500 dark:text-gray-300 mb-6">
               {confirmToggle.currentEnabled
                 ? 'This agent will no longer be able to access your personal context until re-enabled.'
                 : 'This agent will be able to access your verified, exportable personal context through MCP.'}
@@ -1671,13 +1671,13 @@ export default function SettingsPage() {
               </div>
               <h3 id="delete-dialog-title" className="text-lg font-semibold text-gray-900 dark:text-white">Revoke Agent Access</h3>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
               Are you sure you want to permanently revoke MCP access for:
             </p>
             <p className="text-sm font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700/50 rounded px-3 py-2 mb-4">
               {mcpPermissions.find((p) => p.id === confirmDelete)?.agentName || 'Unknown agent'}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">
+            <p className="text-xs text-gray-500 dark:text-gray-300 mb-6">
               This will permanently remove this agent connection. You can add it again later if needed.
             </p>
             <div className="flex justify-end gap-3">

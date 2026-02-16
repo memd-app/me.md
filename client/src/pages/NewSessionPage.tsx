@@ -117,7 +117,7 @@ export default function NewSessionPage() {
     <div className="max-w-4xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">New Session</h1>
-        <p className="mt-1 text-gray-600 dark:text-gray-400">
+        <p className="mt-1 text-gray-600 dark:text-gray-300">
           Start a new AI-guided interview session
         </p>
       </div>
@@ -149,7 +149,7 @@ export default function NewSessionPage() {
                 ~5 min
               </span>
             </div>
-            <p className="text-gray-600 dark:text-gray-400 mb-3">
+            <p className="text-gray-600 dark:text-gray-300 mb-3">
               Answer 5-7 high-impact questions to build your starter profile. Perfect for getting started quickly!
             </p>
             <div className="flex items-center gap-3">
@@ -172,7 +172,7 @@ export default function NewSessionPage() {
                   </>
                 )}
               </button>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
+              <span className="text-xs text-gray-500 dark:text-gray-300">
                 Creates insights + knowledge graph
               </span>
             </div>
@@ -185,7 +185,7 @@ export default function NewSessionPage() {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           Choose a Topic
         </h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-4">
+        <p className="text-gray-600 dark:text-gray-300 mb-4">
           Select an existing topic to start an in-depth interview session.
         </p>
 
@@ -198,7 +198,7 @@ export default function NewSessionPage() {
           /* Empty state */
           <div className="text-center py-8 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
             <span className="text-3xl block mb-2">&#x1F4CB;</span>
-            <p className="text-gray-500 dark:text-gray-400 mb-3">
+            <p className="text-gray-500 dark:text-gray-300 mb-3">
               No topics available. Create a topic first.
             </p>
             <Link to="/app/topics/new" className="btn-secondary inline-block">
@@ -222,23 +222,23 @@ export default function NewSessionPage() {
                         {topic.title}
                       </h3>
                       <span className={`px-1.5 py-0.5 text-xs rounded-full ${
-                        topic.status === 'backlog' ? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400' :
+                        topic.status === 'backlog' ? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300' :
                         topic.status === 'in_progress' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
                         topic.status === 'extracted' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
-                        'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                        'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
                       }`}>
                         {topic.status}
                       </span>
                     </div>
                     {topic.description && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      <p className="text-xs text-gray-500 dark:text-gray-300 truncate">
                         {topic.description}
                       </p>
                     )}
                     {tags.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {tags.slice(0, 3).map((tag, i) => (
-                          <span key={i} className="px-1.5 py-0.5 text-xs rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                          <span key={i} className="px-1.5 py-0.5 text-xs rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300">
                             {tag}
                           </span>
                         ))}

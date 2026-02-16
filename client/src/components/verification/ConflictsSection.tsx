@@ -283,7 +283,7 @@ export default function ConflictsSection() {
             </svg>
             Insight Conflicts
           </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-gray-600 dark:text-gray-300">
             {stats.unresolved > 0
               ? `${stats.unresolved} unresolved conflict${stats.unresolved !== 1 ? 's' : ''} detected`
               : 'No unresolved conflicts'}
@@ -342,14 +342,14 @@ export default function ConflictsSection() {
       {/* Conflicts list */}
       {conflicts.length === 0 ? (
         <div className="card text-center py-8 border border-dashed border-gray-300 dark:border-gray-600">
-          <svg className="w-10 h-10 mx-auto mb-3 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-10 h-10 mx-auto mb-3 text-gray-400 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <p className="text-gray-600 dark:text-gray-400 font-medium">
+          <p className="text-gray-600 dark:text-gray-300 font-medium">
             {showResolved ? 'No conflicts found' : 'No unresolved conflicts'}
           </p>
-          <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
-            Click "Scan for Conflicts" to check for contradictions between your insights.
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Click &quot;Scan for Conflicts&quot; to check for contradictions between your insights.
           </p>
         </div>
       ) : (
@@ -364,13 +364,13 @@ export default function ConflictsSection() {
                 <div className="flex items-center gap-2">
                   {getStatusBadge(conflict.resolutionStatus)}
                   {conflict.createdAt && (
-                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
                       Detected {formatDate(conflict.createdAt)}
                     </span>
                   )}
                 </div>
                 {conflict.resolvedAt && (
-                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
                     Resolved {formatDate(conflict.resolvedAt)}
                   </span>
                 )}
@@ -385,7 +385,7 @@ export default function ConflictsSection() {
                     : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
                 }`}>
                   <div className="flex items-center gap-1.5 mb-2">
-                    <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
                       Insight A
                     </span>
                     {conflict.resolutionStatus === 'a_outdated' && (
@@ -412,7 +412,7 @@ export default function ConflictsSection() {
                     : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
                 }`}>
                   <div className="flex items-center gap-1.5 mb-2">
-                    <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
                       Insight B
                     </span>
                     {conflict.resolutionStatus === 'b_outdated' && (
@@ -468,7 +468,7 @@ export default function ConflictsSection() {
                             <div className="flex items-center gap-2 mb-1">
                               <span className={resolutionState.resolution === option.value
                                 ? 'text-blue-600 dark:text-blue-400'
-                                : 'text-gray-500 dark:text-gray-400'
+                                : 'text-gray-600 dark:text-gray-300'
                               }>
                                 {option.icon}
                               </span>
@@ -476,7 +476,7 @@ export default function ConflictsSection() {
                                 {option.label}
                               </span>
                             </div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 ml-7">
+                            <p className="text-xs text-gray-600 dark:text-gray-300 ml-7">
                               {option.description}
                             </p>
                           </button>

@@ -1077,7 +1077,7 @@ export default function SessionPage() {
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <div className="animate-spin inline-block w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full mb-3" />
-          <p className="text-gray-600 dark:text-gray-400">Loading session...</p>
+          <p className="text-gray-600 dark:text-gray-300">Loading session...</p>
         </div>
       </div>
     );
@@ -1091,7 +1091,7 @@ export default function SessionPage() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             Session not found
           </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
+          <p className="text-gray-600 dark:text-gray-300 mb-4">{error}</p>
           <Link to="/app/topics" className="btn-primary inline-block">
             Back to Topics
           </Link>
@@ -1123,13 +1123,13 @@ export default function SessionPage() {
               className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors shrink-0"
               title="Back to chat"
             >
-              <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-gray-500 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
             <div className="min-w-0">
               {/* Breadcrumb navigation */}
-              <nav className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 mb-0.5">
+              <nav className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-300 mb-0.5">
                 <Link to="/app/topics" className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
                   Topics
                 </Link>
@@ -1142,7 +1142,7 @@ export default function SessionPage() {
               </nav>
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-green-500" />
-                <span className="text-xs text-gray-500 dark:text-gray-400">
+                <span className="text-xs text-gray-500 dark:text-gray-300">
                   Distilled Notes
                 </span>
               </div>
@@ -1160,7 +1160,7 @@ export default function SessionPage() {
         <div className="px-6 py-3 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-dark-border shrink-0">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 overflow-x-auto">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 shrink-0">Format:</span>
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-300 shrink-0">Format:</span>
               {(Object.entries(FORMAT_LABELS) as [NoteFormat, string][]).map(([format, label]) => (
                 <button
                   key={format}
@@ -1169,7 +1169,7 @@ export default function SessionPage() {
                   className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors shrink-0 ${
                     selectedFormat === format
                       ? 'bg-primary-600 text-white'
-                      : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
                   } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   {label}
@@ -1185,7 +1185,7 @@ export default function SessionPage() {
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                     copySuccess
                       ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
-                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
                   }`}
                   title="Copy note content to clipboard"
                 >
@@ -1211,7 +1211,7 @@ export default function SessionPage() {
                 <button
                   onClick={handleDownloadNote}
                   disabled={isRegenerating}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Download note as markdown file"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1225,7 +1225,7 @@ export default function SessionPage() {
                 <button
                   onClick={handleStartEdit}
                   disabled={isRegenerating}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Edit note content"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1240,7 +1240,7 @@ export default function SessionPage() {
                   <button
                     onClick={handleCancelEdit}
                     disabled={isSavingNote}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Cancel
                   </button>
@@ -1319,7 +1319,7 @@ export default function SessionPage() {
                 <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
                   Regenerating {FORMAT_LABELS[selectedFormat]}...
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <p className="text-xs text-gray-500 dark:text-gray-300 mt-1">
                   Re-analyzing session messages
                 </p>
               </div>
@@ -1329,7 +1329,7 @@ export default function SessionPage() {
           {/* Edit mode: Markdown textarea editor */}
           {isEditingNote && !isRegenerating && (
             <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-300">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
@@ -1342,7 +1342,7 @@ export default function SessionPage() {
                 placeholder={selectedFormat === 'json' ? 'Enter JSON content...' : 'Enter markdown content...'}
                 spellCheck={selectedFormat !== 'json'}
               />
-              <div className="flex items-center justify-between text-xs text-gray-400 dark:text-gray-500">
+              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-300">
                 <span>{editContent.length} characters</span>
                 <span>Press Save to persist changes</span>
               </div>
@@ -1373,7 +1373,7 @@ export default function SessionPage() {
                 </svg>
                 Extracted Insights ({noteInsights.length})
               </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              <p className="text-sm text-gray-500 dark:text-gray-300 mb-4">
                 These insights need to be verified in the Verification queue before being added to your profile.
               </p>
               <div className="space-y-3">
@@ -1392,7 +1392,7 @@ export default function SessionPage() {
                             ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
                             : insight.confidenceScore >= 55
                             ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-                            : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                            : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
                         }`}>
                           {insight.confidenceScore}%
                         </span>
@@ -1416,7 +1416,7 @@ export default function SessionPage() {
                 </svg>
                 Suggested Cross-Topic Links ({suggestedConnections.length})
               </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              <p className="text-sm text-gray-500 dark:text-gray-300 mb-4">
                 This session content is relevant to other topics. Select the connections you want to save.
               </p>
 
@@ -1464,7 +1464,7 @@ export default function SessionPage() {
                                 style={{ width: `${conn.relevanceScore}%` }}
                               />
                             </div>
-                            <span className="text-xs text-gray-500 dark:text-gray-400 w-8 text-right">
+                            <span className="text-xs text-gray-500 dark:text-gray-300 w-8 text-right">
                               {conn.relevanceScore}%
                             </span>
                           </div>
@@ -1485,7 +1485,7 @@ export default function SessionPage() {
                         const allIds = new Set(suggestedConnections.map(c => c.targetTopicId));
                         setSelectedConnectionIds(prev => prev.size === allIds.size ? new Set() : allIds);
                       }}
-                      className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                      className="text-sm text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
                     >
                       {selectedConnectionIds.size === suggestedConnections.length ? 'Deselect all' : 'Select all'}
                     </button>
@@ -1510,7 +1510,7 @@ export default function SessionPage() {
               className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors shrink-0"
               title="Back to topic"
             >
-              <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-gray-500 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </Link>
@@ -1518,7 +1518,7 @@ export default function SessionPage() {
           <div className="min-w-0">
             {/* Breadcrumb navigation - hidden in fullscreen and on mobile */}
             {!isFullscreen && (
-              <nav className="hidden sm:flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 mb-0.5">
+              <nav className="hidden sm:flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-300 mb-0.5">
                 <Link to="/app/topics" className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
                   Topics
                 </Link>
@@ -1532,7 +1532,7 @@ export default function SessionPage() {
             )}
             <div className="flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full ${isSessionActive ? 'bg-green-500 animate-pulse' : isSessionPaused ? 'bg-amber-500' : 'bg-gray-400'}`} />
-              <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+              <span className="text-xs text-gray-500 dark:text-gray-300 truncate">
                 {isFullscreen ? `${topic.title} — ` : ''}
                 <span className="sm:hidden">{topic.title.length > 20 ? topic.title.slice(0, 20) + '...' : topic.title}</span>
                 <span className="hidden sm:inline">{isSessionActive ? 'Interview Session' : isSessionPaused ? 'Session Paused' : 'Session Completed'}</span>
@@ -1541,7 +1541,7 @@ export default function SessionPage() {
           </div>
         </div>
         <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-          <span className="hidden sm:inline text-xs text-gray-400 dark:text-gray-500">
+          <span className="hidden sm:inline text-xs text-gray-500 dark:text-gray-300">
             {messages.filter(m => m.role === 'user').length} messages
           </span>
           {/* Fullscreen toggle button */}
@@ -1552,11 +1552,11 @@ export default function SessionPage() {
             aria-label={isFullscreen ? 'Exit fullscreen mode' : 'Enter focus mode'}
           >
             {isFullscreen ? (
-              <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-gray-500 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
               </svg>
             ) : (
-              <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-gray-500 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
               </svg>
             )}
@@ -1693,10 +1693,10 @@ export default function SessionPage() {
         <div className="px-6 py-3 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-dark-border shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-gray-500 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              <span className="text-sm text-gray-600 dark:text-gray-400">
+              <span className="text-sm text-gray-600 dark:text-gray-300">
                 This session has been completed and distilled.
                 {session.completedAt && ` Completed ${new Date(session.completedAt).toLocaleString()}`}
               </span>
@@ -1731,7 +1731,7 @@ export default function SessionPage() {
               <div className={`text-xs font-medium mb-1 flex items-center gap-1 ${
                 message.role === 'user'
                   ? 'text-primary-200'
-                  : 'text-gray-500 dark:text-gray-400'
+                  : 'text-gray-500 dark:text-gray-300'
               }`}>
                 {message.role === 'user' ? 'You' : 'AI Interviewer'}
                 {message.isVoiceInput && (
@@ -1754,7 +1754,7 @@ export default function SessionPage() {
               <div className={`flex items-center justify-between mt-2 ${
                 message.role === 'user'
                   ? 'text-primary-300'
-                  : 'text-gray-400 dark:text-gray-500'
+                  : 'text-gray-500 dark:text-gray-300'
               }`}>
                 <span className="text-xs">
                   {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -1791,7 +1791,7 @@ export default function SessionPage() {
         {isStreaming && streamingContent && (
           <div className="flex justify-start">
             <div className="max-w-[80%] bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-2xl rounded-bl-md px-4 py-3">
-              <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              <div className="text-xs font-medium text-gray-500 dark:text-gray-300 mb-1">
                 AI Interviewer
               </div>
               <div className="text-sm leading-relaxed">
@@ -1806,7 +1806,7 @@ export default function SessionPage() {
         {(isSending || isRetrying) && !isStreaming && (
           <div className="flex justify-start">
             <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-bl-md px-4 py-3">
-              <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              <div className="text-xs font-medium text-gray-500 dark:text-gray-300 mb-1">
                 {isRetrying ? 'AI Interviewer (Retrying...)' : 'AI Interviewer'}
               </div>
               <div className="flex items-center gap-1.5">
@@ -1990,7 +1990,7 @@ export default function SessionPage() {
             </div>
           )}
           {!isRecording && !isVoiceInputPending && (
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 text-center">
+            <p className="text-xs text-gray-500 dark:text-gray-300 mt-2 text-center">
               Press Enter to send, Shift+Enter for new line{isSpeechSupported ? ', or use the microphone' : ''}
             </p>
           )}

@@ -99,7 +99,7 @@ export default function LandingPage() {
           <span className="font-semibold text-primary-600 dark:text-primary-400">95%+ accuracy</span>{' '}
           instead of the 53-67% offered by passive memory systems.
         </p>
-        <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 max-w-2xl mx-auto mb-8 sm:mb-10">
+        <p className="text-sm sm:text-base text-gray-500 dark:text-gray-300 max-w-2xl mx-auto mb-8 sm:mb-10">
           me.md uses structured interviews with proven questioning methodologies to actively extract
           personal knowledge, then puts you in full control through human-in-the-loop verification
           of every insight.
@@ -111,7 +111,7 @@ export default function LandingPage() {
           <a
             href="#how-it-works"
             onClick={(e) => scrollToSection(e, 'how-it-works')}
-            className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-medium transition-colors"
+            className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors"
           >
             Learn how it works &darr;
           </a>
@@ -124,7 +124,7 @@ export default function LandingPage() {
           <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 dark:text-white mb-3 sm:mb-4">
             Three Steps to Your Personal AI Context
           </h2>
-          <p className="text-center text-sm sm:text-base text-gray-500 dark:text-gray-400 max-w-2xl mx-auto mb-8 sm:mb-12">
+          <p className="text-center text-sm sm:text-base text-gray-500 dark:text-gray-300 max-w-2xl mx-auto mb-8 sm:mb-12">
             A simple, human-centred process that keeps you in control at every step.
           </p>
           <div className="grid md:grid-cols-3 gap-6 sm:gap-8">
@@ -159,7 +159,7 @@ export default function LandingPage() {
                 <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white mb-2 sm:mb-3">
                   {pillar.title}
                 </h3>
-                <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 leading-relaxed">
+                <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 leading-relaxed">
                   {pillar.description}
                 </p>
               </div>
@@ -174,7 +174,7 @@ export default function LandingPage() {
           <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 dark:text-white mb-3 sm:mb-4">
             Everything You Need to Know Yourself Better
           </h2>
-          <p className="text-center text-sm sm:text-base text-gray-500 dark:text-gray-400 max-w-2xl mx-auto mb-8 sm:mb-12">
+          <p className="text-center text-sm sm:text-base text-gray-500 dark:text-gray-300 max-w-2xl mx-auto mb-8 sm:mb-12">
             Powerful tools designed to build, verify, and manage a living knowledge graph of who you are.
           </p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
@@ -231,7 +231,7 @@ export default function LandingPage() {
               >
                 <div className="text-2xl mb-2 sm:mb-3">{feature.icon}</div>
                 <h4 className="font-semibold text-gray-900 dark:text-white mb-1">{feature.label}</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{feature.desc}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{feature.desc}</p>
               </div>
             ))}
           </div>
@@ -244,7 +244,7 @@ export default function LandingPage() {
           <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 dark:text-white mb-3 sm:mb-4">
             Why me.md?
           </h2>
-          <p className="text-center text-sm sm:text-base text-gray-500 dark:text-gray-400 max-w-2xl mx-auto mb-8 sm:mb-12">
+          <p className="text-center text-sm sm:text-base text-gray-500 dark:text-gray-300 max-w-2xl mx-auto mb-8 sm:mb-12">
             Most AI memory systems capture 53-67% of who you are. me.md uses structured interviews
             and human verification to achieve{' '}
             <span className="font-semibold text-primary-600 dark:text-primary-400">95%+ accuracy</span>{' '}
@@ -263,7 +263,7 @@ export default function LandingPage() {
                   {stat.value}
                 </div>
                 <div className="font-medium text-xs sm:text-base text-gray-900 dark:text-white mb-0.5 sm:mb-1">{stat.label}</div>
-                <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 leading-tight">{stat.note}</div>
+                <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-300 leading-tight">{stat.note}</div>
               </div>
             ))}
           </div>
@@ -302,7 +302,7 @@ export default function LandingPage() {
                   <div className="font-medium text-gray-900 dark:text-white text-sm">
                     {testimonial.author}
                   </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">{testimonial.role}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-300">{testimonial.role}</div>
                 </div>
               </div>
             ))}
@@ -379,28 +379,28 @@ export default function LandingPage() {
       {/* ───── Footer ───── */}
       <footer className="border-t border-gray-200 dark:border-dark-border py-6 sm:py-8">
         <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
-          <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 text-center sm:text-left">
+          <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-300 text-center sm:text-left">
             &copy; 2026 me.md. Your verified personal context for AI.
           </div>
           <nav className="flex items-center gap-4 sm:gap-6">
             <a
               href="#how-it-works"
               onClick={(e) => scrollToSection(e, 'how-it-works')}
-              className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              className="text-xs text-gray-500 dark:text-gray-300 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             >
               How It Works
             </a>
             <a
               href="#features"
               onClick={(e) => scrollToSection(e, 'features')}
-              className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              className="text-xs text-gray-500 dark:text-gray-300 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             >
               Features
             </a>
             <a
               href="#waitlist"
               onClick={(e) => scrollToSection(e, 'waitlist')}
-              className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              className="text-xs text-gray-500 dark:text-gray-300 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             >
               Join Beta
             </a>

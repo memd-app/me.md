@@ -120,67 +120,67 @@ export default function DashboardPage() {
     topic_created: {
       icon: '📋',
       dotColor: 'bg-indigo-500',
-      badgeClass: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
+      badgeClass: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
       badgeLabel: 'Topic Created',
     },
     session_started: {
       icon: '💬',
       dotColor: 'bg-blue-500',
-      badgeClass: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+      badgeClass: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
       badgeLabel: 'Session Started',
     },
     session_completed: {
       icon: '✅',
       dotColor: 'bg-green-500',
-      badgeClass: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+      badgeClass: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
       badgeLabel: 'Session Completed',
     },
     session_paused: {
       icon: '⏸️',
       dotColor: 'bg-amber-500',
-      badgeClass: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+      badgeClass: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
       badgeLabel: 'Session Paused',
     },
     insight_verified: {
       icon: '🛡️',
       dotColor: 'bg-emerald-500',
-      badgeClass: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+      badgeClass: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
       badgeLabel: 'Insight Verified',
     },
     insight_rejected: {
       icon: '❌',
       dotColor: 'bg-red-500',
-      badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+      badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
       badgeLabel: 'Insight Rejected',
     },
     insight_edited: {
       icon: '✏️',
       dotColor: 'bg-purple-500',
-      badgeClass: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+      badgeClass: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
       badgeLabel: 'Insight Edited',
     },
     insight_action: {
       icon: '🔍',
       dotColor: 'bg-gray-500',
-      badgeClass: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400',
+      badgeClass: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300',
       badgeLabel: 'Insight Action',
     },
     note_created: {
       icon: '📝',
       dotColor: 'bg-cyan-500',
-      badgeClass: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
+      badgeClass: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300',
       badgeLabel: 'Note Created',
     },
     bookmark_added: {
       icon: '⭐',
       dotColor: 'bg-yellow-500',
-      badgeClass: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+      badgeClass: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
       badgeLabel: 'Bookmark Added',
     },
     export_profile: {
       icon: '📤',
       dotColor: 'bg-teal-500',
-      badgeClass: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
+      badgeClass: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',
       badgeLabel: 'Profile Exported',
     },
   };
@@ -189,7 +189,7 @@ export default function DashboardPage() {
     return ACTIVITY_CONFIG[type] || {
       icon: '📌',
       dotColor: 'bg-gray-400',
-      badgeClass: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400',
+      badgeClass: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300',
       badgeLabel: type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
     };
   };
@@ -200,7 +200,7 @@ export default function DashboardPage() {
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
           Welcome back, {user?.name || 'there'}
         </h1>
-        <p className="mt-1 text-gray-600 dark:text-gray-400 text-sm sm:text-base">
+        <p className="mt-1 text-gray-600 dark:text-gray-300 text-sm sm:text-base">
           Here&apos;s your knowledge overview
         </p>
       </div>
@@ -216,9 +216,9 @@ export default function DashboardPage() {
               ) : (
                 <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white truncate">{stat.value}</p>
               )}
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">{stat.label}</p>
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-300">{stat.label}</p>
               {!isLoading && stat.sublabel && (
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{stat.sublabel}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{stat.sublabel}</p>
               )}
             </div>
           </div>
@@ -230,7 +230,7 @@ export default function DashboardPage() {
         <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-2 sm:mb-4">
           Knowledge Completeness
         </h2>
-        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-4 sm:mb-6">
+        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-300 mb-4 sm:mb-6">
           Track your progress across the 5 knowledge categories
         </p>
         {isLoading ? (
@@ -257,7 +257,7 @@ export default function DashboardPage() {
                         {cat.completeness}%
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 sm:gap-3 text-xs text-gray-500 dark:text-gray-400 flex-shrink-0 pl-7 sm:pl-0">
+                    <div className="flex items-center gap-2 sm:gap-3 text-xs text-gray-500 dark:text-gray-300 flex-shrink-0 pl-7 sm:pl-0">
                       <span>{cat.exploredTopics}/{cat.totalTopics} topics</span>
                       <span>{cat.verifiedInsights} verified</span>
                       <span className="hidden sm:inline font-semibold text-gray-700 dark:text-gray-300">
@@ -278,10 +278,10 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="text-center py-6">
-            <p className="text-gray-500 dark:text-gray-400 text-sm">
+            <p className="text-gray-500 dark:text-gray-300 text-sm">
               No categorized topics yet. Create topics with preset categories to see progress here.
             </p>
-            <Link to="/app/topics" className="text-indigo-600 dark:text-indigo-400 text-sm hover:underline mt-2 inline-block min-h-[44px] flex items-center justify-center">
+            <Link to="/app/topics" className="text-indigo-600 dark:text-indigo-300 text-sm hover:underline mt-2 inline-block min-h-[44px] flex items-center justify-center">
               Browse Topics
             </Link>
           </div>
@@ -293,7 +293,7 @@ export default function DashboardPage() {
         <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">
           Get Started
         </h2>
-        <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-4">
+        <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 mb-4">
           Start your journey by exploring a topic and having your first AI-guided interview.
         </p>
         <div className="flex flex-col sm:flex-row gap-3">
@@ -311,7 +311,7 @@ export default function DashboardPage() {
         <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-1">
           Recent Activity
         </h2>
-        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-3 sm:mb-4">
+        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-300 mb-3 sm:mb-4">
           Your latest actions across the platform
         </p>
         {isLoading ? (
@@ -322,7 +322,7 @@ export default function DashboardPage() {
           </div>
         ) : activity.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-gray-500 dark:text-gray-400 text-sm">
+            <p className="text-gray-500 dark:text-gray-300 text-sm">
               No activity yet. Start by creating a topic or having your first interview.
             </p>
           </div>
@@ -355,7 +355,7 @@ export default function DashboardPage() {
                           {config.badgeLabel}
                         </span>
                       </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      <p className="text-xs text-gray-500 dark:text-gray-300 mt-0.5">
                         {activityDate.toLocaleDateString('en-US', {
                           weekday: 'short',
                           month: 'short',

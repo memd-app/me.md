@@ -403,7 +403,7 @@ export default function KnowledgeGraphPage() {
       .attr('font-weight', '500')
       .attr('font-style', 'italic')
       .attr('fill', 'currentColor')
-      .attr('class', 'text-gray-400 dark:text-gray-500')
+      .attr('class', 'text-gray-500 dark:text-gray-300')
       .attr('opacity', 0.7)
       .style('pointer-events', 'none')
       .text((d: GraphNode) => d.label || '');
@@ -444,7 +444,7 @@ export default function KnowledgeGraphPage() {
       .attr('text-anchor', 'middle')
       .attr('font-size', '9px')
       .attr('fill', 'currentColor')
-      .attr('class', 'text-gray-600 dark:text-gray-400')
+      .attr('class', 'text-gray-600 dark:text-gray-300')
       .attr('opacity', 0.7)
       .style('pointer-events', 'none')
       .text((d: GraphNode) => {
@@ -537,7 +537,7 @@ export default function KnowledgeGraphPage() {
       <div className="max-w-6xl mx-auto">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Knowledge Graph</h1>
-          <p className="mt-1 text-gray-600 dark:text-gray-400">
+          <p className="mt-1 text-gray-600 dark:text-gray-300">
             Visualize connections between your topics and insights
           </p>
         </div>
@@ -547,7 +547,7 @@ export default function KnowledgeGraphPage() {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
               Your Knowledge Graph
             </h2>
-            <p className="text-gray-600 dark:text-gray-400 text-center max-w-md">
+            <p className="text-gray-600 dark:text-gray-300 text-center max-w-md">
               Complete interview sessions and verify insights to see your knowledge graph grow.
               Topics and concepts will appear as connected nodes.
             </p>
@@ -569,13 +569,13 @@ export default function KnowledgeGraphPage() {
       <div className="mb-3 sm:mb-4 flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Knowledge Graph</h1>
-          <p className="mt-0.5 sm:mt-1 text-sm text-gray-600 dark:text-gray-400 hidden sm:block">
+          <p className="mt-0.5 sm:mt-1 text-sm text-gray-600 dark:text-gray-300 hidden sm:block">
             Visualize connections between your topics and insights
           </p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           {/* Toggle gap nodes */}
-          <label className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
+          <label className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
             <input
               type="checkbox"
               checked={showGaps}
@@ -585,7 +585,7 @@ export default function KnowledgeGraphPage() {
             <span className="hidden sm:inline">Show </span>Gaps
           </label>
           {/* Toggle concepts */}
-          <label className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
+          <label className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
             <input
               type="checkbox"
               checked={showConcepts}
@@ -606,7 +606,7 @@ export default function KnowledgeGraphPage() {
 
       {/* Stats bar */}
       {graphData && graphData.stats && (
-        <div className="mb-3 flex gap-2 sm:gap-4 flex-wrap text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+        <div className="mb-3 flex gap-2 sm:gap-4 flex-wrap text-xs sm:text-sm text-gray-600 dark:text-gray-300">
           <span>{graphData.stats.topicCount} topics</span>
           <span>{graphData.stats.conceptCount} concepts</span>
           <span>{graphData.stats.insightCount} insights</span>
@@ -633,7 +633,7 @@ export default function KnowledgeGraphPage() {
         <div className="card" style={{ minHeight: '600px' }} role="status" aria-label="Loading knowledge graph">
           <div className="flex flex-col items-center justify-center h-96">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mb-4" aria-hidden="true"></div>
-            <p className="text-gray-600 dark:text-gray-400">Loading knowledge graph...</p>
+            <p className="text-gray-600 dark:text-gray-300">Loading knowledge graph...</p>
           </div>
         </div>
       )}
@@ -684,7 +684,7 @@ export default function KnowledgeGraphPage() {
               {hoveredNode.type === 'gap' && (
                 <div className="mt-1 space-y-1.5">
                   {hoveredNode.description && (
-                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                    <p className="text-xs text-gray-600 dark:text-gray-300">
                       {hoveredNode.description}
                     </p>
                   )}
@@ -700,11 +700,11 @@ export default function KnowledgeGraphPage() {
               {hoveredNode.type === 'topic' && (
                 <>
                   {hoveredNode.description && (
-                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">
+                    <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 line-clamp-2">
                       {hoveredNode.description}
                     </p>
                   )}
-                  <div className="mt-2 flex gap-3 text-xs text-gray-500 dark:text-gray-400">
+                  <div className="mt-2 flex gap-3 text-xs text-gray-500 dark:text-gray-300">
                     <span>{hoveredNode.insightCount || 0} insights</span>
                     <span className="text-green-600">{hoveredNode.verifiedInsightCount || 0} verified</span>
                     <span>{hoveredNode.sessionCount || 0} sessions</span>
@@ -715,7 +715,7 @@ export default function KnowledgeGraphPage() {
                         className="w-2 h-2 rounded-full"
                         style={{ backgroundColor: STATUS_COLORS[hoveredNode.status] || '#9ca3af' }}
                       />
-                      <span className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+                      <span className="text-xs text-gray-500 dark:text-gray-300 capitalize">
                         {hoveredNode.status.replace('_', ' ')}
                       </span>
                     </div>
@@ -725,7 +725,7 @@ export default function KnowledgeGraphPage() {
                       {hoveredNode.tags.slice(0, 5).map((tag: string) => (
                         <span
                           key={tag}
-                          className="px-1.5 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded"
+                          className="px-1.5 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded"
                         >
                           {tag}
                         </span>
@@ -755,7 +755,7 @@ export default function KnowledgeGraphPage() {
                           Verified
                         </span>
                       ) : (
-                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                        <span className="text-xs text-gray-500 dark:text-gray-300">
                           {hoveredNode.verificationStatus === 'unverified' ? 'Pending verification' : hoveredNode.verificationStatus}
                         </span>
                       )}
@@ -772,27 +772,27 @@ export default function KnowledgeGraphPage() {
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-blue-500" />
-                <span className="text-gray-600 dark:text-gray-400">Topic (explored)</span>
+                <span className="text-gray-600 dark:text-gray-300">Topic (explored)</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full border-2 border-dashed border-amber-400 opacity-50" style={{ backgroundColor: '#fcd34d' }} />
-                <span className="text-gray-600 dark:text-gray-400">Unexplored area</span>
+                <span className="text-gray-600 dark:text-gray-300">Unexplored area</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-violet-400" />
-                <span className="text-gray-600 dark:text-gray-400">Concept</span>
+                <span className="text-gray-600 dark:text-gray-300">Concept</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-green-500 text-white flex items-center justify-center text-[7px] font-bold">3</span>
-                <span className="text-gray-600 dark:text-gray-400">Verified insights</span>
+                <span className="text-gray-600 dark:text-gray-300">Verified insights</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-4 border-t border-gray-400" />
-                <span className="text-gray-600 dark:text-gray-400">Connection</span>
+                <span className="text-gray-600 dark:text-gray-300">Connection</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-4 border-t border-dashed border-blue-300" />
-                <span className="text-gray-600 dark:text-gray-400">Shared tag</span>
+                <span className="text-gray-600 dark:text-gray-300">Shared tag</span>
               </div>
             </div>
           </div>
@@ -807,7 +807,7 @@ export default function KnowledgeGraphPage() {
                   1.3
                 );
               }}
-              className="w-11 h-11 sm:w-8 sm:h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg flex items-center justify-center text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 text-lg font-bold shadow-sm"
+              className="w-11 h-11 sm:w-8 sm:h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-lg font-bold shadow-sm"
               aria-label="Zoom in"
             >
               +
@@ -820,7 +820,7 @@ export default function KnowledgeGraphPage() {
                   0.7
                 );
               }}
-              className="w-11 h-11 sm:w-8 sm:h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg flex items-center justify-center text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 text-lg font-bold shadow-sm"
+              className="w-11 h-11 sm:w-8 sm:h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-lg font-bold shadow-sm"
               aria-label="Zoom out"
             >
               -
@@ -837,7 +837,7 @@ export default function KnowledgeGraphPage() {
                   d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8)
                 );
               }}
-              className="w-11 h-11 sm:w-8 sm:h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg flex items-center justify-center text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm shadow-sm"
+              className="w-11 h-11 sm:w-8 sm:h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm shadow-sm"
               title="Reset view"
               aria-label="Reset graph view"
             >

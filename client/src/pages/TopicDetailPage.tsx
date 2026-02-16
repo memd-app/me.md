@@ -396,7 +396,7 @@ export default function TopicDetailPage() {
       <div className="max-w-4xl mx-auto">
         <div className="card text-center py-12">
           <div className="animate-spin inline-block w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full mb-3" />
-          <p className="text-gray-600 dark:text-gray-400">Loading topic...</p>
+          <p className="text-gray-600 dark:text-gray-300">Loading topic...</p>
         </div>
       </div>
     );
@@ -410,7 +410,7 @@ export default function TopicDetailPage() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             Topic not found
           </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
+          <p className="text-gray-600 dark:text-gray-300 mb-4">{error}</p>
           <Link to="/app/topics" className="btn-primary inline-block">
             Back to Topics
           </Link>
@@ -430,7 +430,7 @@ export default function TopicDetailPage() {
   return (
     <div className="max-w-4xl mx-auto">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-6">
+      <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-300 mb-6">
         <Link to="/app/topics" className="hover:text-primary-600 dark:hover:text-primary-400">
           Topics
         </Link>
@@ -464,7 +464,7 @@ export default function TopicDetailPage() {
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Edit Topic</h2>
               <button
                 onClick={cancelEditing}
-                className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-200"
               >
                 Cancel
               </button>
@@ -547,7 +547,7 @@ export default function TopicDetailPage() {
                     }`}>
                       {option.label}
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    <div className="text-xs text-gray-500 dark:text-gray-300 mt-0.5">
                       {option.description}
                     </div>
                   </button>
@@ -596,7 +596,7 @@ export default function TopicDetailPage() {
                   Add
                 </button>
               </div>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-300">
                 Press Enter or comma to add a tag
               </p>
             </div>
@@ -640,19 +640,19 @@ export default function TopicDetailPage() {
               </div>
 
               {topic.description && (
-                <p className="text-gray-600 dark:text-gray-400 mb-4">
+                <p className="text-gray-600 dark:text-gray-300 mb-4">
                   {topic.description}
                 </p>
               )}
 
               <div className="flex flex-wrap items-center gap-3">
                 {topic.priority && (
-                  <span className="inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
+                  <span className="inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-300">
                     <span className="font-medium">Priority:</span> {PRIORITY_LABELS[topic.priority] || topic.priority}
                   </span>
                 )}
                 {topic.intent && (
-                  <span className="inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
+                  <span className="inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-300">
                     <span className="font-medium">Intent:</span> {INTENT_LABELS[topic.intent] || topic.intent}
                   </span>
                 )}
@@ -661,7 +661,7 @@ export default function TopicDetailPage() {
                     {tags.map((tag) => (
                       <span
                         key={tag}
-                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
                       >
                         {tag}
                       </span>
@@ -675,7 +675,7 @@ export default function TopicDetailPage() {
             <div className="flex items-center gap-2 ml-4 shrink-0">
               <button
                 onClick={startEditing}
-                className="p-2 text-gray-400 hover:text-primary-500 dark:text-gray-500 dark:hover:text-primary-400 transition-colors"
+                className="p-2 text-gray-500 hover:text-primary-500 dark:text-gray-400 dark:hover:text-primary-300 transition-colors"
                 title="Edit topic"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -684,7 +684,7 @@ export default function TopicDetailPage() {
               </button>
               <button
                 onClick={() => setShowDeleteConfirm(true)}
-                className="p-2 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 transition-colors"
+                className="p-2 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-300 transition-colors"
                 title="Delete topic"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -711,13 +711,13 @@ export default function TopicDetailPage() {
               </h3>
             </div>
 
-            <p className="text-gray-600 dark:text-gray-400 mb-2">
+            <p className="text-gray-600 dark:text-gray-300 mb-2">
               Are you sure you want to delete <span className="font-semibold text-gray-900 dark:text-white">&quot;{topic.title}&quot;</span>?
             </p>
-            <p className="text-sm text-gray-500 dark:text-gray-500 mb-4">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
               This will permanently delete this topic and all associated data including:
             </p>
-            <ul className="text-sm text-gray-500 dark:text-gray-500 mb-6 list-disc list-inside space-y-1">
+            <ul className="text-sm text-gray-500 dark:text-gray-400 mb-6 list-disc list-inside space-y-1">
               {sessions.length > 0 && <li>{sessions.length} session{sessions.length !== 1 ? 's' : ''} and their messages</li>}
               <li>All notes and distilled content</li>
               <li>All extracted insights</li>
@@ -758,7 +758,7 @@ export default function TopicDetailPage() {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
               Ready to explore this topic?
             </h2>
-            <p className="text-gray-600 dark:text-gray-400 text-sm">
+            <p className="text-gray-600 dark:text-gray-300 text-sm">
               Start an AI-guided interview session to build your personal knowledge.
             </p>
           </div>
@@ -789,7 +789,7 @@ export default function TopicDetailPage() {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           Reference URLs
         </h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        <p className="text-sm text-gray-500 dark:text-gray-300 mb-4">
           Add reference URLs as context for this topic. These will be used by the AI during interview sessions.
         </p>
 
@@ -836,10 +836,10 @@ export default function TopicDetailPage() {
         {/* URL list */}
         {referenceUrls.length === 0 ? (
           <div className="text-center py-6 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
-            <svg className="w-8 h-8 mx-auto text-gray-400 dark:text-gray-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-8 h-8 mx-auto text-gray-500 dark:text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
             </svg>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-gray-500 dark:text-gray-300">
               No reference URLs added yet. Add URLs to provide context for AI interviews.
             </p>
           </div>
@@ -850,7 +850,7 @@ export default function TopicDetailPage() {
                 key={`${url}-${index}`}
                 className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 group"
               >
-                <svg className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-gray-500 dark:text-gray-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                 </svg>
                 <a
@@ -864,7 +864,7 @@ export default function TopicDetailPage() {
                 </a>
                 <button
                   onClick={() => handleRemoveUrl(url)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 shrink-0"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-300 shrink-0"
                   title="Remove URL"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -886,7 +886,7 @@ export default function TopicDetailPage() {
         {sessions.length === 0 ? (
           <div className="text-center py-8 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
             <span className="text-3xl block mb-2">💬</span>
-            <p className="text-gray-500 dark:text-gray-400">
+            <p className="text-gray-500 dark:text-gray-300">
               No sessions yet. Start your first interview session above!
             </p>
           </div>
@@ -894,7 +894,7 @@ export default function TopicDetailPage() {
           <div className="space-y-3">
             {activeSessions.length > 0 && (
               <div className="mb-4">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider mb-2">
                   Active Sessions
                 </h3>
                 {activeSessions.map((session) => (
@@ -910,7 +910,7 @@ export default function TopicDetailPage() {
                           Active Session
                         </span>
                       </div>
-                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                      <span className="text-sm text-gray-500 dark:text-gray-300">
                         Started {new Date(session.createdAt).toLocaleString()}
                       </span>
                     </div>
@@ -921,7 +921,7 @@ export default function TopicDetailPage() {
 
             {pausedSessions.length > 0 && (
               <div className="mb-4">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider mb-2">
                   Paused Sessions
                 </h3>
                 {pausedSessions.map((session) => (
@@ -940,7 +940,7 @@ export default function TopicDetailPage() {
                           — Click to resume
                         </span>
                       </div>
-                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                      <span className="text-sm text-gray-500 dark:text-gray-300">
                         Paused {new Date(session.updatedAt).toLocaleString()}
                       </span>
                     </div>
@@ -951,7 +951,7 @@ export default function TopicDetailPage() {
 
             {completedSessions.length > 0 && (
               <div>
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider mb-2">
                   Completed Sessions
                 </h3>
                 {completedSessions.map((session) => (
@@ -967,7 +967,7 @@ export default function TopicDetailPage() {
                           Completed Session
                         </span>
                       </div>
-                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                      <span className="text-sm text-gray-500 dark:text-gray-300">
                         {session.completedAt
                           ? new Date(session.completedAt).toLocaleString()
                           : new Date(session.updatedAt).toLocaleString()
@@ -987,7 +987,7 @@ export default function TopicDetailPage() {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           Related Insights
           {topicInsights.length > 0 && (
-            <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
+            <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-300">
               ({topicInsights.length})
             </span>
           )}
@@ -995,10 +995,10 @@ export default function TopicDetailPage() {
 
         {topicInsights.length === 0 ? (
           <div className="text-center py-8 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
-            <svg className="w-8 h-8 mx-auto text-gray-400 dark:text-gray-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-8 h-8 mx-auto text-gray-500 dark:text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
             </svg>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-gray-500 dark:text-gray-300">
               No insights extracted yet. Complete a session and distill it to generate insights.
             </p>
           </div>
@@ -1020,7 +1020,7 @@ export default function TopicDetailPage() {
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <p className={`text-sm ${isRejected ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-800 dark:text-gray-200'}`}>
+                    <p className={`text-sm ${isRejected ? 'text-gray-500 dark:text-gray-300 line-through' : 'text-gray-800 dark:text-gray-200'}`}>
                       {insight.content}
                     </p>
                     <div className="flex items-center gap-2 shrink-0">
@@ -1038,7 +1038,7 @@ export default function TopicDetailPage() {
                       <VerifiedBadge status={insight.verificationStatus} />
                     </div>
                   </div>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                  <p className="text-xs text-gray-500 dark:text-gray-300 mt-2">
                     {new Date(insight.createdAt).toLocaleDateString()}
                   </p>
                 </div>
@@ -1053,7 +1053,7 @@ export default function TopicDetailPage() {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           Connected Topics
           {connectedTopics.length > 0 && (
-            <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
+            <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-300">
               ({connectedTopics.length})
             </span>
           )}
@@ -1061,10 +1061,10 @@ export default function TopicDetailPage() {
 
         {connectedTopics.length === 0 ? (
           <div className="text-center py-8 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
-            <svg className="w-8 h-8 mx-auto text-gray-400 dark:text-gray-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-8 h-8 mx-auto text-gray-500 dark:text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
             </svg>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-gray-500 dark:text-gray-300">
               No connections yet. Connections are created through shared tags and multi-bucket distillation.
             </p>
           </div>
@@ -1089,18 +1089,18 @@ export default function TopicDetailPage() {
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[ct.status] || STATUS_COLORS.backlog}`}>
                           {STATUS_LABELS[ct.status] || ct.status}
                         </span>
-                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                        <span className="text-xs text-gray-500 dark:text-gray-300">
                           {ct.connectionType === 'multi_bucket' ? 'Multi-bucket link' : ct.connectionType === 'tag_shared' ? 'Shared tags' : ct.connectionType === 'ai_detected' ? 'AI detected' : ct.connectionType}
                         </span>
                         {ct.relevanceScore > 0 && (
-                          <span className="text-xs text-gray-400 dark:text-gray-500">
+                          <span className="text-xs text-gray-500 dark:text-gray-300">
                             {ct.relevanceScore}% relevant
                           </span>
                         )}
                       </div>
                     </div>
                   </div>
-                  <svg className="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-gray-500 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>

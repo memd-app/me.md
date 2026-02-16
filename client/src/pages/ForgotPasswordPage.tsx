@@ -46,7 +46,7 @@ export default function ForgotPasswordPage() {
           <Link to="/" className="text-3xl font-bold text-primary-600">
             me.md
           </Link>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
+          <p className="mt-2 text-gray-600 dark:text-gray-300">
             Reset your password
           </p>
         </div>
@@ -63,11 +63,11 @@ export default function ForgotPasswordPage() {
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                 Check your email
               </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
                 If an account exists with <strong>{email}</strong>, a password reset link has been generated.
                 Check the server console for the reset link.
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-500 mb-6">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">
                 In development mode, the reset link is printed to the server terminal.
               </p>
               <div className="space-y-3">
@@ -94,7 +94,7 @@ export default function ForgotPasswordPage() {
                 </div>
               )}
 
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-5">
                 Enter your email address and we&apos;ll send you a link to reset your password.
               </p>
 
@@ -126,7 +126,7 @@ export default function ForgotPasswordPage() {
               </form>
 
               <div className="mt-6 text-center">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-gray-600 dark:text-gray-300">
                   Remember your password?{' '}
                   <Link to="/login" className="text-primary-600 hover:text-primary-500 font-medium">
                     Sign in
