@@ -275,8 +275,12 @@ topicsRouter.post('/', async (req, res) => {
 
     const { title, description, tags, status, priority, intent, trigger, referenceUrls, contextItems, isPreset, presetCategory } = req.body;
 
-    if (!title) {
-      return res.status(400).json({ error: 'Title is required' });
+    if (!title || (typeof title === 'string' && !title.trim())) {
+      return res.status(400).json({ error: 'Title is required. Please provide a descriptive name for your topic.' });
+    }
+
+    if (typeof title === 'string' && title.trim().length > 200) {
+      return res.status(400).json({ error: 'Title is too long. Please keep it under 200 characters.' });
     }
 
     const topicId = uuidv4();

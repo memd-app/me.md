@@ -288,6 +288,46 @@ function generateMarkdown(summary: ProfileSummary): string {
   return lines.join('\n');
 }
 
+// GET /api/profile/export/status - Check if there is verified exportable data available
+profileRouter.get('/export/status', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const user = db.select().from(users).where(eq(users.id, userId)).get();
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Count verified exportable insights
+    const verifiedInsights = db.select({
+      content: insights.content,
+    }).from(insights)
+      .where(
+        and(
+          eq(insights.userId, userId),
+          eq(insights.verificationStatus, 'verified'),
+          eq(insights.privacyTier, 'exportable')
+        )
+      )
+      .all();
+
+    const topicCount = db.select().from(topics).where(eq(topics.userId, userId)).all().length;
+
+    res.json({
+      hasVerifiedData: verifiedInsights.length > 0,
+      verifiedInsightCount: verifiedInsights.length,
+      topicCount,
+    });
+  } catch (error) {
+    console.error('Export status check error:', error);
+    res.status(500).json({ error: 'Failed to check export status' });
+  }
+});
+
 // GET /api/profile/summary - Get auto-generated profile summary from verified insights
 profileRouter.get('/summary', async (req, res) => {
   try {

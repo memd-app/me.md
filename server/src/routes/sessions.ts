@@ -27,7 +27,7 @@ sessionsRouter.post('/', async (req, res) => {
     ).get();
 
     if (!topic) {
-      return res.status(404).json({ error: 'Topic not found' });
+      return res.status(404).json({ error: 'This topic no longer exists. It may have been deleted. Please go back and select a different topic.' });
     }
 
     const sessionId = uuidv4();

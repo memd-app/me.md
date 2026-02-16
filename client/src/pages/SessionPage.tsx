@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { formatFullDate, formatDateTime, formatTime } from '@/utils/dateFormat';
 
@@ -173,6 +174,7 @@ const MessageBubble = memo(function MessageBubble({
 export default function SessionPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { addToast } = useToast();
   const [session, setSession] = useState<Session | null>(null);
   const [topic, setTopic] = useState<Topic | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -243,9 +245,12 @@ export default function SessionPage() {
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
           if (res.status === 404) {
-            throw new Error(data.error || 'This session does not exist or has been deleted.');
+            throw new Error(data.error || 'This session does not exist or has been deleted. Please go back and start a new session.');
           }
-          throw new Error(data.error || 'Failed to load session');
+          if (res.status === 401) {
+            throw new Error('You need to be signed in to view this session. Please sign in and try again.');
+          }
+          throw new Error(data.error || 'Failed to load session. Please refresh the page to try again.');
         }
 
         const data = await res.json();
@@ -780,8 +785,13 @@ export default function SessionPage() {
 
   // Send a message with SSE streaming
   const sendMessage = async (content: string, voiceInput?: boolean) => {
+    // Validate: prevent empty messages with user feedback
+    if (!content.trim()) {
+      addToast('Please type a message before sending.', 'warning', 3000);
+      return;
+    }
     // Use ref for synchronous double-click protection (state updates are async)
-    if (!user || !session || !content.trim() || isSending || isSendingRef.current) return;
+    if (!user || !session || isSending || isSendingRef.current) return;
     isSendingRef.current = true;
 
     const trimmedContent = content.trim();

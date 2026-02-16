@@ -1,15 +1,22 @@
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
 
 type ExportFormat = 'markdown' | 'json' | 'both';
 type ExportAction = 'download' | 'clipboard';
 
 export default function ExportPage() {
   const { user } = useAuth();
+  const { addToast } = useToast();
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('markdown');
   const [exporting, setExporting] = useState(false);
   const [copying, setCopying] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Export readiness state
+  const [exportStatus, setExportStatus] = useState<{ hasVerifiedData: boolean; verifiedInsightCount: number; topicCount: number } | null>(null);
+  const [loadingExportStatus, setLoadingExportStatus] = useState(true);
 
   // Authentication verification state
   const [isVerified, setIsVerified] = useState(false);
@@ -18,6 +25,37 @@ export default function ExportPage() {
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [pendingAction, setPendingAction] = useState<ExportAction | null>(null);
+
+  // Check export readiness on mount
+  useEffect(() => {
+    if (!user) return;
+    const controller = new AbortController();
+
+    const checkExportStatus = async () => {
+      try {
+        const res = await fetch('/api/profile/export/status', {
+          headers: { 'x-user-id': user.id },
+          signal: controller.signal,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (!controller.signal.aborted) {
+            setExportStatus(data);
+          }
+        }
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        // Silent fail - export will still work, just without the warning
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoadingExportStatus(false);
+        }
+      }
+    };
+
+    checkExportStatus();
+    return () => controller.abort();
+  }, [user]);
 
   const downloadFile = async (endpoint: string, filename: string) => {
     if (!user) return;
@@ -63,7 +101,7 @@ export default function ExportPage() {
 
       setStatus({ type: 'success', message: formatLabel });
     } catch (err) {
-      setStatus({ type: 'error', message: err instanceof Error ? err.message : 'Failed to export' });
+      setStatus({ type: 'error', message: err instanceof Error ? err.message : 'Failed to export. Please check your connection and try again.' });
     } finally {
       setExporting(false);
     }
@@ -82,13 +120,23 @@ export default function ExportPage() {
       await navigator.clipboard.writeText(text);
       setStatus({ type: 'success', message: 'Profile copied to clipboard!' });
     } catch (err) {
-      setStatus({ type: 'error', message: err instanceof Error ? err.message : 'Failed to copy' });
+      setStatus({ type: 'error', message: err instanceof Error ? err.message : 'Failed to copy. Please try again.' });
     } finally {
       setCopying(false);
     }
   };
 
   const requireVerification = (action: ExportAction) => {
+    // Check if there's verified data to export
+    if (exportStatus && !exportStatus.hasVerifiedData) {
+      addToast('No verified insights available to export. Complete interview sessions and verify insights first.', 'warning', 5000);
+      setStatus({
+        type: 'error',
+        message: 'Nothing to export yet. To build your exportable profile: 1) Create topics and complete interview sessions, 2) Review and verify your insights on the Verification page, 3) Ensure verified insights have the "exportable" privacy tier.',
+      });
+      return;
+    }
+
     if (isVerified) {
       // Already verified this session
       if (action === 'download') {
@@ -123,7 +171,7 @@ export default function ExportPage() {
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Verification failed');
+        throw new Error(data.error || 'Verification failed. Please check your password and try again.');
       }
 
       // Mark as verified for this session
@@ -139,7 +187,7 @@ export default function ExportPage() {
       }
       setPendingAction(null);
     } catch (err) {
-      setVerifyError(err instanceof Error ? err.message : 'Verification failed');
+      setVerifyError(err instanceof Error ? err.message : 'Verification failed. Please try again.');
     } finally {
       setVerifying(false);
     }
@@ -184,6 +232,46 @@ export default function ExportPage() {
           Export your verified profile as Markdown, JSON, or both formats
         </p>
       </div>
+
+      {/* No verified data warning */}
+      {!loadingExportStatus && exportStatus && !exportStatus.hasVerifiedData && (
+        <div className="mb-6 p-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
+          <div className="flex items-start gap-3">
+            <svg className="w-5 h-5 text-amber-500 dark:text-amber-400 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            <div>
+              <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                No verified data to export
+              </h3>
+              <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                Your profile export will be empty because you don&apos;t have any verified, exportable insights yet. To build your profile:
+              </p>
+              <ol className="text-sm text-amber-700 dark:text-amber-300 mt-2 ml-4 list-decimal space-y-1">
+                <li>
+                  <Link to="/app/topics" className="underline hover:text-amber-900 dark:hover:text-amber-100">Create topics</Link> and complete interview sessions
+                </li>
+                <li>
+                  <Link to="/app/verify" className="underline hover:text-amber-900 dark:hover:text-amber-100">Verify your insights</Link> on the Verification page
+                </li>
+                <li>Ensure verified insights have the &quot;exportable&quot; privacy tier</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export readiness summary */}
+      {!loadingExportStatus && exportStatus && exportStatus.hasVerifiedData && (
+        <div className="mb-6 p-3 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 flex items-center gap-2">
+          <svg className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+          <p className="text-sm text-green-700 dark:text-green-300">
+            <strong>{exportStatus.verifiedInsightCount} verified insight{exportStatus.verifiedInsightCount !== 1 ? 's' : ''}</strong> across {exportStatus.topicCount} topic{exportStatus.topicCount !== 1 ? 's' : ''} ready to export.
+          </p>
+        </div>
+      )}
 
       {/* Status message */}
       {status && (

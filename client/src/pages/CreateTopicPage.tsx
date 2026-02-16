@@ -75,12 +75,17 @@ export default function CreateTopicPage() {
     }
 
     if (!title.trim()) {
-      setError('Title is required');
+      setError('Title is required. Please enter a descriptive name for your topic (e.g., "My Leadership Style").');
+      return;
+    }
+
+    if (title.trim().length > 200) {
+      setError('Title is too long. Please keep it under 200 characters.');
       return;
     }
 
     if (!user) {
-      setError('You must be logged in');
+      setError('You must be logged in to create a topic. Please sign in and try again.');
       return;
     }
 

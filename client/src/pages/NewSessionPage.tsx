@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 
@@ -17,11 +18,13 @@ interface Topic {
 export default function NewSessionPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { addToast } = useToast();
   const [isStartingMini, setIsStartingMini] = useState(false);
   const [isStartingTopic, setIsStartingTopic] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [isLoadingTopics, setIsLoadingTopics] = useState(true);
+  const [topicLoadError, setTopicLoadError] = useState<string | null>(null);
 
   // Fetch user topics
   useEffect(() => {
@@ -29,6 +32,7 @@ export default function NewSessionPage() {
     const controller = new AbortController();
 
     const fetchTopics = async () => {
+      setTopicLoadError(null);
       try {
         const res = await fetch('/api/topics', {
           headers: { 'x-user-id': user.id },
@@ -39,10 +43,14 @@ export default function NewSessionPage() {
           if (!controller.signal.aborted) {
             setTopics(data.topics || []);
           }
+        } else if (!controller.signal.aborted) {
+          setTopicLoadError('Failed to load your topics. Please refresh the page to try again.');
         }
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
-        // Silent fail for other errors
+        if (!controller.signal.aborted) {
+          setTopicLoadError('Unable to load topics. Please check your connection and refresh the page.');
+        }
       } finally {
         if (!controller.signal.aborted) {
           setIsLoadingTopics(false);
@@ -71,14 +79,20 @@ export default function NewSessionPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to start mini session');
+        const data = await res.json().catch(() => ({ error: 'Server error' }));
+        throw new Error(data.error || 'Failed to start mini session. Please try again.');
       }
 
       const data = await res.json();
       navigate(`/app/sessions/${data.session.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start mini session');
+      const msg = err instanceof Error ? err.message : 'Failed to start mini session';
+      // Improve network error messaging
+      if (err instanceof TypeError) {
+        setError('Unable to connect to the server. Please check your internet connection and try again.');
+      } else {
+        setError(msg);
+      }
       setIsStartingMini(false);
     }
   };
@@ -101,14 +115,23 @@ export default function NewSessionPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to start session');
+        const data = await res.json().catch(() => ({ error: 'Failed to start session' }));
+
+        // If topic was deleted (404), remove it from the local list and show actionable toast
+        if (res.status === 404) {
+          setTopics(prev => prev.filter(t => t.id !== topicId));
+          addToast('This topic was deleted or no longer exists. The list has been refreshed.', 'error', 5000);
+          setIsStartingTopic(null);
+          return;
+        }
+
+        throw new Error(data.error || 'Failed to start session. Please try again.');
       }
 
       const data = await res.json();
       navigate(`/app/sessions/${data.session.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start session');
+      setError(err instanceof Error ? err.message : 'Failed to start session. Please check your connection and try again.');
       setIsStartingTopic(null);
     }
   };
@@ -199,6 +222,22 @@ export default function NewSessionPage() {
         {isLoadingTopics ? (
           <div className="text-center py-8">
             <LoadingSpinner size="sm" message="Loading topics..." />
+          </div>
+        ) : topicLoadError ? (
+          /* Topic load error state */
+          <div className="text-center py-8 border border-dashed border-red-300 dark:border-red-700 rounded-lg bg-red-50 dark:bg-red-900/10">
+            <svg className="w-8 h-8 mx-auto text-red-400 dark:text-red-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.072 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            <p className="text-red-600 dark:text-red-400 text-sm mb-3">
+              {topicLoadError}
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="btn-secondary text-sm"
+            >
+              Refresh Page
+            </button>
           </div>
         ) : topics.length === 0 ? (
           /* Empty state */
