@@ -29,14 +29,28 @@ authRouter.post('/register', async (req, res) => {
   try {
     const { email, password, name, dateOfBirth, location, occupation, gender } = req.body;
 
-    if (!email || !name) {
-      return res.status(400).json({ error: 'Email and name are required' });
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    if (!name || (typeof name === 'string' && !name.trim())) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+
+    // Validate email is a string
+    if (typeof email !== 'string') {
+      return res.status(400).json({ error: 'Email must be a string' });
     }
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      return res.status(400).json({ error: 'Invalid email format' });
+      return res.status(400).json({ error: 'Invalid email format. Please enter a valid email address (e.g., user@example.com).' });
+    }
+
+    // Validate name length
+    if (typeof name === 'string' && name.trim().length > 100) {
+      return res.status(400).json({ error: 'Name is too long. Please keep it under 100 characters.' });
     }
 
     // Validate password requirements: 8+ chars, 1 number, 1 special char

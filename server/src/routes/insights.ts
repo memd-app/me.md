@@ -295,6 +295,12 @@ insightsRouter.post('/:id/verify', async (req, res) => {
 
     // Allow client to specify interval, or auto-classify
     const requestedInterval = req.body.reVerifyInterval;
+    const validIntervals = ['weekly', 'monthly', 'quarterly', 'biannual', 'annual'];
+    if (requestedInterval && !validIntervals.includes(requestedInterval)) {
+      return res.status(400).json({
+        error: `Invalid re-verification interval "${requestedInterval}". Must be one of: ${validIntervals.join(', ')}`
+      });
+    }
     const reVerifyInterval = requestedInterval || classifyInsightInterval(insight.content, insight.confidenceScore);
     const reVerifyAt = calculateReVerifyAt(reVerifyInterval);
 
@@ -556,6 +562,34 @@ insightsRouter.put('/:id', async (req, res) => {
         currentUpdatedAt: insight.updatedAt,
         yourExpectedUpdatedAt: expectedUpdatedAt,
       });
+    }
+
+    // Validate content if provided
+    if (content !== undefined && content !== null) {
+      if (typeof content !== 'string' || !content.trim()) {
+        return res.status(400).json({ error: 'Insight content cannot be empty.' });
+      }
+      if (content.length > 5000) {
+        return res.status(400).json({ error: 'Insight content is too long. Please keep it under 5000 characters.' });
+      }
+    }
+
+    // Validate agreementScore if provided
+    if (agreementScore !== undefined && agreementScore !== null) {
+      const score = Number(agreementScore);
+      if (isNaN(score) || score < 0 || score > 100) {
+        return res.status(400).json({ error: 'Agreement score must be a number between 0 and 100.' });
+      }
+    }
+
+    // Validate privacyTier if provided
+    if (privacyTier !== undefined && privacyTier !== null) {
+      const validTiers = ['public', 'connections', 'private'];
+      if (!validTiers.includes(privacyTier)) {
+        return res.status(400).json({
+          error: `Invalid privacy tier "${privacyTier}". Must be one of: ${validTiers.join(', ')}`
+        });
+      }
     }
 
     const now = new Date().toISOString();

@@ -6,6 +6,11 @@ import { v4 as uuidv4 } from 'uuid';
 
 export const topicsRouter = Router();
 
+// Valid enum values for topic fields
+const VALID_STATUSES = ['backlog', 'scheduled', 'in_progress', 'extracted', 'refined'];
+const VALID_PRIORITIES = ['high', 'medium', 'low'];
+const VALID_INTENTS = ['articulate', 'explore', 'decide', 'document'];
+
 // Preset topics data - 16 topics across 5 categories
 const PRESET_TOPICS = [
   // Identity (4 topics)
@@ -283,6 +288,37 @@ topicsRouter.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Title is too long. Please keep it under 200 characters.' });
     }
 
+    // Validate status if provided
+    if (status !== undefined && status !== null && !VALID_STATUSES.includes(status)) {
+      return res.status(400).json({
+        error: `Invalid status "${status}". Must be one of: ${VALID_STATUSES.join(', ')}`
+      });
+    }
+
+    // Validate priority if provided
+    if (priority !== undefined && priority !== null && !VALID_PRIORITIES.includes(priority)) {
+      return res.status(400).json({
+        error: `Invalid priority "${priority}". Must be one of: ${VALID_PRIORITIES.join(', ')}`
+      });
+    }
+
+    // Validate intent if provided
+    if (intent !== undefined && intent !== null && !VALID_INTENTS.includes(intent)) {
+      return res.status(400).json({
+        error: `Invalid intent "${intent}". Must be one of: ${VALID_INTENTS.join(', ')}`
+      });
+    }
+
+    // Validate tags is an array if provided
+    if (tags !== undefined && tags !== null && !Array.isArray(tags)) {
+      return res.status(400).json({ error: 'Tags must be an array of strings' });
+    }
+
+    // Validate description length if provided
+    if (description && typeof description === 'string' && description.length > 2000) {
+      return res.status(400).json({ error: 'Description is too long. Please keep it under 2000 characters.' });
+    }
+
     const topicId = uuidv4();
 
     const newTopic = db.insert(topics).values({
@@ -459,6 +495,47 @@ topicsRouter.put('/:id', async (req, res) => {
     }
 
     const { title, description, tags, status, priority, intent, trigger, referenceUrls, contextItems } = req.body;
+
+    // Validate title if provided
+    if (title !== undefined) {
+      if (!title || (typeof title === 'string' && !title.trim())) {
+        return res.status(400).json({ error: 'Title cannot be empty.' });
+      }
+      if (typeof title === 'string' && title.trim().length > 200) {
+        return res.status(400).json({ error: 'Title is too long. Please keep it under 200 characters.' });
+      }
+    }
+
+    // Validate status if provided
+    if (status !== undefined && status !== null && !VALID_STATUSES.includes(status)) {
+      return res.status(400).json({
+        error: `Invalid status "${status}". Must be one of: ${VALID_STATUSES.join(', ')}`
+      });
+    }
+
+    // Validate priority if provided
+    if (priority !== undefined && priority !== null && !VALID_PRIORITIES.includes(priority)) {
+      return res.status(400).json({
+        error: `Invalid priority "${priority}". Must be one of: ${VALID_PRIORITIES.join(', ')}`
+      });
+    }
+
+    // Validate intent if provided
+    if (intent !== undefined && intent !== null && !VALID_INTENTS.includes(intent)) {
+      return res.status(400).json({
+        error: `Invalid intent "${intent}". Must be one of: ${VALID_INTENTS.join(', ')}`
+      });
+    }
+
+    // Validate tags is an array if provided
+    if (tags !== undefined && tags !== null && !Array.isArray(tags)) {
+      return res.status(400).json({ error: 'Tags must be an array of strings' });
+    }
+
+    // Validate description length if provided
+    if (description !== undefined && description !== null && typeof description === 'string' && description.length > 2000) {
+      return res.status(400).json({ error: 'Description is too long. Please keep it under 2000 characters.' });
+    }
 
     const updated = db.update(topics)
       .set({
