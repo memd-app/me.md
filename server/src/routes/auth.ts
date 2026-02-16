@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { db } from '../config/database.js';
+import { db, sqlite } from '../config/database.js';
 import { users, passwordResetTokens } from '../models/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
@@ -604,8 +604,80 @@ authRouter.delete('/account', authMiddleware, async (req, res) => {
     // Revoke all session tokens before deleting
     revokeUserTokens(userId);
 
-    // Delete the user (cascades to all related data)
-    db.delete(users).where(eq(users.id, userId)).run();
+    // Explicitly delete all user data from every table in correct order
+    // (leaf tables first, then parent tables, then user record)
+    // This provides defense-in-depth beyond ON DELETE CASCADE
+    const deleteAllUserData = sqlite.transaction(() => {
+      // 1. Delete verification_history (via insights → notes → user)
+      sqlite.prepare(`
+        DELETE FROM verification_history WHERE insight_id IN (
+          SELECT id FROM insights WHERE user_id = ?
+        )
+      `).run(userId);
+
+      // 2. Delete insight_conflicts (references user_id directly and insight_ids)
+      sqlite.prepare('DELETE FROM insight_conflicts WHERE user_id = ?').run(userId);
+
+      // 3. Delete concept_edges (via concept_nodes → user)
+      sqlite.prepare(`
+        DELETE FROM concept_edges WHERE source_node_id IN (
+          SELECT id FROM concept_nodes WHERE user_id = ?
+        ) OR target_node_id IN (
+          SELECT id FROM concept_nodes WHERE user_id = ?
+        )
+      `).run(userId, userId);
+
+      // 4. Delete concept_nodes
+      sqlite.prepare('DELETE FROM concept_nodes WHERE user_id = ?').run(userId);
+
+      // 5. Delete bookmarks
+      sqlite.prepare('DELETE FROM bookmarks WHERE user_id = ?').run(userId);
+
+      // 6. Delete messages (via sessions → user)
+      sqlite.prepare(`
+        DELETE FROM messages WHERE session_id IN (
+          SELECT id FROM sessions WHERE user_id = ?
+        )
+      `).run(userId);
+
+      // 7. Delete insights
+      sqlite.prepare('DELETE FROM insights WHERE user_id = ?').run(userId);
+
+      // 8. Delete notes
+      sqlite.prepare('DELETE FROM notes WHERE user_id = ?').run(userId);
+
+      // 9. Delete sessions
+      sqlite.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+
+      // 10. Delete topic_connections (via topics → user)
+      sqlite.prepare(`
+        DELETE FROM topic_connections WHERE source_topic_id IN (
+          SELECT id FROM topics WHERE user_id = ?
+        ) OR target_topic_id IN (
+          SELECT id FROM topics WHERE user_id = ?
+        )
+      `).run(userId, userId);
+
+      // 11. Delete topics
+      sqlite.prepare('DELETE FROM topics WHERE user_id = ?').run(userId);
+
+      // 12. Delete MCP access permissions
+      sqlite.prepare('DELETE FROM mcp_access_permissions WHERE user_id = ?').run(userId);
+
+      // 13. Delete imported files
+      sqlite.prepare('DELETE FROM imported_files WHERE user_id = ?').run(userId);
+
+      // 14. Delete password reset tokens
+      sqlite.prepare('DELETE FROM password_reset_tokens WHERE user_id = ?').run(userId);
+
+      // 15. Delete session tokens
+      sqlite.prepare('DELETE FROM session_tokens WHERE user_id = ?').run(userId);
+
+      // 16. Finally, delete the user record itself
+      sqlite.prepare('DELETE FROM users WHERE id = ?').run(userId);
+    });
+
+    deleteAllUserData();
 
     res.json({ message: 'Account deleted successfully' });
   } catch (error) {
