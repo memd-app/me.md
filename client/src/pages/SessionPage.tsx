@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatFullDate, formatDateTime, formatTime } from '@/utils/dateFormat';
@@ -65,6 +65,110 @@ const FORMAT_LABELS: Record<NoteFormat, string> = {
   json: 'JSON Data',
 };
 
+// Pure render function for message content (bold + newlines) - defined outside component for stability
+function renderMessageContent(content: string) {
+  const parts = content.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return (
+        <strong key={i} className="font-semibold">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    return part.split('\n').map((line, j, arr) => (
+      <span key={`${i}-${j}`}>
+        {line}
+        {j < arr.length - 1 && <br />}
+      </span>
+    ));
+  });
+}
+
+// Memoized message bubble component to prevent re-renders of all messages when new ones arrive
+const MessageBubble = memo(function MessageBubble({
+  message,
+  onToggleBookmark,
+}: {
+  message: Message;
+  onToggleBookmark: (message: Message) => void;
+}) {
+  return (
+    <div
+      className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+      role="article"
+      aria-label={`${message.role === 'user' ? 'Your' : 'AI Interviewer'} message`}
+    >
+      <div
+        className={`max-w-[80%] ${
+          message.role === 'user'
+            ? 'bg-primary-600 text-white rounded-2xl rounded-br-md px-4 py-3'
+            : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-2xl rounded-bl-md px-4 py-3'
+        }`}
+      >
+        {/* Role indicator */}
+        <div className={`text-xs font-medium mb-1 flex items-center gap-1 ${
+          message.role === 'user'
+            ? 'text-primary-200'
+            : 'text-gray-500 dark:text-gray-300'
+        }`}>
+          {message.role === 'user' ? 'You' : 'AI Interviewer'}
+          {message.isVoiceInput && (
+            <span className="inline-flex" aria-label="Voice input">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+              </svg>
+            </span>
+          )}
+        </div>
+
+        {/* Message content */}
+        <div className={`text-sm leading-relaxed ${
+          message.role === 'user' ? 'text-white' : ''
+        }`}>
+          {renderMessageContent(message.content)}
+        </div>
+
+        {/* Timestamp and bookmark */}
+        <div className={`flex items-center justify-between mt-2 ${
+          message.role === 'user'
+            ? 'text-primary-300'
+            : 'text-gray-500 dark:text-gray-300'
+        }`}>
+          <span className="text-xs">
+            {formatTime(message.createdAt)}
+          </span>
+          {/* Bookmark button - only show for real messages (not temp) */}
+          {!message.id.startsWith('temp-') && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleBookmark(message);
+              }}
+              className={`ml-2 p-0.5 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-1 ${
+                message.isBookmarked
+                  ? message.role === 'user'
+                    ? 'text-yellow-300 hover:text-yellow-200'
+                    : 'text-yellow-500 hover:text-yellow-600 dark:text-yellow-400 dark:hover:text-yellow-300'
+                  : message.role === 'user'
+                    ? 'text-primary-300 hover:text-yellow-300 opacity-60 hover:opacity-100'
+                    : 'text-gray-300 dark:text-gray-600 hover:text-yellow-500 dark:hover:text-yellow-400 opacity-60 hover:opacity-100'
+              }`}
+              title={message.isBookmarked ? 'Remove bookmark' : 'Bookmark this message'}
+              aria-label={message.isBookmarked ? 'Remove bookmark from this message' : 'Bookmark this message'}
+              aria-pressed={message.isBookmarked}
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill={message.isBookmarked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
 export default function SessionPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
@@ -102,6 +206,16 @@ export default function SessionPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isSendingRef = useRef(false); // Synchronous guard against double-send
+
+  // Prevent parent main area from scrolling - SessionPage handles its own scroll
+  useEffect(() => {
+    const mainEl = document.getElementById('main-content');
+    if (mainEl) {
+      const prev = mainEl.style.overflow;
+      mainEl.style.overflow = 'hidden';
+      return () => { mainEl.style.overflow = prev; };
+    }
+  }, []);
 
   // Scroll to bottom of messages
   const scrollToBottom = useCallback(() => {
@@ -937,7 +1051,7 @@ export default function SessionPage() {
   };
 
   // Toggle bookmark on a message
-  const toggleBookmark = async (message: Message) => {
+  const toggleBookmark = useCallback(async (message: Message) => {
     if (!user || !session) return;
 
     const isCurrentlyBookmarked = message.isBookmarked;
@@ -976,7 +1090,7 @@ export default function SessionPage() {
         m.id === message.id ? { ...m, isBookmarked: isCurrentlyBookmarked } : m
       ));
     }
-  };
+  }, [user, session]);
 
   // Handle quick reply click
   const handleQuickReply = (reply: string) => {
@@ -1052,28 +1166,6 @@ export default function SessionPage() {
         return <code key={i} className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-sm font-mono text-primary-600 dark:text-primary-400">{part.slice(1, -1)}</code>;
       }
       return <span key={i}>{part}</span>;
-    });
-  };
-
-  // Render markdown-like bold text (for chat messages)
-  const renderContent = (content: string) => {
-    // Split by **text** for bold
-    const parts = content.split(/(\*\*[^*]+\*\*)/g);
-    return parts.map((part, i) => {
-      if (part.startsWith('**') && part.endsWith('**')) {
-        return (
-          <strong key={i} className="font-semibold">
-            {part.slice(2, -2)}
-          </strong>
-        );
-      }
-      // Handle newlines
-      return part.split('\n').map((line, j, arr) => (
-        <span key={`${i}-${j}`}>
-          {line}
-          {j < arr.length - 1 && <br />}
-        </span>
-      ));
     });
   };
 
@@ -1726,79 +1818,11 @@ export default function SessionPage() {
       {/* Messages area */}
       <div className={`flex-1 overflow-y-auto px-3 sm:px-6 py-4 space-y-4 ${isFullscreen ? 'max-w-4xl mx-auto w-full' : ''}`} role="log" aria-label="Chat messages" aria-live="polite">
         {messages.map((message) => (
-          <div
+          <MessageBubble
             key={message.id}
-            className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            role="article"
-            aria-label={`${message.role === 'user' ? 'Your' : 'AI Interviewer'} message`}
-          >
-            <div
-              className={`max-w-[80%] ${
-                message.role === 'user'
-                  ? 'bg-primary-600 text-white rounded-2xl rounded-br-md px-4 py-3'
-                  : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-2xl rounded-bl-md px-4 py-3'
-              }`}
-            >
-              {/* Role indicator */}
-              <div className={`text-xs font-medium mb-1 flex items-center gap-1 ${
-                message.role === 'user'
-                  ? 'text-primary-200'
-                  : 'text-gray-500 dark:text-gray-300'
-              }`}>
-                {message.role === 'user' ? 'You' : 'AI Interviewer'}
-                {message.isVoiceInput && (
-                  <span className="inline-flex" aria-label="Voice input">
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                    </svg>
-                  </span>
-                )}
-              </div>
-
-              {/* Message content */}
-              <div className={`text-sm leading-relaxed ${
-                message.role === 'user' ? 'text-white' : ''
-              }`}>
-                {renderContent(message.content)}
-              </div>
-
-              {/* Timestamp and bookmark */}
-              <div className={`flex items-center justify-between mt-2 ${
-                message.role === 'user'
-                  ? 'text-primary-300'
-                  : 'text-gray-500 dark:text-gray-300'
-              }`}>
-                <span className="text-xs">
-                  {formatTime(message.createdAt)}
-                </span>
-                {/* Bookmark button - only show for real messages (not temp) */}
-                {!message.id.startsWith('temp-') && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleBookmark(message);
-                    }}
-                    className={`ml-2 p-0.5 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-1 ${
-                      message.isBookmarked
-                        ? message.role === 'user'
-                          ? 'text-yellow-300 hover:text-yellow-200'
-                          : 'text-yellow-500 hover:text-yellow-600 dark:text-yellow-400 dark:hover:text-yellow-300'
-                        : message.role === 'user'
-                          ? 'text-primary-300 hover:text-yellow-300 opacity-60 hover:opacity-100'
-                          : 'text-gray-300 dark:text-gray-600 hover:text-yellow-500 dark:hover:text-yellow-400 opacity-60 hover:opacity-100'
-                    }`}
-                    title={message.isBookmarked ? 'Remove bookmark' : 'Bookmark this message'}
-                    aria-label={message.isBookmarked ? 'Remove bookmark from this message' : 'Bookmark this message'}
-                    aria-pressed={message.isBookmarked}
-                  >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill={message.isBookmarked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
+            message={message}
+            onToggleBookmark={toggleBookmark}
+          />
         ))}
 
         {/* Streaming AI response bubble */}
@@ -1809,7 +1833,7 @@ export default function SessionPage() {
                 AI Interviewer
               </div>
               <div className="text-sm leading-relaxed">
-                {renderContent(streamingContent)}
+                {renderMessageContent(streamingContent)}
                 <span className="inline-block w-1.5 h-4 bg-primary-500 dark:bg-primary-400 animate-pulse ml-0.5 align-text-bottom rounded-sm" />
               </div>
             </div>
