@@ -618,3 +618,52 @@ insightsRouter.put('/:id', async (req, res) => {
     res.status(500).json({ error: 'Failed to update insight' });
   }
 });
+
+// DELETE /api/insights/:id - Delete an insight and its related data
+insightsRouter.delete('/:id', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const insightId = req.params.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const insight = db.select().from(insights).where(
+      and(eq(insights.id, insightId), eq(insights.userId, userId))
+    ).get();
+
+    if (!insight) {
+      return res.status(404).json({ error: 'Insight not found' });
+    }
+
+    // Delete verification history for this insight
+    db.delete(verificationHistory).where(eq(verificationHistory.insightId, insightId)).run();
+
+    // Delete concept edges referencing concept nodes for this insight
+    const linkedConceptNodes = db.select().from(conceptNodes)
+      .where(eq(conceptNodes.insightId, insightId))
+      .all();
+
+    if (linkedConceptNodes.length > 0) {
+      for (const node of linkedConceptNodes) {
+        db.delete(conceptEdges).where(
+          or(
+            eq(conceptEdges.sourceNodeId, node.id),
+            eq(conceptEdges.targetNodeId, node.id)
+          )
+        ).run();
+      }
+      // Delete concept nodes
+      db.delete(conceptNodes).where(eq(conceptNodes.insightId, insightId)).run();
+    }
+
+    // Delete the insight itself
+    db.delete(insights).where(eq(insights.id, insightId)).run();
+
+    res.json({ message: 'Insight deleted successfully', id: insightId });
+  } catch (error) {
+    console.error('Delete insight error:', error);
+    res.status(500).json({ error: 'Failed to delete insight' });
+  }
+});

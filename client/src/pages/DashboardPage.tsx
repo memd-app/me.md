@@ -14,6 +14,16 @@ interface CategoryCompleteness {
   completeness: number;
 }
 
+interface TopicInsightBreakdown {
+  topicId: string;
+  topicTitle: string;
+  category: string;
+  totalInsights: number;
+  verified: number;
+  rejected: number;
+  unverified: number;
+}
+
 interface DashboardStats {
   topics: number;
   topicsExplored: number;
@@ -25,6 +35,7 @@ interface DashboardStats {
   verificationRate: number;
   notes: number;
   categoryCompleteness: CategoryCompleteness[];
+  topicInsightBreakdown: TopicInsightBreakdown[];
 }
 
 interface ActivityItem {
@@ -391,6 +402,106 @@ export default function DashboardPage() {
             </p>
             <Link to="/app/topics" className="text-indigo-600 dark:text-indigo-300 text-sm hover:underline mt-2 inline-block min-h-[44px] flex items-center justify-center">
               Browse Topics
+            </Link>
+          </div>
+        )}
+      </div>
+
+      {/* Insights per Topic Breakdown */}
+      <div className="card mb-6 sm:mb-8 p-4 sm:p-6">
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-2 sm:mb-4">
+          Insights per Topic
+        </h2>
+        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-300 mb-4 sm:mb-6">
+          Breakdown of insights across your topics
+        </p>
+        {isLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-10 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
+            ))}
+          </div>
+        ) : stats?.topicInsightBreakdown && stats.topicInsightBreakdown.length > 0 ? (
+          <div className="space-y-3">
+            {stats.topicInsightBreakdown.map((topic) => {
+              const maxInsights = Math.max(...stats.topicInsightBreakdown.map(t => t.totalInsights), 1);
+              const barWidth = Math.round((topic.totalInsights / maxInsights) * 100);
+              const categoryIcon = CATEGORY_ICONS[topic.category] || '📂';
+              return (
+                <div key={topic.topicId} className="group">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className="text-sm flex-shrink-0">{categoryIcon}</span>
+                      <Link
+                        to={`/app/topics/${topic.topicId}`}
+                        className="text-sm font-medium text-gray-900 dark:text-white truncate hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                        title={topic.topicTitle}
+                      >
+                        {topic.topicTitle}
+                      </Link>
+                    </div>
+                    <div className="flex items-center gap-2 sm:gap-3 text-xs text-gray-500 dark:text-gray-300 flex-shrink-0 ml-2">
+                      <span className="font-semibold text-gray-700 dark:text-gray-200">{topic.totalInsights}</span>
+                      {topic.verified > 0 && (
+                        <span className="text-emerald-600 dark:text-emerald-400" title="Verified">{topic.verified} verified</span>
+                      )}
+                      {topic.unverified > 0 && (
+                        <span className="text-amber-600 dark:text-amber-400 hidden sm:inline" title="Pending">{topic.unverified} pending</span>
+                      )}
+                      {topic.rejected > 0 && (
+                        <span className="text-red-600 dark:text-red-400 hidden sm:inline" title="Rejected">{topic.rejected} rejected</span>
+                      )}
+                    </div>
+                  </div>
+                  {/* Stacked bar showing verified/unverified/rejected proportions */}
+                  <div className="w-full h-2 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                    <div className="h-full flex" style={{ width: `${barWidth}%`, minWidth: barWidth > 0 ? '8px' : '0px' }}>
+                      {topic.verified > 0 && (
+                        <div
+                          className="h-full bg-emerald-500 transition-all duration-500"
+                          style={{ width: `${(topic.verified / topic.totalInsights) * 100}%` }}
+                        />
+                      )}
+                      {topic.unverified > 0 && (
+                        <div
+                          className="h-full bg-amber-400 transition-all duration-500"
+                          style={{ width: `${(topic.unverified / topic.totalInsights) * 100}%` }}
+                        />
+                      )}
+                      {topic.rejected > 0 && (
+                        <div
+                          className="h-full bg-red-400 transition-all duration-500"
+                          style={{ width: `${(topic.rejected / topic.totalInsights) * 100}%` }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {/* Legend */}
+            <div className="flex items-center gap-4 pt-2 text-xs text-gray-500 dark:text-gray-400">
+              <div className="flex items-center gap-1">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                <span>Verified</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+                <span>Pending</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-2.5 h-2.5 rounded-full bg-red-400" />
+                <span>Rejected</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-6">
+            <p className="text-gray-500 dark:text-gray-300 text-sm">
+              No insights yet. Start an interview session to generate insights from your topics.
+            </p>
+            <Link to="/app/session/new" className="text-indigo-600 dark:text-indigo-300 text-sm hover:underline mt-2 inline-block min-h-[44px] flex items-center justify-center">
+              Start Interview
             </Link>
           </div>
         )}

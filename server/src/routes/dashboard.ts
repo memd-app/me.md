@@ -69,6 +69,24 @@ dashboardRouter.get('/stats', async (req, res) => {
       };
     });
 
+    // Insights per topic breakdown
+    const topicInsightBreakdown = userTopics.map(topic => {
+      const topicInsightsList = userInsights.filter(i => i.topicId === topic.id);
+      const verified = topicInsightsList.filter(i => i.verificationStatus === 'verified').length;
+      const rejected = topicInsightsList.filter(i => i.verificationStatus === 'rejected').length;
+      const unverified = topicInsightsList.filter(i => i.verificationStatus === 'unverified' || i.verificationStatus === 're_verification_pending').length;
+      return {
+        topicId: topic.id,
+        topicTitle: topic.title,
+        category: topic.presetCategory || 'uncategorized',
+        totalInsights: topicInsightsList.length,
+        verified,
+        rejected,
+        unverified,
+      };
+    }).filter(t => t.totalInsights > 0) // Only include topics that have insights
+      .sort((a, b) => b.totalInsights - a.totalInsights); // Sort by most insights first
+
     res.json({
       topics: topicCount,
       topicsExplored,
@@ -80,6 +98,7 @@ dashboardRouter.get('/stats', async (req, res) => {
       verificationRate,
       notes: userNotes.length,
       categoryCompleteness,
+      topicInsightBreakdown,
     });
   } catch (error) {
     console.error('Dashboard stats error:', error);
