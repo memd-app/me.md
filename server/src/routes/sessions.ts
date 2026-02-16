@@ -3,6 +3,8 @@ import { db } from '../config/database.js';
 import { sessions, messages, topics, conceptNodes, topicConnections, insights, users, notes, bookmarks } from '../models/schema.js';
 import { eq, and, desc, ne, or } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
+import { generateClaudeResponse, streamClaudeResponse, checkUserAIRateLimit, isAIAvailable } from '../services/ai.js';
+import type { ProfileContext as AIProfileContext, InterviewMap as AIInterviewMap, AIResponseOptions } from '../services/ai.js';
 
 export const sessionsRouter = Router();
 
@@ -378,11 +380,35 @@ sessionsRouter.post('/:id/messages', async (req, res) => {
     let quickRepliesArr: string[];
     let shouldSuggestCompletion: boolean;
 
+    // Check per-user AI rate limit
+    const rateLimitCheck = checkUserAIRateLimit(userId);
+
     if (session.isMiniSession) {
-      // Mini session: use focused quick-win questions
-      const miniResponse = generateMiniSessionAIResponse(userMessageCount, content, historyForAI);
-      aiResponseContent = miniResponse.content;
-      quickRepliesArr = miniResponse.quickReplies;
+      // Mini session: try Claude API first, fall back to template
+      let claudeResponse: string | null = null;
+
+      if (rateLimitCheck.allowed) {
+        try {
+          claudeResponse = await generateClaudeResponse({
+            topicTitle: topic?.title || 'Quick Win: Getting to Know You',
+            topicDescription: topic?.description || '',
+            topicIntent: topic?.intent || 'explore',
+            conversationHistory: historyForAI,
+            hasResearchContext: false,
+            isMiniSession: true,
+          });
+        } catch (_) { /* fall back to template */ }
+      }
+
+      if (claudeResponse) {
+        aiResponseContent = claudeResponse;
+        quickRepliesArr = generateQuickReplies(userMessageCount, aiResponseContent, historyForAI);
+      } else {
+        // Fallback: use template-based mini session response
+        const miniResponse = generateMiniSessionAIResponse(userMessageCount, content, historyForAI);
+        aiResponseContent = miniResponse.content;
+        quickRepliesArr = miniResponse.quickReplies;
+      }
 
       // Mini sessions suggest completion after 5 messages, wrap up after 7
       shouldSuggestCompletion = userMessageCount >= 5;
@@ -399,16 +425,38 @@ sessionsRouter.post('/:id/messages', async (req, res) => {
         ? JSON.parse(session.interviewMap as string)
         : null;
 
-      // Standard session: use methodology-based questioning with profile context
-      aiResponseContent = generateAIResponse(
-        topic?.title || 'Unknown Topic',
-        topic?.description || '',
-        topic?.intent || '',
-        historyForAI,
-        hasResearchContext,
-        msgProfileContext,
-        sessionInterviewMap
-      );
+      // Try Claude API first, fall back to template-based response
+      let claudeResponse: string | null = null;
+
+      if (rateLimitCheck.allowed) {
+        try {
+          claudeResponse = await generateClaudeResponse({
+            topicTitle: topic?.title || 'Unknown Topic',
+            topicDescription: topic?.description || '',
+            topicIntent: topic?.intent || '',
+            conversationHistory: historyForAI,
+            hasResearchContext,
+            profileContext: msgProfileContext,
+            interviewMap: sessionInterviewMap,
+          });
+        } catch (_) { /* fall back to template */ }
+      }
+
+      if (claudeResponse) {
+        aiResponseContent = claudeResponse;
+      } else {
+        // Fallback: use template-based methodology questioning
+        aiResponseContent = generateAIResponse(
+          topic?.title || 'Unknown Topic',
+          topic?.description || '',
+          topic?.intent || '',
+          historyForAI,
+          hasResearchContext,
+          msgProfileContext,
+          sessionInterviewMap
+        );
+      }
+
       quickRepliesArr = generateQuickReplies(userMessageCount, aiResponseContent, historyForAI);
 
       // AI suggests completion after 10+ user message exchanges (thorough conversation)
@@ -500,15 +548,36 @@ sessionsRouter.post('/:id/messages/retry', async (req, res) => {
       ? JSON.parse(session.interviewMap as string)
       : null;
 
-    const aiResponseContent = generateAIResponse(
-      topic?.title || 'Unknown Topic',
-      topic?.description || '',
-      topic?.intent || '',
-      historyForAI,
-      hasResearchContext,
-      retryProfileContext,
-      retryInterviewMap
-    );
+    // Try Claude API first, fall back to template
+    const retryRateCheck = checkUserAIRateLimit(userId);
+    let aiResponseContent: string | null = null;
+
+    if (retryRateCheck.allowed) {
+      try {
+        aiResponseContent = await generateClaudeResponse({
+          topicTitle: topic?.title || 'Unknown Topic',
+          topicDescription: topic?.description || '',
+          topicIntent: topic?.intent || '',
+          conversationHistory: historyForAI,
+          hasResearchContext,
+          profileContext: retryProfileContext,
+          interviewMap: retryInterviewMap,
+        });
+      } catch (_) { /* fall back to template */ }
+    }
+
+    if (!aiResponseContent) {
+      // Fallback: use template-based methodology questioning
+      aiResponseContent = generateAIResponse(
+        topic?.title || 'Unknown Topic',
+        topic?.description || '',
+        topic?.intent || '',
+        historyForAI,
+        hasResearchContext,
+        retryProfileContext,
+        retryInterviewMap
+      );
+    }
 
     // Generate context-aware quick replies
     const userMessageCount = conversationHistory.filter(m => m.role === 'user').length;
@@ -616,116 +685,224 @@ sessionsRouter.post('/:id/messages/stream', async (req, res) => {
     let aiResponseContent: string;
     let quickRepliesArr: string[];
     let shouldSuggestCompletion: boolean;
+    let useRealStreaming = false;
 
-    if (session.isMiniSession) {
-      // Mini session: use focused quick-win questions
-      const miniResponse = generateMiniSessionAIResponse(userMessageCount, content, historyForAI);
-      aiResponseContent = miniResponse.content;
-      quickRepliesArr = miniResponse.quickReplies;
+    // Check per-user AI rate limit
+    const streamRateCheck = checkUserAIRateLimit(userId);
 
-      // Mini sessions suggest completion after 5 messages, wrap up after 7
-      shouldSuggestCompletion = userMessageCount >= 5;
+    // Determine if we can use real Claude streaming
+    const streamAIOptions: AIResponseOptions = {
+      topicTitle: topic?.title || 'Unknown Topic',
+      topicDescription: topic?.description || '',
+      topicIntent: topic?.intent || '',
+      conversationHistory: historyForAI,
+      hasResearchContext,
+      isMiniSession: !!session.isMiniSession,
+    };
 
-      if (userMessageCount >= 7) {
-        aiResponseContent += '\n\n---\n\n*Great work! We\'ve gathered enough for your **starter profile**. Click **Finish & Distill** to generate your initial insights and knowledge graph.*';
-      }
-    } else {
+    if (!session.isMiniSession) {
       // Gather profile context for personalized streaming responses
       const streamProfileContext = gatherProfileContext(userId, session.topicId);
-
-      // Parse the interview map from session (default map when no research provided)
       const streamInterviewMap: InterviewMap | null = session.interviewMap
         ? JSON.parse(session.interviewMap as string)
         : null;
-
-      // Standard session: use methodology-based questioning with profile context
-      aiResponseContent = generateAIResponse(
-        topic?.title || 'Unknown Topic',
-        topic?.description || '',
-        topic?.intent || '',
-        historyForAI,
-        hasResearchContext,
-        streamProfileContext,
-        streamInterviewMap
-      );
-      quickRepliesArr = generateQuickReplies(userMessageCount, aiResponseContent, historyForAI);
-
-      // AI suggests completion after 10+ user message exchanges (thorough conversation)
-      shouldSuggestCompletion = userMessageCount >= 10;
+      streamAIOptions.profileContext = streamProfileContext;
+      streamAIOptions.interviewMap = streamInterviewMap;
     }
 
-    const finalContent = (!session.isMiniSession && shouldSuggestCompletion)
-      ? aiResponseContent + '\n\n---\n\n*We\'ve explored many angles together. Feel free to **continue exploring** if there\'s more to uncover, or **finish and distill** to capture your insights.*'
-      : aiResponseContent;
-
-    // Save the complete AI message to database immediately
-    const aiMessageId = uuidv4();
-    const aiMessage = db.insert(messages).values({
-      id: aiMessageId,
-      sessionId,
-      role: 'assistant',
-      content: finalContent,
-      quickReplies: JSON.stringify(quickRepliesArr),
-      suggestsCompletion: shouldSuggestCompletion,
-      isBookmarked: false,
-      isVoiceInput: false,
-    }).returning().get();
-
-    // Update session timestamp
-    db.update(sessions).set({
-      updatedAt: new Date().toISOString(),
-    }).where(eq(sessions.id, sessionId)).run();
-
-    // Set up SSE headers
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-    res.flushHeaders();
-
-    // Send the saved user message first
-    res.write(`data: ${JSON.stringify({ type: 'user_message', message: userMessage })}\n\n`);
-
-    // Stream the AI response in chunks for real-time feel
-    // We use a simple synchronous write loop with sleep for timing
-    const chunks = splitIntoStreamChunks(finalContent);
-
-    // Helper: sleep using a sync approach that works in Express
-    const sleep = (ms: number): Promise<void> => new Promise(resolve => { setTimeout(resolve, ms); });
-
-    // Initial thinking delay
-    await sleep(150);
-
-    // Stream each chunk with a small delay between them
-    for (let i = 0; i < chunks.length; i++) {
-      if (res.writableEnded) break;
-      const wrote = res.write(`data: ${JSON.stringify({ type: 'ai_chunk', chunk: chunks[i], chunkIndex: i })}\n\n`);
-      if (!wrote) {
-        // Back-pressure: wait for drain
-        await new Promise<void>(resolve => { res.once('drain', resolve); });
-      }
-      // Small delay between chunks for streaming effect (25-60ms)
-      if (i < chunks.length - 1) {
-        await sleep(25 + Math.floor(Math.random() * 35));
-      }
+    // Check if real streaming is available
+    if (streamRateCheck.allowed && isAIAvailable()) {
+      useRealStreaming = true;
     }
 
-    // Send the complete message with metadata at the end
-    clearTimeout(requestTimeout);
-    if (!res.writableEnded) {
-      res.write(`data: ${JSON.stringify({ type: 'ai_complete', message: aiMessage })}\n\n`);
-      res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
-      res.end();
+    if (!useRealStreaming) {
+      // Fallback: generate response with templates, then simulate streaming
+      if (session.isMiniSession) {
+        const miniResponse = generateMiniSessionAIResponse(userMessageCount, content, historyForAI);
+        aiResponseContent = miniResponse.content;
+        quickRepliesArr = miniResponse.quickReplies;
+        shouldSuggestCompletion = userMessageCount >= 5;
+        if (userMessageCount >= 7) {
+          aiResponseContent += '\n\n---\n\n*Great work! We\'ve gathered enough for your **starter profile**. Click **Finish & Distill** to generate your initial insights and knowledge graph.*';
+        }
+      } else {
+        const streamProfileContext = streamAIOptions.profileContext as ProfileContext;
+        const streamInterviewMap = streamAIOptions.interviewMap as InterviewMap | null;
+        aiResponseContent = generateAIResponse(
+          topic?.title || 'Unknown Topic',
+          topic?.description || '',
+          topic?.intent || '',
+          historyForAI,
+          hasResearchContext,
+          streamProfileContext,
+          streamInterviewMap
+        );
+        quickRepliesArr = generateQuickReplies(userMessageCount, aiResponseContent, historyForAI);
+        shouldSuggestCompletion = userMessageCount >= 10;
+      }
+
+      const finalContent = (!session.isMiniSession && shouldSuggestCompletion)
+        ? aiResponseContent + '\n\n---\n\n*We\'ve explored many angles together. Feel free to **continue exploring** if there\'s more to uncover, or **finish and distill** to capture your insights.*'
+        : aiResponseContent;
+
+      // Save the complete AI message to database immediately
+      const aiMessageId = uuidv4();
+      const aiMessage = db.insert(messages).values({
+        id: aiMessageId,
+        sessionId,
+        role: 'assistant',
+        content: finalContent,
+        quickReplies: JSON.stringify(quickRepliesArr),
+        suggestsCompletion: shouldSuggestCompletion,
+        isBookmarked: false,
+        isVoiceInput: false,
+      }).returning().get();
+
+      db.update(sessions).set({
+        updatedAt: new Date().toISOString(),
+      }).where(eq(sessions.id, sessionId)).run();
+
+      // Set up SSE headers and simulate streaming with template response
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders();
+
+      // Send the saved user message first
+      res.write(`data: ${JSON.stringify({ type: 'user_message', message: userMessage })}\n\n`);
+
+      // Stream the AI response in chunks for real-time feel (simulated streaming)
+      const chunks = splitIntoStreamChunks(finalContent);
+      const sleep = (ms: number): Promise<void> => new Promise(resolve => { setTimeout(resolve, ms); });
+      await sleep(150);
+
+      for (let i = 0; i < chunks.length; i++) {
+        if (res.writableEnded) break;
+        const wrote = res.write(`data: ${JSON.stringify({ type: 'ai_chunk', chunk: chunks[i], chunkIndex: i })}\n\n`);
+        if (!wrote) {
+          await new Promise<void>(resolve => { res.once('drain', resolve); });
+        }
+        if (i < chunks.length - 1) {
+          await sleep(25 + Math.floor(Math.random() * 35));
+        }
+      }
+
+      clearTimeout(requestTimeout);
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ type: 'ai_complete', message: aiMessage })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+        res.end();
+      }
+    } else {
+      // ===== REAL CLAUDE STREAMING =====
+      // Set up SSE headers for real AI streaming
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders();
+
+      // Send the saved user message first
+      res.write(`data: ${JSON.stringify({ type: 'user_message', message: userMessage })}\n\n`);
+
+      let fullStreamedText = '';
+      let chunkIndex = 0;
+      let streamFailed = false;
+
+      try {
+        const streamGen = streamClaudeResponse(streamAIOptions);
+        for await (const chunk of streamGen) {
+          if (res.writableEnded) break;
+          fullStreamedText += chunk;
+          const wrote = res.write(`data: ${JSON.stringify({ type: 'ai_chunk', chunk, chunkIndex: chunkIndex++ })}\n\n`);
+          if (!wrote) {
+            await new Promise<void>(resolve => { res.once('drain', resolve); });
+          }
+        }
+      } catch (streamError) {
+        console.error('[me.md:ai] Stream failed, falling back to template:', streamError);
+        streamFailed = true;
+      }
+
+      // If streaming failed or returned empty, fall back to template
+      if (streamFailed || !fullStreamedText || fullStreamedText.trim().length === 0) {
+        if (session.isMiniSession) {
+          const miniResponse = generateMiniSessionAIResponse(userMessageCount, content, historyForAI);
+          fullStreamedText = miniResponse.content;
+        } else {
+          const fbProfileContext = streamAIOptions.profileContext as ProfileContext;
+          const fbInterviewMap = streamAIOptions.interviewMap as InterviewMap | null;
+          fullStreamedText = generateAIResponse(
+            topic?.title || 'Unknown Topic',
+            topic?.description || '',
+            topic?.intent || '',
+            historyForAI,
+            hasResearchContext,
+            fbProfileContext,
+            fbInterviewMap
+          );
+        }
+        // Send the fallback as a single chunk
+        if (!res.writableEnded) {
+          res.write(`data: ${JSON.stringify({ type: 'ai_chunk', chunk: fullStreamedText, chunkIndex: 0 })}\n\n`);
+        }
+      }
+
+      // Determine completion suggestion
+      if (session.isMiniSession) {
+        shouldSuggestCompletion = userMessageCount >= 5;
+        if (userMessageCount >= 7) {
+          const wrapUp = '\n\n---\n\n*Great work! We\'ve gathered enough for your **starter profile**. Click **Finish & Distill** to generate your initial insights and knowledge graph.*';
+          fullStreamedText += wrapUp;
+          if (!res.writableEnded) {
+            res.write(`data: ${JSON.stringify({ type: 'ai_chunk', chunk: wrapUp, chunkIndex: chunkIndex++ })}\n\n`);
+          }
+        }
+      } else {
+        shouldSuggestCompletion = userMessageCount >= 10;
+        if (shouldSuggestCompletion) {
+          const completionNote = '\n\n---\n\n*We\'ve explored many angles together. Feel free to **continue exploring** if there\'s more to uncover, or **finish and distill** to capture your insights.*';
+          fullStreamedText += completionNote;
+          if (!res.writableEnded) {
+            res.write(`data: ${JSON.stringify({ type: 'ai_chunk', chunk: completionNote, chunkIndex: chunkIndex++ })}\n\n`);
+          }
+        }
+      }
+
+      quickRepliesArr = generateQuickReplies(userMessageCount, fullStreamedText, historyForAI);
+
+      // Save the complete AI message to database
+      const aiMessageId = uuidv4();
+      const aiMessage = db.insert(messages).values({
+        id: aiMessageId,
+        sessionId,
+        role: 'assistant',
+        content: fullStreamedText,
+        quickReplies: JSON.stringify(quickRepliesArr),
+        suggestsCompletion: shouldSuggestCompletion,
+        isBookmarked: false,
+        isVoiceInput: false,
+      }).returning().get();
+
+      db.update(sessions).set({
+        updatedAt: new Date().toISOString(),
+      }).where(eq(sessions.id, sessionId)).run();
+
+      clearTimeout(requestTimeout);
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ type: 'ai_complete', message: aiMessage })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+        res.end();
+      }
     }
 
   } catch (error) {
     clearTimeout(requestTimeout);
     console.error('Stream message error:', error);
-    // If headers haven't been sent yet, send JSON error
     if (!res.headersSent) {
       res.status(500).json({ error: 'Failed to send message. Please try again.' });
     } else {
-      // If already streaming, send error event
       if (!res.writableEnded) {
         res.write(`data: ${JSON.stringify({ type: 'error', error: 'Failed to generate response' })}\n\n`);
         res.end();
