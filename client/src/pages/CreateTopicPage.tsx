@@ -258,9 +258,12 @@ export default function CreateTopicPage() {
 
           {/* Intent */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Intent
             </label>
+            <p className="text-xs text-gray-500 dark:text-gray-300 mb-2">
+              Select what you want to achieve with this topic (optional)
+            </p>
             <div className="grid grid-cols-2 gap-3">
               {INTENT_OPTIONS.map((option) => (
                 <button
