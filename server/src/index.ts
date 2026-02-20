@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { db } from './config/database.js';
 import { healthRouter } from './routes/health.js';
 import { authRouter } from './routes/auth.js';
@@ -25,7 +27,11 @@ import { assessmentRouter } from './routes/assessment.js';
 import { authMiddleware, cleanupExpiredTokens } from './middleware/auth.js';
 import { apiRateLimiter, authRateLimiter } from './middleware/rateLimit.js';
 
-dotenv.config();
+// Resolve .env path relative to this file (server/src/index.ts -> server/.env)
+// This ensures env vars are loaded regardless of the working directory
+const __indexFilename = fileURLToPath(import.meta.url);
+const __indexDirname = path.dirname(__indexFilename);
+dotenv.config({ path: path.resolve(__indexDirname, '..', '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
