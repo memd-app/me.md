@@ -3,9 +3,21 @@ import { db, sqlite } from '../config/database.js';
 import { users } from '../models/schema.js';
 import { eq } from 'drizzle-orm';
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-// Secret key for HMAC token signing. In production, use a persistent env var.
+// Ensure .env is loaded before reading TOKEN_SECRET
+// (this module may be imported before dotenv.config() runs in index.ts)
+const __authFilename = fileURLToPath(import.meta.url);
+const __authDirname = path.dirname(__authFilename);
+dotenv.config({ path: path.resolve(__authDirname, '..', '..', '.env') });
+
+// Secret key for HMAC token signing. Must be persistent across restarts.
 const TOKEN_SECRET = process.env.TOKEN_SECRET || randomBytes(32).toString('hex');
+if (!process.env.TOKEN_SECRET) {
+  console.warn('[me.md:auth] WARNING: TOKEN_SECRET not set in .env - using random secret. Sessions will NOT persist across restarts.');
+}
 
 // Token expiration: 7 days in milliseconds
 const TOKEN_EXPIRATION_MS = 7 * 24 * 60 * 60 * 1000;

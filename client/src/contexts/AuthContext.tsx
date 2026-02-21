@@ -363,19 +363,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const idToken = await firebaseUser.getIdToken();
 
       // Send the token to our backend to create/find the user
-      const res = await fetch(`${API_BASE}/auth/google`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          idToken,
-          email: firebaseUser.email,
-          name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-          firebaseUid: firebaseUser.uid,
-        }),
-      });
+      let res: Response;
+      try {
+        res = await fetch(`${API_BASE}/auth/google`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            idToken,
+            email: firebaseUser.email,
+            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+            firebaseUid: firebaseUser.uid,
+          }),
+        });
+      } catch {
+        throw new Error('Unable to connect to the server. Please check your internet connection and try again.');
+      }
 
       if (!res.ok) {
-        const data = await res.json();
+        let data: { error?: string };
+        try {
+          data = await res.json();
+        } catch {
+          throw new Error('Something went wrong. Please try again later.');
+        }
         throw new Error(data.error || 'Google sign-in failed');
       }
 
