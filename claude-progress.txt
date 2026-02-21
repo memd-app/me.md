@@ -1,3 +1,30 @@
+## Session - 2026-02-21 (Agent handling Feature #239)
+
+### Accomplished
+- Feature #239 (Fix Login Failure - Server Connectivity and Token Secret Persistence): PASSING
+
+### Root Cause Found & Fixed
+- **TOKEN_SECRET not loading from .env**: The auth.ts module was imported (line 27 of index.ts) BEFORE dotenv.config() ran (line 34 of index.ts). Since TOKEN_SECRET was a module-level constant reading process.env.TOKEN_SECRET, it was always undefined at import time, causing a random secret to be generated on every server start.
+- **Fix**: Added dotenv.config() directly in auth.ts to ensure .env is loaded before TOKEN_SECRET is read, regardless of import order.
+- **Added warning**: Console warning now printed if TOKEN_SECRET is not set in .env, alerting developers to the issue.
+- **Google login error handling**: Wrapped the fetch call to /api/auth/google in loginWithGoogle with a nested try-catch (matching the pattern in the email/password login function), converting network errors to "Unable to connect to the server" and non-JSON responses to "Something went wrong".
+
+### Changes Made
+- **server/src/middleware/auth.ts**: Import dotenv/path/fileURLToPath, call dotenv.config() before TOKEN_SECRET constant, add warning when TOKEN_SECRET not in env
+- **client/src/contexts/AuthContext.tsx**: Add nested try-catch around fetch in loginWithGoogle for network errors, add try-catch around res.json() for non-JSON error responses
+- **server/.env**: Added TOKEN_SECRET=<persistent hex string> (not committed - in .gitignore)
+
+### Verification
+- Registered test user, obtained token, restarted server, verified token still valid after restart
+- TypeScript compiles with zero errors (client)
+- Server starts cleanly with no warnings about TOKEN_SECRET
+- No mock data patterns found in client/src or server/src
+- Test data cleaned up after verification
+
+### Current Status
+- 239/239 features passing (100.0%)
+- Feature #239 marked as passing
+
 ## Session - 2026-02-20 (Agent handling Feature #238)
 
 ### Accomplished
