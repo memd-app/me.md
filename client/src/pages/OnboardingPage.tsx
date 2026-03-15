@@ -3,9 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
-// Topic and import service functions available for future migration from fetch calls
-// import { getPresetTopics, selectPresetTopics } from '@/services/topics';
-// import { importUrls, importText, importFile } from '@/services/import';
+import { getPresetTopics, selectPresetTopics } from '@/services/topics';
+import { importUrls, importText, importFile } from '@/services/import';
 
 type OnboardingStep = 'welcome' | 'profile' | 'context' | 'topics';
 type ImportTab = 'url' | 'text' | 'file';
@@ -70,8 +69,8 @@ const CATEGORY_INFO: Record<string, { label: string; icon: string; color: string
 };
 
 export default function OnboardingPage() {
-  const { user, updateUser } = useUser();
-  useDatabase(); // ensure DB is initialized
+  const { user, updateUser, createUser } = useUser();
+  const db = useDatabase();
   const navigate = useNavigate();
 
   const [currentStep, setCurrentStepRaw] = useState<OnboardingStep>('welcome');
@@ -156,19 +155,7 @@ export default function OnboardingPage() {
     setIsLoadingPresets(true);
     setPresetError('');
     try {
-      const userId = user?.id;
-      if (!userId) return;
-
-      const res = await fetch('/api/topics/presets', {
-        headers: { 'x-user-id': userId },
-        signal,
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to load preset topics');
-      }
-
-      const data = await res.json();
+      const data = getPresetTopics(db);
       if (!signal?.aborted) {
         setPresetTopics(data.presets || []);
 
@@ -215,24 +202,7 @@ export default function OnboardingPage() {
     setPresetError('');
 
     try {
-      const userId = user?.id;
-      if (!userId) return;
-
-      const res = await fetch('/api/topics/presets/select', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': userId,
-        },
-        body: JSON.stringify({
-          selectedTopics: Array.from(selectedTopicTitles),
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to save topics');
-      }
+      selectPresetTopics(db, Array.from(selectedTopicTitles));
 
       // Complete onboarding after saving topics
       await handleCompleteOnboarding();
@@ -306,31 +276,18 @@ export default function OnboardingPage() {
     setIsSubmitting(true);
 
     try {
-      const userId = user?.id;
-      if (!userId) {
-        setServerError('Not authenticated. Please log in again.');
-        return;
-      }
+      const profileData = {
+        name: profileFields.name.trim(),
+        dateOfBirth: profileFields.dateOfBirth.trim(),
+        location: profileFields.location.trim(),
+        occupation: profileFields.occupation.trim(),
+        gender: profileFields.gender.trim(),
+      };
 
-      // Save profile fields
-      const profileRes = await fetch('/api/users/onboarding', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': userId,
-        },
-        body: JSON.stringify({
-          name: profileFields.name.trim(),
-          dateOfBirth: profileFields.dateOfBirth.trim(),
-          location: profileFields.location.trim(),
-          occupation: profileFields.occupation.trim(),
-          gender: profileFields.gender.trim(),
-        }),
-      });
-
-      if (!profileRes.ok) {
-        const data = await profileRes.json();
-        throw new Error(data.error || 'Failed to save profile');
+      if (user) {
+        updateUser(profileData);
+      } else {
+        createUser(profileData);
       }
 
       // Move to context import step
@@ -374,27 +331,7 @@ export default function OnboardingPage() {
     setIsProcessingUrl(true);
 
     try {
-      const userId = user?.id;
-      if (!userId) {
-        setUrlError('Not authenticated');
-        return;
-      }
-
-      const res = await fetch('/api/import/urls', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': userId,
-        },
-        body: JSON.stringify({ urls: [trimmedUrl] }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to process URL');
-      }
-
-      const data = await res.json();
+      const data = await importUrls(db, [trimmedUrl]);
 
       if (data.results && data.results.length > 0) {
         setImportResults((prev) => [
@@ -432,30 +369,7 @@ export default function OnboardingPage() {
     setIsProcessingText(true);
 
     try {
-      const userId = user?.id;
-      if (!userId) {
-        setPasteError('Not authenticated');
-        return;
-      }
-
-      const res = await fetch('/api/import/text', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': userId,
-        },
-        body: JSON.stringify({
-          text: trimmedText,
-          title: pasteTitle.trim() || undefined,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to import text');
-      }
-
-      const data = await res.json();
+      const data = importText(db, trimmedText, pasteTitle.trim() || undefined);
 
       setImportResults((prev) => [
         ...prev,
@@ -485,35 +399,13 @@ export default function OnboardingPage() {
     setIsUploadingFile(true);
 
     try {
-      const userId = user?.id;
-      if (!userId) {
-        setFileError('Not authenticated');
-        return;
-      }
-
       // Validate file size (5MB)
       if (file.size > 5 * 1024 * 1024) {
         setFileError('File too large. Maximum size is 5MB.');
         return;
       }
 
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const res = await fetch('/api/import/file', {
-        method: 'POST',
-        headers: {
-          'x-user-id': userId,
-        },
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to upload file');
-      }
-
-      const data = await res.json();
+      const data = await importFile(db, file);
 
       setImportResults((prev) => [
         ...prev,
@@ -551,25 +443,9 @@ export default function OnboardingPage() {
   const handleCompleteOnboarding = async () => {
     setIsSubmitting(true);
     try {
-      const userId = user?.id;
-      if (!userId) return;
-
-      const res = await fetch('/api/users/onboarding/complete', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': userId,
-        },
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.user) {
-          updateUser(data.user);
-        }
-        // Show assessment suggestion instead of navigating directly
-        setShowAssessmentSuggestion(true);
-      }
+      updateUser({ onboardingCompleted: true });
+      // Show assessment suggestion instead of navigating directly
+      setShowAssessmentSuggestion(true);
     } catch {
       navigate('/app', { replace: true });
     } finally {
@@ -580,24 +456,8 @@ export default function OnboardingPage() {
   const handleSkipOnboarding = async () => {
     setIsSubmitting(true);
     try {
-      const userId = user?.id;
-      if (!userId) return;
-
-      const res = await fetch('/api/users/onboarding/complete', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': userId,
-        },
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.user) {
-          updateUser(data.user);
-        }
-        navigate('/app', { replace: true });
-      }
+      updateUser({ onboardingCompleted: true });
+      navigate('/app', { replace: true });
     } catch {
       navigate('/app', { replace: true });
     } finally {
