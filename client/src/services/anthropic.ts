@@ -1,0 +1,133 @@
+const ANTHROPIC_PROXY = '/anthropic/v1/messages'
+const API_VERSION = '2023-06-01'
+const DEFAULT_MODEL = 'claude-sonnet-4-20250514'
+
+export class AnthropicError extends Error {
+  constructor(
+    message: string,
+    public status?: number,
+    public type?: string
+  ) {
+    super(message)
+    this.name = 'AnthropicError'
+  }
+}
+
+interface AnthropicMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+interface CallOptions {
+  messages: AnthropicMessage[]
+  system?: string
+  model?: string
+  maxTokens?: number
+  signal?: AbortSignal
+}
+
+function getApiKey(): string {
+  const key = localStorage.getItem('memd_api_key')
+  if (!key) throw new AnthropicError('API key not configured. Set it in Settings.')
+  return key
+}
+
+function buildHeaders(apiKey: string): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    'x-api-key': apiKey,
+    'anthropic-version': API_VERSION,
+  }
+}
+
+function buildBody(options: CallOptions, stream = false): string {
+  return JSON.stringify({
+    model: options.model ?? DEFAULT_MODEL,
+    max_tokens: options.maxTokens ?? 1024,
+    system: options.system,
+    messages: options.messages,
+    stream,
+  })
+}
+
+export async function callAnthropic(options: CallOptions): Promise<string> {
+  const apiKey = getApiKey()
+  const res = await fetch(ANTHROPIC_PROXY, {
+    method: 'POST',
+    headers: buildHeaders(apiKey),
+    body: buildBody(options),
+    signal: options.signal,
+  })
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new AnthropicError(
+      body.error?.message ?? `API error ${res.status}`,
+      res.status,
+      body.error?.type,
+    )
+  }
+
+  const data = await res.json()
+  const textBlocks = data.content?.filter((b: any) => b.type === 'text') ?? []
+  return textBlocks.map((b: any) => b.text).join('\n\n')
+}
+
+export async function* streamAnthropic(
+  options: CallOptions
+): AsyncGenerator<string, string, undefined> {
+  const apiKey = getApiKey()
+  const res = await fetch(ANTHROPIC_PROXY, {
+    method: 'POST',
+    headers: buildHeaders(apiKey),
+    body: buildBody(options, true),
+    signal: options.signal,
+  })
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new AnthropicError(
+      body.error?.message ?? `API error ${res.status}`,
+      res.status,
+      body.error?.type,
+    )
+  }
+
+  const reader = res.body!.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let fullText = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const data = line.slice(6).trim()
+      if (data === '[DONE]') continue
+
+      try {
+        const event = JSON.parse(data)
+        if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+          const chunk = event.delta.text
+          fullText += chunk
+          yield chunk
+        }
+      } catch {
+        // Skip non-JSON lines
+      }
+    }
+  }
+
+  return fullText
+}
+
+export function isApiKeyConfigured(): boolean {
+  const key = localStorage.getItem('memd_api_key')
+  return !!key && key.trim() !== ''
+}
