@@ -146,7 +146,7 @@ export default function TopicsPage() {
     setError(null);
     try {
       const data = getTopics(db);
-      setTopics(data || []);
+      setTopics((data || []) as Topic[]);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'Failed to load topics');

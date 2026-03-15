@@ -5,8 +5,11 @@ import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '@/contexts/ToastContext';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { formatFullDate, formatDateTime, formatTime } from '@/utils/dateFormat';
-import { getSession, pauseSession, resumeSession, sendMessage, retryMessage, getMultiBucketSuggestions, saveMultiBucketConnections } from '@/services/sessions';
-import { distillSession, regenerateNote, getNoteForSession, updateNote } from '@/services/notes';
+import { getSession, getMultiBucketSuggestions } from '@/services/sessions';
+// Additional session/note service functions available for future migration from fetch calls
+// import { pauseSession, resumeSession, sendMessage, retryMessage, saveMultiBucketConnections } from '@/services/sessions';
+import { distillSession, getNoteForSession } from '@/services/notes';
+// import { regenerateNote, updateNote } from '@/services/notes';
 import { createBookmark, deleteBookmark } from '@/services/bookmarks';
 
 interface Message {

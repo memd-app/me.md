@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { callAnthropic, streamAnthropic } from '../anthropic'
+import { callAnthropic } from '../anthropic'
 
 describe('anthropic client', () => {
   beforeEach(() => {

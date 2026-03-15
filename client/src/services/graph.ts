@@ -1,4 +1,4 @@
-import { eq, and, or, inArray, not, desc } from 'drizzle-orm'
+import { eq, and, inArray, not, desc } from 'drizzle-orm'
 import { scheduleSave } from '@/db/persistence'
 import { LOCAL_USER_ID } from '@/contexts/UserContext'
 import {

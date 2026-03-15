@@ -25,11 +25,14 @@ import { callAnthropic, isApiKeyConfigured } from './anthropic'
 // Big Five library imports (CJS packages)
 // ============================================
 
-// @ts-expect-error — CJS package with no type declarations
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore — CJS package with no type declarations
 import * as questionsLib from '@bigfive-org/questions'
-// @ts-expect-error — CJS package with no type declarations
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore — CJS package with no type declarations
 import calculateScoreFn from '@alheimsins/bigfive-calculate-score'
-// @ts-expect-error — CJS package with no type declarations
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore — CJS package with no type declarations
 import resultsLib from '@bigfive-org/results'
 
 type Db = SQLJsDatabase<typeof schema>
@@ -76,7 +79,7 @@ const FACET_LABELS: Record<string, string[]> = {
 // ============================================
 
 function getQuestionsList(lang = 'en'): BigFiveQuestion[] {
-  return questionsLib.getItems(lang)
+  return questionsLib.getItems(lang) as BigFiveQuestion[]
 }
 
 function getTestInfo(): { name: string; questions: number; time: number } {
@@ -185,7 +188,7 @@ interface PersonalityInsightsResult {
 
 async function generatePersonalityInsights(
   db: Db,
-  attemptId: string,
+  _attemptId: string,
   domainScores: Array<{ domain: string; domainScore: number; facetScores: Record<string, number | null> }>,
   resultText: any[],
 ): Promise<PersonalityInsightsResult> {
@@ -977,8 +980,8 @@ export async function generateChangeInsights(
 async function _generateChangeInsightsAI(
   oldScores: Array<{ domain: string; domainScore: number; facetScores: Record<string, number | null> }>,
   newScores: Array<{ domain: string; domainScore: number; facetScores: Record<string, number | null> }>,
-  oldDate: string,
-  newDate: string,
+  _oldDate: string,
+  _newDate: string,
 ) {
   if (!isApiKeyConfigured()) {
     return _generateRuleBasedChangeInsights(oldScores, newScores)

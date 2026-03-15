@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { useAuth } from './AuthContext';
+import { useUser } from './UserContext';
 
 type Theme = 'light' | 'dark';
 
@@ -11,8 +11,6 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-const API_BASE = '/api';
-
 function applyTheme(theme: Theme) {
   if (theme === 'dark') {
     document.documentElement.classList.add('dark');
@@ -22,7 +20,7 @@ function applyTheme(theme: Theme) {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser } = useUser();
 
   // Initialize theme from localStorage (fast, synchronous) or default to 'light'
   const [theme, setThemeState] = useState<Theme>(() => {
@@ -38,7 +36,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     applyTheme(theme);
   }, [theme]);
 
-  // When user logs in, sync theme from their profile preference
+  // When user loads, sync theme from their profile preference
   useEffect(() => {
     if (user?.themePreference) {
       const userTheme = user.themePreference as Theme;
@@ -53,23 +51,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setThemeState(newTheme);
     localStorage.setItem('memd_theme', newTheme);
 
-    // Update AuthContext so other components see the change
+    // Persist to user record in local database
     updateUser({ themePreference: newTheme });
-
-    // Persist to server if user is logged in
-    if (user?.id) {
-      fetch(`${API_BASE}/users/profile`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify({ themePreference: newTheme }),
-      }).catch((err) => {
-        console.error('Failed to save theme preference:', err);
-      });
-    }
-  }, [user?.id, updateUser]);
+  }, [updateUser]);
 
   const toggleTheme = useCallback(() => {
     setTheme(theme === 'light' ? 'dark' : 'light');

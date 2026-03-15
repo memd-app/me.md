@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import initSqlJs, { type Database as SqlJsDatabase } from 'sql.js'
 import { drizzle } from 'drizzle-orm/sql-js'
 import * as schema from '../schema'
@@ -228,7 +228,7 @@ describe('database initialization', () => {
     const result = sqlDb.exec(
       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
     )
-    const tableNames = result[0].values.map((row) => row[0] as string)
+    const tableNames = result[0].values.map((row: any[]) => row[0] as string)
     expect(tableNames).toContain('users')
     expect(tableNames).toContain('topics')
     expect(tableNames).toContain('sessions')

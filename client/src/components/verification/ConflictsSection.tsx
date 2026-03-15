@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useUser } from '../../contexts/UserContext';
 import { formatShortDate } from '@/utils/dateFormat';
 
 interface Insight {
@@ -81,7 +81,7 @@ const RESOLUTION_OPTIONS = [
 ];
 
 export default function ConflictsSection() {
-  const { user } = useAuth();
+  const { user } = useUser();
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
   const [stats, setStats] = useState<ConflictStats>({ total: 0, unresolved: 0, resolved: 0 });
   const [isLoading, setIsLoading] = useState(true);

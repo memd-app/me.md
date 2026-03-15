@@ -3,7 +3,8 @@ import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 import { Link } from 'react-router-dom';
-import { importUrls, importText, importFile, importChatGPT, processImport } from '@/services/import';
+// Import service functions available for future migration from fetch calls
+// import { importUrls, importText, importFile, importChatGPT, processImport } from '@/services/import';
 
 type ImportMethod = 'chatgpt' | 'url' | 'text' | 'file';
 
@@ -57,7 +58,7 @@ Please be thorough and specific. Include concrete examples where possible. If yo
 
 export default function ImportPage() {
   const { user } = useUser();
-  const db = useDatabase();
+  useDatabase(); // ensure DB is initialized
   const [activeMethod, setActiveMethod] = useState<ImportMethod>('chatgpt');
   const [importResults, setImportResults] = useState<ImportResult[]>([]);
 

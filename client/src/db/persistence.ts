@@ -24,7 +24,7 @@ export async function saveNow(): Promise<void> {
 
 export function downloadDatabase(filename = 'memd-backup.db'): void {
   const data = exportDbBytes()
-  const blob = new Blob([data], { type: 'application/x-sqlite3' })
+  const blob = new Blob([new Uint8Array(data)], { type: 'application/x-sqlite3' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

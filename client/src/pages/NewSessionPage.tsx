@@ -42,7 +42,7 @@ export default function NewSessionPage() {
       try {
         const data = getTopics(db);
         if (!controller.signal.aborted) {
-          setTopics(data || []);
+          setTopics((data || []) as Topic[]);
         }
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;

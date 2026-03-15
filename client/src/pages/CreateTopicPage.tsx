@@ -5,7 +5,7 @@ import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '@/contexts/ToastContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
-import { checkTopicTitle, createTopic } from '@/services/topics';
+import { checkTopicTitle } from '@/services/topics';
 
 const INTENT_OPTIONS = [
   { value: 'articulate', label: 'Articulate', description: 'Express something you already know' },

@@ -140,9 +140,9 @@ export default function TopicDetailPage() {
           setTopic(null);
           throw new Error('This topic has been deleted or does not exist.');
         }
-        setTopic(topicData);
-        setTopicInsights(topicData.insights || []);
-        setConnectedTopics(topicData.connectedTopics || []);
+        setTopic(topicData as Topic);
+        setTopicInsights((topicData.insights || []) as Insight[]);
+        setConnectedTopics((topicData.connectedTopics || []).filter(Boolean) as ConnectedTopic[]);
 
         // Fetch sessions for this topic
         const sessionsData = getSessionsByTopic(db, id!);
@@ -158,17 +158,6 @@ export default function TopicDetailPage() {
     fetchTopic();
     return () => controller.abort();
   }, [user, id, fetchVersion]);
-
-  // Helper to check if an API response indicates the topic was deleted
-  const checkTopicDeleted = (status: number, errorMsg?: string): boolean => {
-    if (status === 404 || (errorMsg && errorMsg.toLowerCase().includes('not found'))) {
-      setTopicNotFound(true);
-      setTopic(null);
-      setError('This topic has been deleted or no longer exists.');
-      return true;
-    }
-    return false;
-  };
 
   const handleStartSession = async () => {
     if (!user || !topic) return;
@@ -255,7 +244,7 @@ export default function TopicDetailPage() {
     try {
       const updatedUrls = [...currentUrls, trimmedUrl];
       const data = updateTopic(db, topic.id, { referenceUrls: updatedUrls });
-      setTopic(data);
+      setTopic(data as Topic);
       setNewUrl('');
     } catch (err) {
       if (!topicNotFound) {
@@ -274,7 +263,7 @@ export default function TopicDetailPage() {
 
     try {
       const data = updateTopic(db, topic.id, { referenceUrls: updatedUrls });
-      setTopic(data);
+      setTopic(data as Topic);
     } catch (err) {
       if (!topicNotFound) {
         setError(err instanceof Error ? err.message : 'Failed to remove URL');
@@ -339,7 +328,7 @@ export default function TopicDetailPage() {
           intent: editIntent || null,
           tags: editTags.length > 0 ? editTags : null,
         });
-      setTopic(data);
+      setTopic(data as Topic);
       setIsEditing(false);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);

@@ -149,7 +149,7 @@ export default function ProfilePage() {
   }, [user]);
 
   // Fetch latest assessment data
-  const fetchAssessment = useCallback(async (signal?: AbortSignal) => {
+  const fetchAssessment = useCallback(async (_signal?: AbortSignal) => {
     if (!user) return;
     try {
       const data = getLatestAssessment(db);

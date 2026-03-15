@@ -1,4 +1,4 @@
-import type { SqlJsDatabase } from 'drizzle-orm/sql-js'
+import type { SQLJsDatabase } from 'drizzle-orm/sql-js'
 import { eq, and, or, desc } from 'drizzle-orm'
 import * as schema from '@/db/schema'
 import { topics, sessions, messages, notes, insights, topicConnections, conceptNodes, bookmarks, users } from '@/db/schema'
@@ -7,7 +7,7 @@ import { LOCAL_USER_ID } from '@/contexts/UserContext'
 import { isAIAvailable, generatePersonalizedTopicSuggestions } from './ai'
 import type { TopicSuggestionContext } from './ai'
 
-type Db = SqlJsDatabase<typeof schema>
+type Db = SQLJsDatabase<typeof schema>
 
 // Valid enum values for topic fields
 const VALID_STATUSES = ['backlog', 'scheduled', 'in_progress', 'extracted', 'refined']
@@ -210,15 +210,15 @@ export function getTopic(db: Db, id: string) {
     .all()
 
   const connectedTopicIds = connections
-    .map(c => c.sourceTopicId === id ? c.targetTopicId : c.sourceTopicId)
-    .filter((tid, index, self) => self.indexOf(tid) === index)
+    .map((c: any) => c.sourceTopicId === id ? c.targetTopicId : c.sourceTopicId)
+    .filter((tid: string, index: number, self: string[]) => self.indexOf(tid) === index)
 
-  const connectedTopics = connectedTopicIds.map(ctId => {
+  const connectedTopics = connectedTopicIds.map((ctId: string) => {
     const ct = db.select().from(topics)
       .where(and(eq(topics.id, ctId), eq(topics.userId, LOCAL_USER_ID)))
       .get()
     if (!ct) return null
-    const conn = connections.find(c =>
+    const conn = connections.find((c: any) =>
       (c.sourceTopicId === id && c.targetTopicId === ctId) ||
       (c.targetTopicId === id && c.sourceTopicId === ctId)
     )
@@ -398,7 +398,7 @@ export function deleteTopic(db: Db, id: string) {
 
   // Count related data before deletion
   const relatedSessions = db.select().from(sessions).where(eq(sessions.topicId, id)).all()
-  const sessionIds = relatedSessions.map(s => s.id)
+  const sessionIds = relatedSessions.map((s: any) => s.id)
 
   let messageCount = 0
   let bookmarkCount = 0
@@ -447,7 +447,7 @@ export function getPresetTopics(db: Db) {
     .where(and(eq(topics.userId, LOCAL_USER_ID), eq(topics.isPreset, true)))
     .all()
 
-  const existingTitles = new Set(existingPresets.map(t => t.title))
+  const existingTitles = new Set(existingPresets.map((t: any) => t.title))
 
   const categories: Record<string, { label: string; presets: Array<typeof PRESET_TOPICS[number] & { alreadySelected: boolean }> }> = {
     identity: { label: 'Identity', presets: [] },
@@ -482,7 +482,7 @@ export function selectPresetTopics(db: Db, selectedTopics: string[]) {
   const existingPresets = db.select().from(topics)
     .where(and(eq(topics.userId, LOCAL_USER_ID), eq(topics.isPreset, true)))
     .all()
-  const existingTitles = new Set(existingPresets.map(t => t.title))
+  const existingTitles = new Set(existingPresets.map((t: any) => t.title))
 
   const createdTopics = []
 
@@ -536,8 +536,8 @@ export async function getTopicSuggestions(db: Db) {
     and(eq(insights.userId, LOCAL_USER_ID), eq(insights.verificationStatus, 'verified'))
   ).all()
 
-  const insightsWithTopics = verifiedInsights.map(insight => {
-    const topic = userTopics.find(t => t.id === insight.topicId)
+  const insightsWithTopics = verifiedInsights.map((insight: any) => {
+    const topic = userTopics.find((t: any) => t.id === insight.topicId)
     return {
       content: insight.content,
       topicTitle: topic?.title || 'Unknown Topic',
@@ -547,7 +547,7 @@ export async function getTopicSuggestions(db: Db) {
 
   // Cold start: if user has fewer than 3 topics or no verified insights, return presets only
   if (userTopics.length < 3 || verifiedInsights.length === 0) {
-    const existingTitles = new Set(userTopics.map(t => t.title.toLowerCase()))
+    const existingTitles = new Set(userTopics.map((t: any) => t.title.toLowerCase()))
 
     const coldStartSuggestions = PRESET_TOPICS
       .filter(p => !existingTitles.has(p.title.toLowerCase()))
@@ -572,7 +572,7 @@ export async function getTopicSuggestions(db: Db) {
 
   // Check if AI is available
   if (!isAIAvailable()) {
-    const existingTitles = new Set(userTopics.map(t => t.title.toLowerCase()))
+    const existingTitles = new Set(userTopics.map((t: any) => t.title.toLowerCase()))
     const fallbackSuggestions = PRESET_TOPICS
       .filter(p => !existingTitles.has(p.title.toLowerCase()))
       .slice(0, 5)
@@ -597,14 +597,14 @@ export async function getTopicSuggestions(db: Db) {
   // Get topic connections for cross-topic analysis
   const allConnections = db.select().from(topicConnections).all()
   const userConnections = allConnections
-    .filter(c => {
-      const sourceMatch = userTopics.some(t => t.id === c.sourceTopicId)
-      const targetMatch = userTopics.some(t => t.id === c.targetTopicId)
+    .filter((c: any) => {
+      const sourceMatch = userTopics.some((t: any) => t.id === c.sourceTopicId)
+      const targetMatch = userTopics.some((t: any) => t.id === c.targetTopicId)
       return sourceMatch && targetMatch
     })
-    .map(c => {
-      const sourceT = userTopics.find(t => t.id === c.sourceTopicId)
-      const targetT = userTopics.find(t => t.id === c.targetTopicId)
+    .map((c: any) => {
+      const sourceT = userTopics.find((t: any) => t.id === c.sourceTopicId)
+      const targetT = userTopics.find((t: any) => t.id === c.targetTopicId)
       return {
         sourceTopic: sourceT?.title || 'Unknown',
         targetTopic: targetT?.title || 'Unknown',
@@ -615,7 +615,7 @@ export async function getTopicSuggestions(db: Db) {
   const suggestionContext: TopicSuggestionContext = {
     userName: userRecord?.name || '',
     occupation: userRecord?.occupation || '',
-    existingTopics: userTopics.map(t => ({
+    existingTopics: userTopics.map((t: any) => ({
       title: t.title,
       status: t.status || 'backlog',
       tags: t.tags,
@@ -629,7 +629,7 @@ export async function getTopicSuggestions(db: Db) {
   const aiSuggestions = await generatePersonalizedTopicSuggestions(suggestionContext)
 
   if (!aiSuggestions || aiSuggestions.length === 0) {
-    const existingTitles = new Set(userTopics.map(t => t.title.toLowerCase()))
+    const existingTitles = new Set(userTopics.map((t: any) => t.title.toLowerCase()))
     const fallbackSuggestions = PRESET_TOPICS
       .filter(p => !existingTitles.has(p.title.toLowerCase()))
       .slice(0, 5)
@@ -651,7 +651,7 @@ export async function getTopicSuggestions(db: Db) {
     }
   }
 
-  const existingTitles = new Set(userTopics.map(t => t.title.toLowerCase()))
+  const existingTitles = new Set(userTopics.map((t: any) => t.title.toLowerCase()))
   const filteredSuggestions = aiSuggestions
     .filter(s => !existingTitles.has(s.title.toLowerCase()))
     .map(s => ({
@@ -724,12 +724,12 @@ export function checkTopicTitle(db: Db, title: string) {
 
   const trimmedTitle = title.trim().toLowerCase()
   const userTopics = db.select().from(topics).where(eq(topics.userId, LOCAL_USER_ID)).all()
-  const duplicates = userTopics.filter(t => t.title.trim().toLowerCase() === trimmedTitle)
+  const duplicates = userTopics.filter((t: any) => t.title.trim().toLowerCase() === trimmedTitle)
 
   return {
     exists: duplicates.length > 0,
     count: duplicates.length,
-    existingTopics: duplicates.map(t => ({
+    existingTopics: duplicates.map((t: any) => ({
       id: t.id,
       title: t.title,
       status: t.status,

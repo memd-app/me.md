@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
-import { getPresetTopics, selectPresetTopics } from '@/services/topics';
-import { importUrls, importText, importFile } from '@/services/import';
+// Topic and import service functions available for future migration from fetch calls
+// import { getPresetTopics, selectPresetTopics } from '@/services/topics';
+// import { importUrls, importText, importFile } from '@/services/import';
 
 type OnboardingStep = 'welcome' | 'profile' | 'context' | 'topics';
 type ImportTab = 'url' | 'text' | 'file';
@@ -69,8 +70,8 @@ const CATEGORY_INFO: Record<string, { label: string; icon: string; color: string
 };
 
 export default function OnboardingPage() {
-  const { user, updateUser, createUser } = useUser();
-  const db = useDatabase();
+  const { user, updateUser } = useUser();
+  useDatabase(); // ensure DB is initialized
   const navigate = useNavigate();
 
   const [currentStep, setCurrentStepRaw] = useState<OnboardingStep>('welcome');

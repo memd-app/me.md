@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
-import { getAttemptResults, generateInsightsForAttempt } from '@/services/assessment';
+// Assessment service functions available for future migration from fetch calls
+// import { getAttemptResults, generateInsightsForAttempt } from '@/services/assessment';
 
 // ============================================
 // Types
@@ -450,7 +451,7 @@ export default function AssessmentResultsPage() {
   const { attemptId } = useParams<{ attemptId: string }>();
   const navigate = useNavigate();
   const { user } = useUser();
-  const db = useDatabase();
+  useDatabase(); // ensure DB is initialized
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

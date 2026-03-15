@@ -1,4 +1,4 @@
-import { eq, and, desc } from 'drizzle-orm'
+import { eq, desc } from 'drizzle-orm'
 import { LOCAL_USER_ID } from '@/contexts/UserContext'
 import { topics, sessions, insights, notes, verificationHistory, bookmarks } from '@/db/schema'
 

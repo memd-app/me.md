@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
-import { getAssessmentHistory, compareAssessments, generateChangeInsights } from '@/services/assessment';
+import { compareAssessments } from '@/services/assessment';
 
 // ============================================
 // Types

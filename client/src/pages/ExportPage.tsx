@@ -4,7 +4,7 @@ import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '@/contexts/ToastContext';
 import Modal from '@/components/common/Modal';
-import { getExportStatus, exportAsMarkdown, exportAsJson } from '@/services/profile';
+import { getExportStatus } from '@/services/profile';
 
 type ExportFormat = 'markdown' | 'json' | 'both';
 type ExportAction = 'download' | 'clipboard';

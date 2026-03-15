@@ -3,7 +3,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '@/contexts/ToastContext';
-import { getAssessmentHistory, startAssessment, submitAnswers, completeAssessment } from '@/services/assessment';
+// Assessment service functions available for future migration from fetch calls
+// import { getAssessmentHistory, startAssessment, submitAnswers, completeAssessment } from '@/services/assessment';
 
 // ============================================
 // Types
@@ -81,7 +82,7 @@ type Phase = 'loading' | 'landing' | 'test' | 'completing' | 'completed';
 
 export default function AssessmentPage() {
   const { user } = useUser();
-  const db = useDatabase();
+  useDatabase(); // ensure DB is initialized
   const { addToast } = useToast();
   const navigate = useNavigate();
 

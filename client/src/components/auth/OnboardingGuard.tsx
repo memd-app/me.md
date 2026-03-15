@@ -1,8 +1,8 @@
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
 
 export default function OnboardingGuard({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user } = useUser();
 
   // If user hasn't completed onboarding, redirect to onboarding
   if (user && !user.onboardingCompleted) {

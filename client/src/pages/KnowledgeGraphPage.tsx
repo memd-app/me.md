@@ -6,7 +6,8 @@ import ApiErrorAlert from '@/components/ApiErrorAlert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { formatShortDate } from '@/utils/dateFormat';
 import * as d3 from 'd3';
-import { getGraphData } from '@/services/graph';
+// Graph service function available for future migration from fetch calls
+// import { getGraphData } from '@/services/graph';
 
 interface GraphNode {
   id: string;
@@ -154,7 +155,7 @@ function getEdgeColor(edge: GraphEdge): string {
 
 export default function KnowledgeGraphPage() {
   const { user } = useUser();
-  const db = useDatabase();
+  useDatabase(); // ensure DB is initialized
   const navigate = useNavigate();
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);

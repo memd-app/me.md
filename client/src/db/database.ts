@@ -1,6 +1,6 @@
 import initSqlJs, { type Database as SqlJsDatabase } from 'sql.js'
 import { drizzle } from 'drizzle-orm/sql-js'
-import type { SqlJsDatabase as DrizzleDb } from 'drizzle-orm/sql-js'
+import type { SQLJsDatabase as DrizzleDb } from 'drizzle-orm/sql-js'
 import * as schema from './schema'
 
 let sqlDb: SqlJsDatabase | null = null

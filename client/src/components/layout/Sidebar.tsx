@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { NavLink } from 'react-router-dom';
+import { useUser } from '@/contexts/UserContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
+import { assessmentAttempts } from '@/db/schema';
+import { eq } from 'drizzle-orm';
+import { LOCAL_USER_ID } from '@/contexts/UserContext';
 
 interface NavItem {
   to: string;
@@ -33,34 +37,24 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const { user } = useUser();
+  const db = useDatabase();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [hasNeverTakenTest, setHasNeverTakenTest] = useState(false);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/');
-  };
-
-  // Check if user has ever taken the personality assessment
+  // Check if user has ever taken the personality assessment (from local DB)
   useEffect(() => {
     if (!user) return;
-    const controller = new AbortController();
-    fetch('/api/assessment/history', {
-      headers: { 'x-user-id': user.id },
-      signal: controller.signal,
-    })
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        if (data && data.history) {
-          const hasCompleted = data.history.some((a: { status: string }) => a.status === 'completed');
-          setHasNeverTakenTest(!hasCompleted);
-        }
-      })
-      .catch(() => {/* ignore */});
-    return () => controller.abort();
-  }, [user]);
+    try {
+      const attempts = db.select().from(assessmentAttempts)
+        .where(eq(assessmentAttempts.userId, LOCAL_USER_ID))
+        .all();
+      const hasCompleted = attempts.some((a: { status: string | null }) => a.status === 'completed');
+      setHasNeverTakenTest(!hasCompleted);
+    } catch {
+      // ignore - table may not exist yet
+    }
+  }, [user, db]);
 
   // Compute nav items with badge info
   const navItemsWithBadge = navItems.map(item => ({
@@ -159,7 +153,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
           {/* User section */}
           <div className="border-t border-gray-200 dark:border-dark-border p-4" role="region" aria-label="User account">
-            <div className="flex items-center gap-3 mb-3">
+            <div className="flex items-center gap-3">
               <div
                 className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center text-sm font-medium text-primary-700 dark:text-primary-300"
                 aria-hidden="true"
@@ -171,17 +165,10 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                   {user?.name || 'User'}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-300 truncate">
-                  {user?.email || ''}
+                  Local user
                 </p>
               </div>
             </div>
-            <button
-              onClick={handleLogout}
-              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
-              aria-label="Sign out of your account"
-            >
-              Sign out
-            </button>
           </div>
         </div>
       </aside>

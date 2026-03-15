@@ -5,7 +5,8 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { formatShortDate } from '@/utils/dateFormat';
-import { searchAll } from '@/services/search';
+// Search service function available for future migration from fetch calls
+// import { searchAll } from '@/services/search';
 
 interface SearchResult {
   id: string;
@@ -69,7 +70,7 @@ const RESULTS_PER_PAGE = 20;
 
 export default function SearchPage() {
   const { user } = useUser();
-  const db = useDatabase();
+  useDatabase(); // ensure DB is initialized
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 

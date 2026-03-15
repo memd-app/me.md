@@ -10,8 +10,6 @@ import {
   type DistillationContext,
 } from './ai'
 import { extractInsights, formatInterviewTranscript, type ExtractionContext } from './insightExtraction'
-import type { DrizzleD1Database } from 'drizzle-orm/d1'
-
 type Db = any // Drizzle sql.js instance
 
 // ============================================
@@ -142,7 +140,7 @@ function generateFullAnalysis(
 function generateBriefSummary(
   topicTitle: string,
   userMessages: MessageData[],
-  assistantMessages: MessageData[]
+  _assistantMessages: MessageData[]
 ): string {
   let summary = `# Brief Summary: ${topicTitle}\n\n`
 
@@ -181,7 +179,7 @@ function generateBriefSummary(
 function generateDecisionFramework(
   topicTitle: string,
   userMessages: MessageData[],
-  assistantMessages: MessageData[]
+  _assistantMessages: MessageData[]
 ): string {
   let framework = `# Decision Framework: ${topicTitle}\n\n`
 
