@@ -6,11 +6,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/me-md/me.md"
+    "url": "https://github.com/memd-app/me.md"
   },
-  "homepage": "https://github.com/me-md/me.md#readme",
+  "homepage": "https://github.com/memd-app/me.md#readme",
   "bugs": {
-    "url": "https://github.com/me-md/me.md/issues"
+    "url": "https://github.com/memd-app/me.md/issues"
   },
   "keywords": [
     "personal-knowledge",

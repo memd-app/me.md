@@ -336,6 +336,188 @@ export async function importFile(db: Db, file: File) {
 }
 
 /**
+ * Import LinkedIn data export (JSON format).
+ * LinkedIn provides a ZIP with JSON files — this expects the parsed JSON content.
+ */
+export function importLinkedIn(db: Db, jsonContent: string) {
+  if (!jsonContent || jsonContent.trim().length === 0) throw new Error('LinkedIn data is required')
+
+  const user = db.select().from(users).where(eq(users.id, LOCAL_USER_ID)).get()
+  if (!user) throw new Error('User not found')
+
+  let parsed: Record<string, unknown>
+  try {
+    parsed = JSON.parse(jsonContent)
+  } catch {
+    throw new Error('Invalid JSON. Please paste the contents of a LinkedIn data export JSON file.')
+  }
+
+  // Extract structured text from common LinkedIn export fields
+  const sections: string[] = []
+
+  // Profile data
+  if (parsed.Profile || parsed.profile) {
+    const profile = (parsed.Profile || parsed.profile) as Record<string, unknown>
+    const fields = ['First Name', 'Last Name', 'Headline', 'Summary', 'Industry', 'Location']
+    for (const field of fields) {
+      const val = profile[field] || profile[field.toLowerCase()] || profile[field.replace(/ /g, '_')]
+      if (val && typeof val === 'string' && val.trim()) sections.push(`${field}: ${val.trim()}`)
+    }
+  }
+
+  // Positions / experience
+  const positions = (parsed.Positions || parsed.positions || parsed.Position || []) as Array<Record<string, unknown>>
+  if (Array.isArray(positions) && positions.length > 0) {
+    sections.push('\n## Work Experience')
+    for (const pos of positions.slice(0, 10)) {
+      const title = pos['Title'] || pos['title'] || ''
+      const company = pos['Company Name'] || pos['company'] || pos['companyName'] || ''
+      const desc = pos['Description'] || pos['description'] || ''
+      if (title || company) {
+        sections.push(`- ${title}${company ? ` at ${company}` : ''}${desc ? `: ${desc}` : ''}`)
+      }
+    }
+  }
+
+  // Skills
+  const skills = (parsed.Skills || parsed.skills || parsed.Skill || []) as Array<Record<string, unknown>>
+  if (Array.isArray(skills) && skills.length > 0) {
+    sections.push('\n## Skills')
+    const skillNames = skills.map(s => (s['Name'] || s['name'] || s) as string).filter(Boolean)
+    sections.push(skillNames.join(', '))
+  }
+
+  // Education
+  const education = (parsed.Education || parsed.education || []) as Array<Record<string, unknown>>
+  if (Array.isArray(education) && education.length > 0) {
+    sections.push('\n## Education')
+    for (const edu of education.slice(0, 5)) {
+      const school = edu['School Name'] || edu['school'] || edu['schoolName'] || ''
+      const degree = edu['Degree Name'] || edu['degree'] || edu['degreeName'] || ''
+      const field = edu['Field of Study'] || edu['fieldOfStudy'] || ''
+      if (school || degree) {
+        sections.push(`- ${degree}${field ? ` in ${field}` : ''}${school ? ` from ${school}` : ''}`)
+      }
+    }
+  }
+
+  // Certifications
+  const certs = (parsed.Certifications || parsed.certifications || []) as Array<Record<string, unknown>>
+  if (Array.isArray(certs) && certs.length > 0) {
+    sections.push('\n## Certifications')
+    for (const cert of certs.slice(0, 10)) {
+      const name = cert['Name'] || cert['name'] || ''
+      const authority = cert['Authority'] || cert['authority'] || ''
+      if (name) sections.push(`- ${name}${authority ? ` (${authority})` : ''}`)
+    }
+  }
+
+  // If structured parsing didn't find much, use the raw JSON as text
+  let extractedText = sections.join('\n')
+  if (extractedText.trim().length < 50) {
+    extractedText = JSON.stringify(parsed, null, 2).substring(0, 10000)
+  }
+  if (extractedText.length > 10000) extractedText = extractedText.substring(0, 10000) + '... [truncated]'
+
+  const fileId = crypto.randomUUID()
+  const displayTitle = 'LinkedIn Data Import'
+  const summary = generateSummary(extractedText)
+
+  db.insert(importedFiles).values({
+    id: fileId,
+    userId: LOCAL_USER_ID,
+    filename: displayTitle,
+    fileType: 'file',
+    processedContent: JSON.stringify({
+      title: displayTitle,
+      summary,
+      textLength: extractedText.length,
+      extractedText,
+      source: 'linkedin',
+      processedAt: new Date().toISOString(),
+    }),
+  }).run()
+
+  const existingContext = parseImportedContext(user.importedContext)
+  db.update(users).set({
+    importedContext: JSON.stringify([...existingContext, { type: 'linkedin', title: displayTitle, importedFileId: fileId }]),
+    updatedAt: new Date().toISOString(),
+  }).where(eq(users.id, LOCAL_USER_ID)).run()
+
+  scheduleSave()
+
+  return { message: 'LinkedIn data imported successfully', id: fileId, title: displayTitle, summary }
+}
+
+/**
+ * Import a PDF resume.
+ * Extracts text from the PDF and stores it for AI processing.
+ */
+export async function importResume(db: Db, file: File) {
+  if (!file) throw new Error('No file provided')
+  if (file.size > 5 * 1024 * 1024) throw new Error('File too large. Maximum size is 5MB.')
+
+  const ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'))
+  if (ext !== '.pdf' && file.type !== 'application/pdf') {
+    throw new Error('Please upload a PDF file')
+  }
+
+  const user = db.select().from(users).where(eq(users.id, LOCAL_USER_ID)).get()
+  if (!user) throw new Error('User not found')
+
+  // Extract text from PDF
+  const buffer = await file.arrayBuffer()
+  const rawText = new TextDecoder('utf-8', { fatal: false }).decode(buffer)
+  const textParts: string[] = []
+  const streamRegex = /stream\s*\n([\s\S]*?)\nendstream/g
+  let match
+  while ((match = streamRegex.exec(rawText)) !== null) {
+    const part = match[1].replace(/[^\x20-\x7E\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim()
+    if (part.length > 10) textParts.push(part)
+  }
+  let extractedText = textParts.join(' ').trim()
+  if (!extractedText || extractedText.length < 20) {
+    extractedText = rawText.replace(/[^\x20-\x7E\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim()
+  }
+  if (extractedText.length > 10000) extractedText = extractedText.substring(0, 10000) + '... [truncated]'
+
+  if (!extractedText || extractedText.trim().length < 10) {
+    throw new Error('Could not extract text from PDF. The file may be image-based or encrypted.')
+  }
+
+  const fileId = crypto.randomUUID()
+  const displayTitle = `Resume: ${file.name}`
+  const summary = generateSummary(extractedText)
+
+  db.insert(importedFiles).values({
+    id: fileId,
+    userId: LOCAL_USER_ID,
+    filename: displayTitle,
+    fileType: 'file',
+    processedContent: JSON.stringify({
+      title: displayTitle,
+      summary,
+      textLength: extractedText.length,
+      extractedText,
+      source: 'resume',
+      originalSize: file.size,
+      mimeType: file.type,
+      processedAt: new Date().toISOString(),
+    }),
+  }).run()
+
+  const existingContext = parseImportedContext(user.importedContext)
+  db.update(users).set({
+    importedContext: JSON.stringify([...existingContext, { type: 'resume', title: displayTitle, importedFileId: fileId }]),
+    updatedAt: new Date().toISOString(),
+  }).where(eq(users.id, LOCAL_USER_ID)).run()
+
+  scheduleSave()
+
+  return { message: 'Resume imported successfully', id: fileId, title: displayTitle, summary, size: file.size }
+}
+
+/**
  * Get import processing status for the user.
  */
 export function getImportStatus(db: Db) {

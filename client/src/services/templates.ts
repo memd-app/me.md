@@ -115,6 +115,18 @@ const SEED_TEMPLATES = [
       'What does a productive day look like for you?',
     ],
   },
+  {
+    title: 'Teach AI My Developer Identity',
+    description: 'Capture your technical philosophy, coding style, architecture preferences, debugging approach, and how you think about software — so AI tools can write code the way you would.',
+    aiUseCaseTag: 'developer_identity',
+    interviewPrompts: [
+      'What is your philosophy on writing good code? What does "good code" mean to you?',
+      'Walk me through how you approach a new technical problem or architecture decision.',
+      'What are your strongest technical skills, and what areas are you actively learning?',
+      'How do you debug? What is your mental process when something breaks?',
+      'What are your strongest opinions about software development — things you would argue for?',
+    ],
+  },
 ]
 
 // ============================================

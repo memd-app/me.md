@@ -3,9 +3,9 @@ import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 import { Link } from 'react-router-dom';
-import { importUrls, importText, importFile, importChatGPT, processImport } from '@/services/import';
+import { importUrls, importText, importFile, importChatGPT, importLinkedIn, importResume, processImport } from '@/services/import';
 
-type ImportMethod = 'chatgpt' | 'url' | 'text' | 'file';
+type ImportMethod = 'chatgpt' | 'url' | 'text' | 'file' | 'linkedin' | 'resume';
 
 interface ExtractedInsight {
   id: string;
@@ -83,6 +83,15 @@ export default function ImportPage() {
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [fileError, setFileError] = useState('');
 
+  // LinkedIn state
+  const [linkedinJson, setLinkedinJson] = useState('');
+  const [isProcessingLinkedin, setIsProcessingLinkedin] = useState(false);
+  const [linkedinError, setLinkedinError] = useState('');
+
+  // Resume state
+  const [isUploadingResume, setIsUploadingResume] = useState(false);
+  const [resumeError, setResumeError] = useState('');
+
   // Track unsaved changes in import forms
   const isImportDirty = useMemo(() => {
     return (
@@ -90,9 +99,10 @@ export default function ImportPage() {
       chatgptTitle.trim() !== '' ||
       urlInput.trim() !== '' ||
       pasteText.trim() !== '' ||
-      pasteTitle.trim() !== ''
+      pasteTitle.trim() !== '' ||
+      linkedinJson.trim() !== ''
     );
-  }, [chatgptOutput, chatgptTitle, urlInput, pasteText, pasteTitle]);
+  }, [chatgptOutput, chatgptTitle, urlInput, pasteText, pasteTitle, linkedinJson]);
 
   useUnsavedChangesWarning(isImportDirty);
 
@@ -353,11 +363,51 @@ export default function ImportPage() {
     }
   };
 
+  const handleLinkedinSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setLinkedinError('');
+    const trimmed = linkedinJson.trim();
+    if (!trimmed) { setLinkedinError('Please paste your LinkedIn export data'); return; }
+
+    setIsProcessingLinkedin(true);
+    try {
+      const userId = user?.id;
+      if (!userId) { setLinkedinError('Not authenticated'); return; }
+      const data = importLinkedIn(db, trimmed);
+      setImportResults((prev) => [...prev, { id: data.id, source: 'linkedin', status: 'success', title: data.title, summary: data.summary }]);
+      setLinkedinJson('');
+    } catch (err) {
+      setLinkedinError(err instanceof Error ? err.message : 'Failed to import LinkedIn data');
+    } finally {
+      setIsProcessingLinkedin(false);
+    }
+  };
+
+  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setResumeError('');
+    setIsUploadingResume(true);
+    try {
+      const userId = user?.id;
+      if (!userId) { setResumeError('Not authenticated'); return; }
+      const data = await importResume(db, file);
+      setImportResults((prev) => [...prev, { id: data.id, source: 'resume', status: 'success', title: data.title, summary: data.summary }]);
+    } catch (err) {
+      setResumeError(err instanceof Error ? err.message : 'Failed to import resume');
+    } finally {
+      setIsUploadingResume(false);
+      e.target.value = '';
+    }
+  };
+
   const methods: { key: ImportMethod; label: string; icon: string; description: string }[] = [
-    { key: 'chatgpt', label: 'ChatGPT Memory', icon: '🤖', description: 'Extract memories from ChatGPT' },
-    { key: 'url', label: 'URL', icon: '🔗', description: 'Import from a web page' },
-    { key: 'text', label: 'Paste Text', icon: '📝', description: 'Paste text content' },
-    { key: 'file', label: 'Upload File', icon: '📁', description: 'Upload a document' },
+    { key: 'chatgpt', label: 'ChatGPT Memory', icon: '\uD83E\uDD16', description: 'Extract memories from ChatGPT' },
+    { key: 'linkedin', label: 'LinkedIn', icon: '\uD83D\uDCBC', description: 'Import LinkedIn data export' },
+    { key: 'resume', label: 'Resume / CV', icon: '\uD83D\uDCC4', description: 'Upload a PDF resume' },
+    { key: 'url', label: 'URL', icon: '\uD83D\uDD17', description: 'Import from a web page' },
+    { key: 'text', label: 'Paste Text', icon: '\uD83D\uDCDD', description: 'Paste text content' },
+    { key: 'file', label: 'Upload File', icon: '\uD83D\uDCC1', description: 'Upload a document' },
   ];
 
   return (
@@ -370,7 +420,7 @@ export default function ImportPage() {
       </div>
 
       {/* Method Selection */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
         {methods.map((method) => (
           <button
             key={method.key}
@@ -695,6 +745,96 @@ export default function ImportPage() {
         </div>
       )}
 
+      {/* LinkedIn Import */}
+      {activeMethod === 'linkedin' && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+          <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Import LinkedIn Data</h3>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+            Go to <a href="https://www.linkedin.com/mypreferences/d/download-my-data" target="_blank" rel="noopener noreferrer" className="text-primary-600 dark:text-primary-400 hover:underline">LinkedIn Data Export</a>, request your data, then paste the JSON content from any of the downloaded files (e.g., Profile.json, Positions.json).
+          </p>
+
+          <form onSubmit={handleLinkedinSubmit} className="space-y-3">
+            <textarea
+              value={linkedinJson}
+              onChange={(e) => { setLinkedinJson(e.target.value); if (linkedinError) setLinkedinError(''); }}
+              className="input-field w-full min-h-[200px] resize-y font-mono text-sm"
+              placeholder='Paste LinkedIn JSON data here...&#10;&#10;{"Profile": {"First Name": "...", "Headline": "..."}}'
+              disabled={isProcessingLinkedin}
+              rows={8}
+            />
+            {linkedinJson.trim().length > 0 && (
+              <p className="text-xs text-gray-500 dark:text-gray-400">{linkedinJson.trim().length} characters</p>
+            )}
+            <button type="submit" disabled={isProcessingLinkedin || !linkedinJson.trim()} className="btn-primary w-full py-2.5">
+              {isProcessingLinkedin ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+                  Processing...
+                </span>
+              ) : 'Import LinkedIn Data'}
+            </button>
+          </form>
+
+          {linkedinError && <p className="mt-2 text-sm text-red-500" role="alert">{linkedinError}</p>}
+
+          <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <p className="text-xs text-blue-800 dark:text-blue-200">
+              <strong>Tip:</strong> You can also combine multiple LinkedIn JSON files by merging them into a single JSON object. The importer looks for Profile, Positions, Skills, Education, and Certifications data.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Resume / CV Import */}
+      {activeMethod === 'resume' && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+          <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Upload Resume / CV</h3>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+            Upload your resume as a PDF. Text will be extracted and processed for insights about your experience, skills, and expertise.
+          </p>
+
+          <div className="space-y-3">
+            <input
+              type="file"
+              accept=".pdf,application/pdf"
+              onChange={handleResumeUpload}
+              className="hidden"
+              id="resume-file-upload"
+              disabled={isUploadingResume}
+            />
+            <label
+              htmlFor="resume-file-upload"
+              className={`flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
+                isUploadingResume
+                  ? 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 cursor-wait'
+                  : 'border-gray-300 dark:border-gray-600 hover:border-primary-400 dark:hover:border-primary-500 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+              }`}
+            >
+              {isUploadingResume ? (
+                <div className="flex flex-col items-center gap-2">
+                  <svg className="animate-spin w-8 h-8 text-primary-600" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+                  <span className="text-sm text-gray-600 dark:text-gray-300">Extracting text from resume...</span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  <span className="text-sm text-gray-600 dark:text-gray-300">Click to upload your resume (PDF)</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Max 5MB</span>
+                </div>
+              )}
+            </label>
+          </div>
+
+          {resumeError && <p className="mt-2 text-sm text-red-500" role="alert">{resumeError}</p>}
+
+          <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+            <p className="text-xs text-amber-800 dark:text-amber-200">
+              <strong>Note:</strong> Text-based PDFs work best. Image-only or scanned PDFs may not extract well. For best results, use a PDF exported from a word processor.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Import Results */}
       {importResults.length > 0 && (
         <div className="mt-6 space-y-4">
@@ -723,7 +863,7 @@ export default function ImportPage() {
                         {result.title || 'Untitled'}
                       </span>
                       <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300">
-                        {result.source === 'chatgpt' ? 'ChatGPT' : result.source === 'url' ? 'URL' : result.source === 'text' ? 'Text' : 'File'}
+                        {result.source === 'chatgpt' ? 'ChatGPT' : result.source === 'linkedin' ? 'LinkedIn' : result.source === 'resume' ? 'Resume' : result.source === 'url' ? 'URL' : result.source === 'text' ? 'Text' : 'File'}
                       </span>
                       {result.sectionCount != null && result.sectionCount > 0 && (
                         <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300">
