@@ -11,6 +11,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@alheimsins/bigfive-calculate-score": "^3.0.3",
+    "@bigfive-org/questions": "^1.2.1",
+    "@bigfive-org/results": "^1.2.5",
     "d3": "^7.9.0",
     "drizzle-orm": "^0.45.1",
     "firebase": "^10.14.0",
