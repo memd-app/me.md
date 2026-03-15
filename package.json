@@ -4,20 +4,10 @@
   "private": true,
   "description": "Personal knowledge system for building verified personal context consumed by AI agents",
   "scripts": {
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "dev:server": "npm run --prefix server dev",
-    "dev:client": "npm run --prefix client dev",
-    "build": "npm run build:client && npm run build:server",
-    "build:client": "npm run --prefix client build",
-    "build:server": "npm run --prefix server build",
-    "start": "npm run --prefix server start",
-    "install:all": "npm install && npm run --prefix client install && npm run --prefix server install",
-    "db:generate": "npm run --prefix server db:generate",
-    "db:migrate": "npm run --prefix server db:migrate",
+    "dev": "cd client && npm run dev",
+    "build": "cd client && npm run build",
+    "test": "cd client && npm test",
     "mcp": "cd mcp && npx tsx mcp-server.ts"
-  },
-  "devDependencies": {
-    "concurrently": "^8.2.2"
   },
   "dependencies": {
     "@playwright/test": "^1.58.2",
