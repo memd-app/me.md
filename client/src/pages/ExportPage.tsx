@@ -4,7 +4,7 @@ import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '@/contexts/ToastContext';
 import Modal from '@/components/common/Modal';
-import { getExportStatus } from '@/services/profile';
+import { getExportStatus, exportAsMarkdown, exportAsJson } from '@/services/profile';
 
 type ExportFormat = 'markdown' | 'json' | 'both';
 type ExportAction = 'download' | 'clipboard';
@@ -55,13 +55,8 @@ export default function ExportPage() {
     return () => controller.abort();
   }, [user]);
 
-  const downloadFile = async (endpoint: string, filename: string) => {
-    if (!user) return;
-    const res = await fetch(endpoint, {
-      headers: { 'x-user-id': user.id },
-    });
-    if (!res.ok) throw new Error(`Failed to export profile`);
-    const blob = await res.blob();
+  const downloadContent = (content: string, filename: string, mimeType = 'text/plain') => {
+    const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -80,14 +75,13 @@ export default function ExportPage() {
       const safeName = (user.name || 'user').replace(/[^a-zA-Z0-9]/g, '_');
 
       if (selectedFormat === 'markdown' || selectedFormat === 'both') {
-        await downloadFile('/api/profile/export/markdown', `${safeName}_me.md`);
+        const mdContent = exportAsMarkdown(db);
+        downloadContent(mdContent, `${safeName}_me.md`, 'text/markdown');
       }
 
       if (selectedFormat === 'json' || selectedFormat === 'both') {
-        if (selectedFormat === 'both') {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-        await downloadFile('/api/profile/export/json', `${safeName}_profile.json`);
+        const jsonData = exportAsJson(db);
+        downloadContent(JSON.stringify(jsonData, null, 2), `${safeName}_profile.json`, 'application/json');
       }
 
       const formatLabel =
@@ -110,11 +104,7 @@ export default function ExportPage() {
     try {
       setCopying(true);
       setStatus(null);
-      const res = await fetch('/api/profile/export/markdown', {
-        headers: { 'x-user-id': user.id },
-      });
-      if (!res.ok) throw new Error('Failed to fetch profile');
-      const text = await res.text();
+      const text = exportAsMarkdown(db);
       await navigator.clipboard.writeText(text);
       setStatus({ type: 'success', message: 'Profile copied to clipboard!' });
     } catch (err) {
@@ -154,41 +144,18 @@ export default function ExportPage() {
     e.preventDefault();
     if (!user) return;
 
-    setVerifyError(null);
-    setVerifying(true);
+    // Local-only app: no server auth, auto-verify
+    setIsVerified(true);
+    setShowVerifyDialog(false);
+    setVerifyPassword('');
 
-    try {
-      const res = await fetch('/api/auth/verify-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify({ password: verifyPassword }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Verification failed. Please check your password and try again.');
-      }
-
-      // Mark as verified for this session
-      setIsVerified(true);
-      setShowVerifyDialog(false);
-      setVerifyPassword('');
-
-      // Execute the pending action
-      if (pendingAction === 'download') {
-        performExport();
-      } else if (pendingAction === 'clipboard') {
-        performCopy();
-      }
-      setPendingAction(null);
-    } catch (err) {
-      setVerifyError(err instanceof Error ? err.message : 'Verification failed. Please try again.');
-    } finally {
-      setVerifying(false);
+    // Execute the pending action
+    if (pendingAction === 'download') {
+      performExport();
+    } else if (pendingAction === 'clipboard') {
+      performCopy();
     }
+    setPendingAction(null);
   };
 
   const handleCancelVerify = () => {

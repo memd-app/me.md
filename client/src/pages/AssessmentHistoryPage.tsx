@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
-import { compareAssessments } from '@/services/assessment';
+import { compareAssessments, getAssessmentHistory, generateChangeInsights } from '@/services/assessment';
 
 // ============================================
 // Types
@@ -341,11 +341,7 @@ export default function AssessmentHistoryPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/assessment/history', {
-        headers: { 'x-user-id': user.id },
-      });
-      if (!res.ok) throw new Error('Failed to load assessment history');
-      const data = await res.json();
+      const data = getAssessmentHistory(db);
       setHistory(data.history || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load history');
@@ -385,19 +381,7 @@ export default function AssessmentHistoryPage() {
     if (!user || !compareA || !compareB) return;
     setIsLoadingInsights(true);
     try {
-      const res = await fetch('/api/assessment/change-insights', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify({
-          attemptIdOld: compareA,
-          attemptIdNew: compareB,
-        }),
-      });
-      if (!res.ok) throw new Error('Failed to generate insights');
-      const data = await res.json();
+      const data = await generateChangeInsights(db, compareA!, compareB!);
       setChangeInsights(data);
     } catch (err) {
       console.error('Change insight error:', err);

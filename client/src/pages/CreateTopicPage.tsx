@@ -5,7 +5,7 @@ import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '@/contexts/ToastContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
-import { checkTopicTitle } from '@/services/topics';
+import { checkTopicTitle, createTopic } from '@/services/topics';
 
 const INTENT_OPTIONS = [
   { value: 'articulate', label: 'Articulate', description: 'Express something you already know' },
@@ -197,59 +197,25 @@ export default function CreateTopicPage() {
     setIsSubmitting(true);
 
     try {
-      const res = await fetch('/api/topics', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify({
-          title: title.trim(),
-          description: description.trim() || null,
-          tags: tags.length > 0 ? tags : null,
-          intent: intent || null,
-          trigger: trigger.trim() || null,
-        }),
+      const data = createTopic(db, {
+        title: title.trim(),
+        description: description.trim() || null,
+        tags: tags.length > 0 ? tags : null,
+        intent: intent || null,
+        trigger: trigger.trim() || null,
       });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: 'Server error' }));
-        throw new Error(data.error || 'Failed to create topic');
-      }
-
-      const data = await res.json();
 
       // Mark as submitted to prevent back-button resubmission
       setHasSubmitted(true);
 
-      // Show appropriate toast based on whether duplicates existed
-      if (data.warning) {
-        addToast('Topic created! Note: a topic with this title already existed.', 'success', 5000);
-      } else {
-        addToast('Topic created successfully!', 'success', 4000);
-      }
+      // Show success toast (duplicate warning already shown inline during title entry)
+      addToast('Topic created successfully!', 'success', 4000);
 
       // Use replace to remove the form page from history, preventing back+resubmit
       navigate('/app/topics', { replace: true });
     } catch (err) {
-      // Detect network errors (fetch throws TypeError on network failure)
-      const isNetwork = err instanceof TypeError ||
-        (err instanceof Error && (
-          err.message === 'Failed to fetch' ||
-          err.message === 'NetworkError when attempting to fetch resource.' ||
-          err.message === 'Network request failed' ||
-          err.message.includes('network') ||
-          err.message.includes('ERR_NETWORK') ||
-          err.message.includes('ERR_CONNECTION')
-        ));
-
-      if (isNetwork) {
-        setIsNetworkError(true);
-        setError('Unable to connect to the server. Please check your internet connection and try again. Your form data has been preserved.');
-      } else {
-        setIsNetworkError(false);
-        setError(err instanceof Error ? err.message : 'Failed to create topic. Please try again.');
-      }
+      setIsNetworkError(false);
+      setError(err instanceof Error ? err.message : 'Failed to create topic. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

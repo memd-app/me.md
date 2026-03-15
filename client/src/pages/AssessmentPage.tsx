@@ -3,8 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '@/contexts/ToastContext';
-// Assessment service functions available for future migration from fetch calls
-// import { getAssessmentHistory, startAssessment, submitAnswers, completeAssessment } from '@/services/assessment';
+import { getAssessmentHistory, startAssessment, submitAnswers, completeAssessment } from '@/services/assessment';
 
 // ============================================
 // Types
@@ -82,7 +81,7 @@ type Phase = 'loading' | 'landing' | 'test' | 'completing' | 'completed';
 
 export default function AssessmentPage() {
   const { user } = useUser();
-  useDatabase(); // ensure DB is initialized
+  const db = useDatabase();
   const { addToast } = useToast();
   const navigate = useNavigate();
 
@@ -108,16 +107,8 @@ export default function AssessmentPage() {
   const [showResults, setShowResults] = useState(false);
 
   // ============================================
-  // API Helpers
+  // API Helpers (removed - using direct service calls)
   // ============================================
-
-  const headers = useCallback((): Record<string, string> => {
-    if (!user) return {};
-    return {
-      'Content-Type': 'application/json',
-      'x-user-id': user.id,
-    };
-  }, [user]);
 
   // ============================================
   // Load initial state - check for in-progress attempt
@@ -129,12 +120,7 @@ export default function AssessmentPage() {
 
     const loadHistory = async () => {
       try {
-        const res = await fetch('/api/assessment/history', {
-          headers: { 'x-user-id': user.id },
-        });
-        if (!res.ok) throw new Error('Failed to load assessment history');
-
-        const data = await res.json();
+        const data = getAssessmentHistory(db);
         const history: AssessmentAttempt[] = data.history || [];
 
         // Check for in-progress attempt
@@ -169,18 +155,7 @@ export default function AssessmentPage() {
     setError(null);
 
     try {
-      const res = await fetch('/api/assessment/start', {
-        method: 'POST',
-        headers: headers(),
-        body: JSON.stringify({ language: 'en' }),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to start assessment');
-      }
-
-      const data = await res.json();
+      const data = startAssessment(db);
       setAttemptId(data.attemptId);
       setQuestions(data.questions || []);
       setAnswers({});
@@ -191,7 +166,7 @@ export default function AssessmentPage() {
       setError(err.message);
       addToast(err.message, 'error');
     }
-  }, [user, headers, addToast]);
+  }, [user, db, addToast]);
 
   // ============================================
   // Resume in-progress test
@@ -203,19 +178,9 @@ export default function AssessmentPage() {
 
     try {
       // Start a new "view" with the same attempt - we need questions
-      // The /start endpoint creates a new attempt. For resume, we reload questions
-      // and fetch existing answers from the attempt
-      const res = await fetch('/api/assessment/start', {
-        method: 'POST',
-        headers: headers(),
-        body: JSON.stringify({ language: 'en' }),
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to load test questions');
-      }
-
-      const data = await res.json();
+      // The startAssessment creates a new attempt. For resume, we reload questions
+      // and use the new attempt
+      const data = startAssessment(db);
       // We use the NEW attempt but with the existing attempt's answers
       // Actually let's use the in-progress attemptId and just re-fetch the questions from the new response
       const allQuestions: BigFiveQuestion[] = data.questions || [];
@@ -247,7 +212,7 @@ export default function AssessmentPage() {
       setError(err.message);
       addToast(err.message, 'error');
     }
-  }, [user, inProgressAttempt, headers, addToast]);
+  }, [user, inProgressAttempt, db, addToast]);
 
   // ============================================
   // Save answers to server
@@ -265,23 +230,14 @@ export default function AssessmentPage() {
 
     setIsSaving(true);
     try {
-      const res = await fetch(`/api/assessment/${attemptId}/answers`, {
-        method: 'POST',
-        headers: headers(),
-        body: JSON.stringify({ answers: answerArray }),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        console.error('[Assessment] Save error:', errData.error);
-      }
+      submitAnswers(db, attemptId, answerArray);
     } catch (err: any) {
       console.error('[Assessment] Save error:', err.message);
     } finally {
       setIsSaving(false);
       pendingSaveRef.current = false;
     }
-  }, [attemptId, user, isSaving, headers]);
+  }, [attemptId, user, isSaving, db]);
 
   // ============================================
   // Auto-save logic
@@ -351,18 +307,7 @@ export default function AssessmentPage() {
       await saveAnswers(answers);
 
       // Then complete the test
-      const res = await fetch(`/api/assessment/${attemptId}/complete`, {
-        method: 'POST',
-        headers: headers(),
-        body: JSON.stringify({ language: 'en' }),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to complete assessment');
-      }
-
-      const data = await res.json();
+      const data = await completeAssessment(db, attemptId);
       setCompletionResults(data.scores || []);
 
       // Navigate to the dedicated results page
@@ -372,7 +317,7 @@ export default function AssessmentPage() {
       setPhase('test');
       addToast(err.message, 'error');
     }
-  }, [attemptId, user, answers, saveAnswers, headers, addToast, navigate]);
+  }, [attemptId, user, answers, saveAnswers, db, addToast, navigate]);
 
   // ============================================
   // Keyboard navigation

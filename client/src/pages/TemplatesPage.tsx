@@ -4,8 +4,7 @@ import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
-// Template service functions available for future migration from fetch calls
-// import { getTemplates, createTopicFromTemplate } from '@/services/templates';
+import { getTemplates, createTopicFromTemplate } from '@/services/templates';
 
 interface Template {
   id: string;
@@ -41,7 +40,7 @@ const TAG_COLORS: Record<string, string> = {
 export default function TemplatesPage() {
   const navigate = useNavigate();
   const { user } = useUser();
-  useDatabase(); // ensure DB is initialized
+  const db = useDatabase();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,23 +52,15 @@ export default function TemplatesPage() {
     if (!user) return;
     const controller = new AbortController();
 
-    const fetchTemplates = async () => {
+    const fetchTemplates = () => {
       setIsLoading(true);
       setError(null);
       try {
-        const res = await fetch('/api/templates', {
-          headers: { 'x-user-id': user.id },
-          signal: controller.signal,
-        });
-        if (!res.ok) {
-          throw new Error('Failed to load templates');
-        }
-        const data = await res.json();
+        const data = getTemplates(db);
         if (!controller.signal.aborted) {
           setTemplates(data.templates || []);
         }
       } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
         if (!controller.signal.aborted) {
           setError(err instanceof Error ? err.message : 'Failed to load templates');
         }
@@ -105,20 +96,7 @@ export default function TemplatesPage() {
     setError(null);
     setCreateSuccess(null);
     try {
-      const res = await fetch(`/api/templates/${template.id}/create-topic`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to create topic from template');
-      }
-
-      const data = await res.json();
+      const data = createTopicFromTemplate(db, template.id);
       setCreateSuccess(data.topic.id);
 
       // Navigate to the new topic after a brief delay

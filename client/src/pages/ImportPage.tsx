@@ -3,8 +3,7 @@ import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 import { Link } from 'react-router-dom';
-// Import service functions available for future migration from fetch calls
-// import { importUrls, importText, importFile, importChatGPT, processImport } from '@/services/import';
+import { importUrls, importText, importFile, importChatGPT, processImport } from '@/services/import';
 
 type ImportMethod = 'chatgpt' | 'url' | 'text' | 'file';
 
@@ -58,7 +57,7 @@ Please be thorough and specific. Include concrete examples where possible. If yo
 
 export default function ImportPage() {
   const { user } = useUser();
-  useDatabase(); // ensure DB is initialized
+  const db = useDatabase();
   const [activeMethod, setActiveMethod] = useState<ImportMethod>('chatgpt');
   const [importResults, setImportResults] = useState<ImportResult[]>([]);
 
@@ -111,20 +110,7 @@ export default function ImportPage() {
     );
 
     try {
-      const res = await fetch(`/api/import/${result.id}/process`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': userId,
-        },
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to process import');
-      }
-
-      const data = await res.json();
+      const data = await processImport(db, result.id);
 
       setImportResults((prev) =>
         prev.map((r, i) =>
@@ -198,24 +184,7 @@ export default function ImportPage() {
         return;
       }
 
-      const res = await fetch('/api/import/chatgpt', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': userId,
-        },
-        body: JSON.stringify({
-          text: trimmed,
-          title: chatgptTitle.trim() || undefined,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to import ChatGPT context');
-      }
-
-      const data = await res.json();
+      const data = importChatGPT(db, trimmed, chatgptTitle.trim() || undefined);
 
       setImportResults((prev) => [
         ...prev,
@@ -268,21 +237,7 @@ export default function ImportPage() {
         return;
       }
 
-      const res = await fetch('/api/import/urls', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': userId,
-        },
-        body: JSON.stringify({ urls: [trimmedUrl] }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to process URL');
-      }
-
-      const data = await res.json();
+      const data = await importUrls(db, [trimmedUrl]);
 
       if (data.results && data.results.length > 0) {
         setImportResults((prev) => [
@@ -326,24 +281,7 @@ export default function ImportPage() {
         return;
       }
 
-      const res = await fetch('/api/import/text', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': userId,
-        },
-        body: JSON.stringify({
-          text: trimmedText,
-          title: pasteTitle.trim() || undefined,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to import text');
-      }
-
-      const data = await res.json();
+      const data = importText(db, trimmedText, pasteTitle.trim() || undefined);
 
       setImportResults((prev) => [
         ...prev,
@@ -384,23 +322,7 @@ export default function ImportPage() {
         return;
       }
 
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const res = await fetch('/api/import/file', {
-        method: 'POST',
-        headers: {
-          'x-user-id': userId,
-        },
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to upload file');
-      }
-
-      const data = await res.json();
+      const data = await importFile(db, file);
 
       setImportResults((prev) => [
         ...prev,
