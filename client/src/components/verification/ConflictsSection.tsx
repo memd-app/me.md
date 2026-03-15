@@ -102,7 +102,7 @@ export default function ConflictsSection() {
       const status = showResolved ? undefined : 'unresolved';
       const conflictsData = getConflicts(db, status);
       const statsData = getConflictStats(db);
-      setConflicts(conflictsData as any);
+      setConflicts((conflictsData.conflicts || []) as any);
       setStats(statsData);
     } catch (err) {
       console.error('Failed to fetch conflicts:', err);
