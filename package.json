@@ -13,7 +13,8 @@
     "start": "npm run --prefix server start",
     "install:all": "npm install && npm run --prefix client install && npm run --prefix server install",
     "db:generate": "npm run --prefix server db:generate",
-    "db:migrate": "npm run --prefix server db:migrate"
+    "db:migrate": "npm run --prefix server db:migrate",
+    "mcp": "cd mcp && npx tsx mcp-server.ts"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

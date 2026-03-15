@@ -1,0 +1,15 @@
+{
+  "name": "memd-mcp-server",
+  "type": "module",
+  "scripts": {
+    "start": "npx tsx mcp-server.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "better-sqlite3": "^12.6.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.5",
+    "tsx": "^4.0.0"
+  }
+}
