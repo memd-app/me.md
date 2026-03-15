@@ -5,11 +5,8 @@ import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '@/contexts/ToastContext';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { formatFullDate, formatDateTime, formatTime } from '@/utils/dateFormat';
-import { getSession, getMultiBucketSuggestions } from '@/services/sessions';
-// Additional session/note service functions available for future migration from fetch calls
-// import { pauseSession, resumeSession, sendMessage, retryMessage, saveMultiBucketConnections } from '@/services/sessions';
-import { distillSession, getNoteForSession } from '@/services/notes';
-// import { regenerateNote, updateNote } from '@/services/notes';
+import { getSession, getMultiBucketSuggestions, pauseSession, resumeSession, sendMessage as sendMessageService, retryMessage, saveMultiBucketConnections } from '@/services/sessions';
+import { distillSession, getNoteForSession, regenerateNote, updateNote } from '@/services/notes';
 import { createBookmark, deleteBookmark } from '@/services/bookmarks';
 
 interface Message {
@@ -428,20 +425,7 @@ export default function SessionPage() {
           relevanceScore: c.relevanceScore,
         }));
 
-      const res = await fetch(`/api/sessions/${session.id}/multi-bucket`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify({ selectedConnections: connectionsToSave }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to save connections');
-      }
-
+      saveMultiBucketConnections(db, session.id, connectionsToSave);
       setConnectionsSaved(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save cross-topic connections');
@@ -457,21 +441,8 @@ export default function SessionPage() {
     setIsPausing(true);
     setError(null);
     try {
-      const res = await fetch(`/api/sessions/${session.id}/pause`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to pause session');
-      }
-
-      const data = await res.json();
-      setSession(data.session);
+      const updatedSession = pauseSession(db, session.id);
+      setSession(updatedSession);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to pause session');
     } finally {
@@ -486,20 +457,7 @@ export default function SessionPage() {
     setIsResuming(true);
     setError(null);
     try {
-      const res = await fetch(`/api/sessions/${session.id}/resume`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to resume session');
-      }
-
-      const data = await res.json();
+      const data = resumeSession(db, session.id);
       setSession(data.session);
       // Add the gap-aware greeting message to the messages list
       if (data.greetingMessage) {
@@ -520,14 +478,7 @@ export default function SessionPage() {
     if (!user || !session || !note) return;
 
     try {
-      await fetch(`/api/sessions/${session.id}/distill/regenerate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify({ format }),
-      });
+      await regenerateNote(db, session.id, format);
     } catch {
       // Silent update - format is changed locally anyway
     }
@@ -542,21 +493,7 @@ export default function SessionPage() {
     setError(null);
 
     try {
-      const res = await fetch(`/api/sessions/${session.id}/distill/regenerate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify({ format: selectedFormat, regenerateContent: true }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to regenerate note');
-      }
-
-      const data = await res.json();
+      const data = await regenerateNote(db, session.id, selectedFormat, true);
       setNote(data.note);
       setRegenerateSuccess(true);
       setIsEditingNote(false);
@@ -609,21 +546,7 @@ export default function SessionPage() {
           break;
       }
 
-      const res = await fetch(`/api/notes/${note.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify(updatePayload),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to save note');
-      }
-
-      const data = await res.json();
+      const data = updateNote(db, note.id, updatePayload);
       setNote(data.note);
       setIsEditingNote(false);
       setEditContent('');
@@ -866,84 +789,34 @@ export default function SessionPage() {
         abortController.abort();
       }, AI_TIMEOUT_MS);
 
-      const res = await fetch(`/api/sessions/${session.id}/messages/stream`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify({ content: trimmedContent, isVoiceInput: isVoice }),
-        signal: abortController.signal,
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to send message');
-      }
-
-      const reader = res.body?.getReader();
-      if (!reader) {
-        throw new Error('Streaming not supported');
-      }
-
-      const decoder = new TextDecoder();
+      // Replace temp user message with the real one (service saves user message to DB)
+      // We'll update after the generator starts
       let accumulatedContent = '';
-      let buffer = '';
 
-      // Process the SSE stream
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      const generator = sendMessageService(db, session.id, trimmedContent, { isVoiceInput: isVoice });
+
+      for await (const chunk of generator) {
+        if (abortController.signal.aborted) break;
 
         // Reset timeout on each chunk received (AI is still responding)
         if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          didTimeout = true;
+          abortController.abort();
+        }, AI_TIMEOUT_MS);
 
-        buffer += decoder.decode(value, { stream: true });
-
-        // Process complete SSE events (lines ending with \n\n)
-        const events = buffer.split('\n\n');
-        buffer = events.pop() || ''; // Keep incomplete event in buffer
-
-        for (const eventStr of events) {
-          const lines = eventStr.split('\n');
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-
-                if (data.type === 'user_message') {
-                  // Replace temp user message with the real one
-                  setMessages(prev => prev.map(m =>
-                    m.id === tempUserMessage.id ? data.message : m
-                  ));
-                } else if (data.type === 'ai_chunk') {
-                  accumulatedContent += data.chunk;
-                  setStreamingContent(accumulatedContent);
-                  setIsStreaming(true);
-                } else if (data.type === 'ai_complete') {
-                  // Replace streaming content with the final complete message
-                  setStreamingContent('');
-                  setIsStreaming(false);
-                  setMessages(prev => [...prev, data.message]);
-                } else if (data.type === 'error') {
-                  throw new Error(data.error || 'Streaming error');
-                }
-              } catch (parseErr) {
-                // Ignore JSON parse errors for incomplete data
-                if (parseErr instanceof SyntaxError) continue;
-                throw parseErr;
-              }
-            }
-          }
-        }
+        accumulatedContent += chunk;
+        setStreamingContent(accumulatedContent);
+        setIsStreaming(true);
       }
 
-      // Fallback: if stream ended without ai_complete
-      if (isStreaming) {
-        setStreamingContent('');
-        setIsStreaming(false);
-      }
+      // Stream completed - get updated messages from DB
+      setStreamingContent('');
+      setIsStreaming(false);
+
+      // Refresh messages from DB to get the saved user + AI messages
+      const refreshed = getSession(db, session.id);
+      setMessages(refreshed.messages);
 
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
@@ -994,112 +867,67 @@ export default function SessionPage() {
         abortController.abort();
       }, AI_TIMEOUT_MS);
 
-      // The user message was already stored on the server from the first attempt.
-      // We need to re-send to get the AI response. Use the non-streaming fallback
-      // endpoint which creates both user message + AI response.
-      // But since the user message may already exist, we use the stream endpoint
-      // which handles the full flow. Let's re-fetch the session to get the latest
-      // messages first, then only request a retry of the AI generation.
+      // Refresh messages from DB to see if the user message was actually saved
+      const sessionData = getSession(db, session.id);
+      const serverMessages: Message[] = sessionData.messages || [];
+      setMessages(serverMessages);
 
-      // First, refresh messages to see if the user message was actually saved
-      const sessionRes = await fetch(`/api/sessions/${session.id}`, {
-        headers: { 'x-user-id': user.id },
-      });
+      // Check if the last message is from the user (meaning AI response failed)
+      const lastMsg = serverMessages[serverMessages.length - 1];
+      if (lastMsg && lastMsg.role === 'user') {
+        // AI response failed - need to regenerate it using the retry service
+        let accumulatedContent = '';
+        const generator = retryMessage(db, session.id);
 
-      if (sessionRes.ok) {
-        const sessionData = await sessionRes.json();
-        const serverMessages: Message[] = sessionData.messages || [];
-        setMessages(serverMessages);
+        for await (const chunk of generator) {
+          if (abortController.signal.aborted) break;
 
-        // Check if the last message is from the user (meaning AI response failed)
-        const lastMsg = serverMessages[serverMessages.length - 1];
-        if (lastMsg && lastMsg.role === 'user') {
-          // AI response failed - need to regenerate it
-          // Use the retry endpoint
-          const retryRes = await fetch(`/api/sessions/${session.id}/messages/retry`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-user-id': user.id,
-            },
-            signal: abortController.signal,
-          });
+          // Reset timeout on each chunk received
+          if (retryTimeoutId) clearTimeout(retryTimeoutId);
+          retryTimeoutId = setTimeout(() => {
+            retryDidTimeout = true;
+            abortController.abort();
+          }, AI_TIMEOUT_MS);
 
-          if (!retryRes.ok) {
-            const data = await retryRes.json();
-            throw new Error(data.error || 'Failed to retry');
-          }
-
-          const retryData = await retryRes.json();
-          setMessages(prev => [...prev, retryData.aiMessage]);
-          setFailedMessageContent(null);
-        } else {
-          // The user message wasn't saved, resend it
-          const res = await fetch(`/api/sessions/${session.id}/messages/stream`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-user-id': user.id,
-            },
-            body: JSON.stringify({ content: failedMessageContent }),
-            signal: abortController.signal,
-          });
-
-          if (!res.ok) {
-            const data = await res.json();
-            throw new Error(data.error || 'Failed to send message');
-          }
-
-          const reader = res.body?.getReader();
-          if (!reader) throw new Error('Streaming not supported');
-
-          const decoder = new TextDecoder();
-          let accumulatedContent = '';
-          let bufferStr = '';
-
-          // eslint-disable-next-line no-constant-condition
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            // Reset timeout on each chunk received
-            if (retryTimeoutId) clearTimeout(retryTimeoutId);
-
-            bufferStr += decoder.decode(value, { stream: true });
-            const events = bufferStr.split('\n\n');
-            bufferStr = events.pop() || '';
-
-            for (const eventStr of events) {
-              const lines = eventStr.split('\n');
-              for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  try {
-                    const data = JSON.parse(line.slice(6));
-                    if (data.type === 'user_message') {
-                      setMessages(prev => [...prev, data.message]);
-                    } else if (data.type === 'ai_chunk') {
-                      accumulatedContent += data.chunk;
-                      setStreamingContent(accumulatedContent);
-                      setIsStreaming(true);
-                    } else if (data.type === 'ai_complete') {
-                      setStreamingContent('');
-                      setIsStreaming(false);
-                      setMessages(prev => [...prev, data.message]);
-                    } else if (data.type === 'error') {
-                      throw new Error(data.error || 'Streaming error');
-                    }
-                  } catch (parseErr) {
-                    if (parseErr instanceof SyntaxError) continue;
-                    throw parseErr;
-                  }
-                }
-              }
-            }
-          }
-          setFailedMessageContent(null);
+          accumulatedContent += chunk;
+          setStreamingContent(accumulatedContent);
+          setIsStreaming(true);
         }
+
+        setStreamingContent('');
+        setIsStreaming(false);
+
+        // Refresh messages from DB
+        const refreshed = getSession(db, session.id);
+        setMessages(refreshed.messages);
+        setFailedMessageContent(null);
       } else {
-        throw new Error('Failed to fetch session state');
+        // The user message wasn't saved, resend it
+        let accumulatedContent = '';
+        const generator = sendMessageService(db, session.id, failedMessageContent!);
+
+        for await (const chunk of generator) {
+          if (abortController.signal.aborted) break;
+
+          // Reset timeout on each chunk received
+          if (retryTimeoutId) clearTimeout(retryTimeoutId);
+          retryTimeoutId = setTimeout(() => {
+            retryDidTimeout = true;
+            abortController.abort();
+          }, AI_TIMEOUT_MS);
+
+          accumulatedContent += chunk;
+          setStreamingContent(accumulatedContent);
+          setIsStreaming(true);
+        }
+
+        setStreamingContent('');
+        setIsStreaming(false);
+
+        // Refresh messages from DB
+        const refreshed = getSession(db, session.id);
+        setMessages(refreshed.messages);
+        setFailedMessageContent(null);
       }
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {

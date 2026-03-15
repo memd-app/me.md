@@ -2,8 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
-// Assessment service functions available for future migration from fetch calls
-// import { getAttemptResults, generateInsightsForAttempt } from '@/services/assessment';
+import { getAttemptResults, generateInsightsForAttempt } from '@/services/assessment';
 
 // ============================================
 // Types
@@ -451,7 +450,7 @@ export default function AssessmentResultsPage() {
   const { attemptId } = useParams<{ attemptId: string }>();
   const navigate = useNavigate();
   const { user } = useUser();
-  useDatabase(); // ensure DB is initialized
+  const db = useDatabase();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -469,29 +468,14 @@ export default function AssessmentResultsPage() {
     setError(null);
 
     try {
-      const res = await fetch(`/api/assessment/${attemptId}/results`, {
-        headers: { 'x-user-id': user.id },
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        if (res.status === 404) {
-          throw new Error('Assessment not found. It may have been deleted or belongs to another user.');
-        }
-        if (res.status === 400) {
-          throw new Error(errData.error || 'Assessment not yet completed.');
-        }
-        throw new Error(errData.error || 'Failed to load results');
-      }
-
-      const resultData: AssessmentResultsData = await res.json();
+      const resultData = getAttemptResults(db, attemptId) as AssessmentResultsData;
       setData(resultData);
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [user, attemptId]);
+  }, [user, attemptId, db]);
 
   useEffect(() => {
     fetchResults();
@@ -507,18 +491,7 @@ export default function AssessmentResultsPage() {
     setInsightError(null);
 
     try {
-      const res = await fetch(`/api/assessment/${attemptId}/generate-insights`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to generate insights');
-      }
+      await generateInsightsForAttempt(db, attemptId);
 
       // Refresh results to pick up new insights
       await fetchResults();
@@ -527,7 +500,7 @@ export default function AssessmentResultsPage() {
     } finally {
       setGeneratingInsights(false);
     }
-  }, [user, attemptId, fetchResults]);
+  }, [user, attemptId, db, fetchResults]);
 
   // ============================================
   // Print handler
