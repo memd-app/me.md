@@ -25,9 +25,8 @@ import { callAnthropic, isApiKeyConfigured } from './anthropic'
 // Big Five library imports (CJS packages)
 // ============================================
 
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore — CJS package with no type declarations
-import * as questionsLib from '@bigfive-org/questions'
+// Static questions data (pre-extracted from @bigfive-org/questions for browser compatibility)
+import bigFiveQuestionsEn from './bigfive-questions-en.json'
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — CJS package with no type declarations
 import calculateScoreFn from '@alheimsins/bigfive-calculate-score'
@@ -78,12 +77,12 @@ const FACET_LABELS: Record<string, string[]> = {
 // Big Five helpers
 // ============================================
 
-function getQuestionsList(lang = 'en'): BigFiveQuestion[] {
-  return questionsLib.getItems(lang) as BigFiveQuestion[]
+function getQuestionsList(_lang = 'en'): BigFiveQuestion[] {
+  return bigFiveQuestionsEn as BigFiveQuestion[]
 }
 
 function getTestInfo(): { name: string; questions: number; time: number } {
-  return questionsLib.getInfo()
+  return { name: "Johnson's IPIP NEO-PI-R", questions: 120, time: 10 }
 }
 
 function processTest(answers: BigFiveAnswer[], lang = 'en') {
