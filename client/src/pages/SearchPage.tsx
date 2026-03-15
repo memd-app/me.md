@@ -5,8 +5,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { formatShortDate } from '@/utils/dateFormat';
-// Search service function available for future migration from fetch calls
-// import { searchAll } from '@/services/search';
+import { searchAll } from '@/services/search';
 
 interface SearchResult {
   id: string;
@@ -70,7 +69,7 @@ const RESULTS_PER_PAGE = 20;
 
 export default function SearchPage() {
   const { user } = useUser();
-  useDatabase(); // ensure DB is initialized
+  const db = useDatabase();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -144,21 +143,20 @@ export default function SearchPage() {
         if (dTo) params.set('dateTo', dTo);
         if (minConf > 0) params.set('minConfidence', String(minConf));
 
-        const res = await fetch(`/api/search?${params}`, {
-          headers: { 'x-user-id': user.id },
-          signal: controller.signal,
-        });
-
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || 'Search failed');
-        }
-
-        const data: SearchResponse = await res.json();
+        const data = searchAll(db, {
+          query: searchQuery.trim(),
+          filter,
+          page,
+          limit: RESULTS_PER_PAGE,
+          verificationStatus: vStatus || undefined,
+          dateFrom: dFrom || undefined,
+          dateTo: dTo || undefined,
+          minConfidence: minConf > 0 ? minConf : undefined,
+        }) as any;
         if (!controller.signal.aborted) {
-          setResults(data.results);
-          setTotal(data.total);
-          setTotalPages(data.totalPages);
+          setResults(data.results || []);
+          setTotal(data.total || 0);
+          setTotalPages(data.totalPages || 0);
         }
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
