@@ -27,7 +27,7 @@ export default function ExportPage() {
   const [showVerifyDialog, setShowVerifyDialog] = useState(false);
   const [verifyPassword, setVerifyPassword] = useState('');
   const [verifyError, setVerifyError] = useState<string | null>(null);
-  const [verifying, setVerifying] = useState(false);
+  const [verifying, _setVerifying] = useState(false);
   const [pendingAction, setPendingAction] = useState<ExportAction | null>(null);
 
   // Check export readiness on mount

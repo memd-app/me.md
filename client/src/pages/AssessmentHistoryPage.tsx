@@ -342,7 +342,7 @@ export default function AssessmentHistoryPage() {
     setError(null);
     try {
       const data = getAssessmentHistory(db);
-      setHistory(data.history || []);
+      setHistory((data.history || []) as any);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load history');
     } finally {

@@ -6,8 +6,7 @@ import ApiErrorAlert from '@/components/ApiErrorAlert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { formatShortDate } from '@/utils/dateFormat';
 import * as d3 from 'd3';
-// Graph service function available for future migration from fetch calls
-// import { getGraphData } from '@/services/graph';
+import { getGraphData } from '@/services/graph';
 
 interface GraphNode {
   id: string;
@@ -155,7 +154,7 @@ function getEdgeColor(edge: GraphEdge): string {
 
 export default function KnowledgeGraphPage() {
   const { user } = useUser();
-  useDatabase(); // ensure DB is initialized
+  const db = useDatabase();
   const navigate = useNavigate();
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -170,25 +169,19 @@ export default function KnowledgeGraphPage() {
   const simulationRef = useRef<d3.Simulation<GraphNode, GraphEdge> | null>(null);
 
   // Fetch graph data
-  const fetchGraph = useCallback(async (signal?: AbortSignal) => {
+  const fetchGraph = useCallback(async (_signal?: AbortSignal) => {
     if (!user) return;
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('/api/graph', {
-        headers: { 'x-user-id': user.id },
-        signal,
-      });
-      if (!res.ok) throw new Error('Failed to load graph data');
-      const data = await res.json();
-      setGraphData(data);
+      const data = getGraphData(db);
+      setGraphData(data as any);
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'Failed to load graph');
     } finally {
-      if (!signal?.aborted) setLoading(false);
+      setLoading(false);
     }
-  }, [user]);
+  }, [user, db]);
 
   useEffect(() => {
     const controller = new AbortController();

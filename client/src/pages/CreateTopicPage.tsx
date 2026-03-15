@@ -197,7 +197,7 @@ export default function CreateTopicPage() {
     setIsSubmitting(true);
 
     try {
-      const data = createTopic(db, {
+      createTopic(db, {
         title: title.trim(),
         description: description.trim() || null,
         tags: tags.length > 0 ? tags : null,

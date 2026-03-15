@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useUser } from '../../contexts/UserContext';
+import { useDatabase } from '../../contexts/DatabaseContext';
+import { getConflicts, getConflictStats, detectConflicts, resolveConflict } from '@/services/conflicts';
 import { formatShortDate } from '@/utils/dateFormat';
 
 interface Insight {
@@ -82,6 +84,7 @@ const RESOLUTION_OPTIONS = [
 
 export default function ConflictsSection() {
   const { user } = useUser();
+  const db = useDatabase();
   const [conflicts, setConflicts] = useState<Conflict[]>([]);
   const [stats, setStats] = useState<ConflictStats>({ total: 0, unresolved: 0, resolved: 0 });
   const [isLoading, setIsLoading] = useState(true);
@@ -92,47 +95,22 @@ export default function ConflictsSection() {
   const [isResolving, setIsResolving] = useState(false);
   const [showResolved, setShowResolved] = useState(false);
 
-  const fetchConflicts = useCallback(async (signal?: AbortSignal) => {
+  const fetchConflicts = useCallback(async (_signal?: AbortSignal) => {
     if (!user) return;
     try {
       setError(null);
-      const statusParam = showResolved ? '' : '?status=unresolved';
-      const [conflictsRes, statsRes] = await Promise.all([
-        fetch(`/api/conflicts${statusParam}`, {
-          headers: { 'x-user-id': user.id },
-          signal,
-        }),
-        fetch('/api/conflicts/stats', {
-          headers: { 'x-user-id': user.id },
-          signal,
-        }),
-      ]);
-
-      if (conflictsRes.ok) {
-        const data = await conflictsRes.json();
-        if (!signal?.aborted) {
-          setConflicts(data.conflicts || []);
-        }
-      }
-
-      if (statsRes.ok) {
-        const data = await statsRes.json();
-        if (!signal?.aborted) {
-          setStats(data);
-        }
-      }
+      const status = showResolved ? undefined : 'unresolved';
+      const conflictsData = getConflicts(db, status);
+      const statsData = getConflictStats(db);
+      setConflicts(conflictsData as any);
+      setStats(statsData);
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error('Failed to fetch conflicts:', err);
-      if (!signal?.aborted) {
-        setError('Failed to load conflicts');
-      }
+      setError('Failed to load conflicts');
     } finally {
-      if (!signal?.aborted) {
-        setIsLoading(false);
-      }
+      setIsLoading(false);
     }
-  }, [user, showResolved]);
+  }, [user, showResolved, db]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -147,20 +125,8 @@ export default function ConflictsSection() {
     setSuccessMsg(null);
 
     try {
-      const res = await fetch('/api/conflicts/detect', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to detect conflicts');
-      }
-
-      const data = await res.json();
-      setSuccessMsg(data.message);
+      const data = detectConflicts(db);
+      setSuccessMsg((data as any).message || 'Conflict detection complete');
 
       // Refresh conflicts list
       await fetchConflicts();
@@ -193,23 +159,7 @@ export default function ConflictsSection() {
     setError(null);
 
     try {
-      const res = await fetch(`/api/conflicts/${resolutionState.conflictId}/resolve`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify({
-          resolution: resolutionState.resolution,
-          resolutionNote: resolutionState.note.trim() || undefined,
-        }),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to resolve conflict');
-      }
-
+      resolveConflict(db, resolutionState.conflictId, resolutionState.note.trim() || '');
       setSuccessMsg('Conflict resolved successfully');
       setResolutionState(null);
 

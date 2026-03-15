@@ -121,7 +121,7 @@ export default function AssessmentPage() {
     const loadHistory = async () => {
       try {
         const data = getAssessmentHistory(db);
-        const history: AssessmentAttempt[] = data.history || [];
+        const history = (data.history || []) as AssessmentAttempt[];
 
         // Check for in-progress attempt
         const inProgress = history.find((a: AssessmentAttempt) => a.status === 'in_progress');

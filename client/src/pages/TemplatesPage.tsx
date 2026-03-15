@@ -58,7 +58,7 @@ export default function TemplatesPage() {
       try {
         const data = getTemplates(db);
         if (!controller.signal.aborted) {
-          setTemplates(data.templates || []);
+          setTemplates((data.templates || []) as any);
         }
       } catch (err) {
         if (!controller.signal.aborted) {

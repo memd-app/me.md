@@ -121,7 +121,7 @@ export default function ImportPage() {
                 isProcessed: true,
                 extractedInsights: data.insights || [],
                 topicCreated: data.topicCreated,
-              }
+              } as ImportResult
             : r
         )
       );
