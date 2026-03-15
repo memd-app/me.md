@@ -22,15 +22,7 @@ interface SearchResult {
   createdAt?: string;
 }
 
-interface SearchResponse {
-  results: SearchResult[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-  query: string;
-  filter: string;
-}
+
 
 type FilterType = 'all' | 'topics' | 'insights' | 'sessions' | 'notes';
 type VerificationFilter = '' | 'verified' | 'unverified' | 'rejected' | 're_verification_pending';

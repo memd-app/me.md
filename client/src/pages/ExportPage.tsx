@@ -4,7 +4,7 @@ import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '@/contexts/ToastContext';
 import Modal from '@/components/common/Modal';
-import { getExportStatus, exportAsMarkdown, exportAsJson } from '@/services/profile';
+import { getExportStatus, exportAsMarkdown, exportAsJson, exportAsOpenAIInstructions, exportAsClaudeMd, exportAsCursorRules } from '@/services/profile';
 
 type ExportFormat = 'markdown' | 'json' | 'both';
 type ExportAction = 'download' | 'clipboard';
@@ -378,6 +378,87 @@ export default function ExportPage() {
             className="btn-secondary"
           >
             {copying ? 'Copying...' : 'Copy Profile'}
+          </button>
+        </div>
+      </div>
+
+      {/* AI-Specific Export Formats */}
+      <div className="card mb-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+          Export for AI Tools
+        </h2>
+        <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+          Download your profile formatted for specific AI tools
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <button
+            onClick={() => {
+              try {
+                const content = exportAsOpenAIInstructions(db);
+                const blob = new Blob([content], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'chatgpt-custom-instructions.txt';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                addToast('ChatGPT instructions downloaded', 'success');
+              } catch (err) {
+                addToast(err instanceof Error ? err.message : 'Export failed', 'error');
+              }
+            }}
+            className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-green-300 dark:hover:border-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all text-left"
+          >
+            <div className="font-semibold text-sm text-gray-900 dark:text-white mb-1">ChatGPT Custom Instructions</div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Paste into ChatGPT &gt; Settings &gt; Personalization</p>
+          </button>
+          <button
+            onClick={() => {
+              try {
+                const content = exportAsClaudeMd(db);
+                const blob = new Blob([content], { type: 'text/markdown' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'CLAUDE.md';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                addToast('CLAUDE.md downloaded', 'success');
+              } catch (err) {
+                addToast(err instanceof Error ? err.message : 'Export failed', 'error');
+              }
+            }}
+            className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-orange-300 dark:hover:border-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-all text-left"
+          >
+            <div className="font-semibold text-sm text-gray-900 dark:text-white mb-1">CLAUDE.md</div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Drop into any project for Claude Code context</p>
+          </button>
+          <button
+            onClick={() => {
+              try {
+                const content = exportAsCursorRules(db);
+                const blob = new Blob([content], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = '.cursorrules';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                addToast('Cursor rules downloaded', 'success');
+              } catch (err) {
+                addToast(err instanceof Error ? err.message : 'Export failed', 'error');
+              }
+            }}
+            className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-left"
+          >
+            <div className="font-semibold text-sm text-gray-900 dark:text-white mb-1">.cursorrules</div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Drop into your project root for Cursor AI context</p>
           </button>
         </div>
       </div>
