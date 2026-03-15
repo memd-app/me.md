@@ -33,6 +33,10 @@ export function downloadDatabase(filename = 'memd-backup.db'): void {
   URL.revokeObjectURL(url)
 }
 
+export function downloadForMCP(): void {
+  downloadDatabase('memd.db')
+}
+
 export async function readDatabaseFile(file: File): Promise<Uint8Array> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
