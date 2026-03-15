@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import { getTopics, getTopicSuggestions, acceptTopicSuggestion } from '@/services/topics';
 import { formatShortDate } from '@/utils/dateFormat';
 
 const TOPICS_PER_PAGE = 10;
@@ -101,7 +103,8 @@ interface AISuggestion {
 }
 
 export default function TopicsPage() {
-  const { user } = useAuth();
+  const { user } = useUser();
+  const db = useDatabase();
   const [searchParams, setSearchParams] = useSearchParams();
   const [topics, setTopics] = useState<Topic[]>([]);
   // Initialize filter state from URL params for deep-linking support
@@ -142,15 +145,8 @@ export default function TopicsPage() {
     }
     setError(null);
     try {
-      const res = await fetch('/api/topics', {
-        headers: { 'x-user-id': user.id },
-        signal,
-      });
-      if (!res.ok) {
-        throw new Error('Failed to load topics');
-      }
-      const data = await res.json();
-      setTopics(data.topics || []);
+      const data = getTopics(db);
+      setTopics(data || []);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'Failed to load topics');
@@ -196,13 +192,7 @@ export default function TopicsPage() {
     setIsSuggestionsLoading(true);
     setSuggestionsError(null);
     try {
-      const res = await fetch('/api/topics/suggestions', {
-        headers: { 'x-user-id': user.id },
-      });
-      if (!res.ok) {
-        throw new Error('Failed to load suggestions');
-      }
-      const data = await res.json();
+      const data = await getTopicSuggestions(db);
       setSuggestions(data.suggestions || []);
       setSuggestionsMessage(data.message || '');
       setSuggestionsSource(data.source || 'preset');
@@ -225,25 +215,14 @@ export default function TopicsPage() {
     if (!user || acceptingIndex !== null) return;
     setAcceptingIndex(index);
     try {
-      const res = await fetch('/api/topics/suggestions/accept', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify({
+      acceptTopicSuggestion(db, {
           title: suggestion.title,
           description: suggestion.description,
           category: suggestion.category,
           intent: suggestion.intent,
           tags: suggestion.tags,
           suggestedQuestion: suggestion.suggestedQuestion,
-        }),
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({ error: 'Failed to create topic' }));
-        throw new Error(errData.error || 'Failed to create topic');
-      }
+        });
       // Refresh topics list
       setFetchVersion(v => v + 1);
       // Remove the accepted suggestion from the list

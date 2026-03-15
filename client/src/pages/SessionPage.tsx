@@ -1,9 +1,13 @@
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '@/contexts/ToastContext';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { formatFullDate, formatDateTime, formatTime } from '@/utils/dateFormat';
+import { getSession, pauseSession, resumeSession, sendMessage, retryMessage, getMultiBucketSuggestions, saveMultiBucketConnections } from '@/services/sessions';
+import { distillSession, regenerateNote, getNoteForSession, updateNote } from '@/services/notes';
+import { createBookmark, deleteBookmark } from '@/services/bookmarks';
 
 interface Message {
   id: string;
@@ -206,7 +210,8 @@ const MessageBubble = memo(function MessageBubble({
 
 export default function SessionPage() {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user } = useUser();
+  const db = useDatabase();
   const { addToast } = useToast();
   const [session, setSession] = useState<Session | null>(null);
   const [topic, setTopic] = useState<Topic | null>(null);
@@ -295,22 +300,10 @@ export default function SessionPage() {
       setIsLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/sessions/${id}`, {
-          headers: { 'x-user-id': user.id },
-        });
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          if (res.status === 404) {
-            throw new Error(data.error || 'This session does not exist or has been deleted. Please go back and start a new session.');
-          }
-          if (res.status === 401) {
-            throw new Error('You need to be signed in to view this session. Please sign in and try again.');
-          }
-          throw new Error(data.error || 'Failed to load session. Please refresh the page to try again.');
+        const data = getSession(db, id!);
+        if (!data) {
+          throw new Error('This session does not exist or has been deleted. Please go back and start a new session.');
         }
-
-        const data = await res.json();
         setSession(data.session);
         setTopic(data.topic);
         setMessages(data.messages || []);
@@ -333,11 +326,7 @@ export default function SessionPage() {
   const fetchNote = async (sessionId: string) => {
     if (!user) return;
     try {
-      const res = await fetch(`/api/notes/session/${sessionId}`, {
-        headers: { 'x-user-id': user.id },
-      });
-      if (res.ok) {
-        const data = await res.json();
+        const data = getNoteForSession(db, sessionId);
         setNote(data.note);
         setNoteInsights(data.insights || []);
         setSelectedFormat((data.note.selectedFormat || 'full_analysis') as NoteFormat);
@@ -345,7 +334,6 @@ export default function SessionPage() {
 
         // Also fetch multi-bucket cross-topic suggestions
         fetchMultiBucketSuggestions(sessionId);
-      }
     } catch {
       // No note found, that's OK
     }
@@ -355,11 +343,7 @@ export default function SessionPage() {
   const fetchMultiBucketSuggestions = async (sessionId: string) => {
     if (!user) return;
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/multi-bucket`, {
-        headers: { 'x-user-id': user.id },
-      });
-      if (res.ok) {
-        const data = await res.json();
+        const data = getMultiBucketSuggestions(db, sessionId);
         if (data.suggestedConnections && data.suggestedConnections.length > 0) {
           setSuggestedConnections(data.suggestedConnections);
           // Pre-select already-saved connections
@@ -371,7 +355,6 @@ export default function SessionPage() {
             setConnectionsSaved(false);
           }
         }
-      }
     } catch {
       // Silently fail - multi-bucket is optional
     }
@@ -385,21 +368,12 @@ export default function SessionPage() {
     setError(null);
 
     try {
-      const res = await fetch(`/api/sessions/${session.id}/distill`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify({ format: 'full_analysis' }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to distill session');
+      const distillData = await distillSession(db, session.id, 'full_analysis');
+      if (!distillData) {
+        throw new Error('Failed to distill session');
       }
 
-      const data = await res.json();
+      const data = distillData;
       setNote(data.note);
       setNoteInsights(data.insights || []);
       setSelectedFormat((data.note.selectedFormat || 'full_analysis') as NoteFormat);
@@ -1177,25 +1151,10 @@ export default function SessionPage() {
     try {
       if (isCurrentlyBookmarked) {
         // Remove bookmark
-        const res = await fetch(`/api/bookmarks/${message.id}`, {
-          method: 'DELETE',
-          headers: { 'x-user-id': user.id },
-        });
-        if (!res.ok) throw new Error('Failed to remove bookmark');
+        deleteBookmark(db, message.id);
       } else {
         // Add bookmark
-        const res = await fetch('/api/bookmarks', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-user-id': user.id,
-          },
-          body: JSON.stringify({
-            messageId: message.id,
-            sessionId: session.id,
-          }),
-        });
-        if (!res.ok) throw new Error('Failed to add bookmark');
+        createBookmark(db, message.id, session.id);
       }
     } catch {
       // Revert optimistic update

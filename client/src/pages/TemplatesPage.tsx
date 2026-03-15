@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import { getTemplates, createTopicFromTemplate } from '@/services/templates';
 
 interface Template {
   id: string;
@@ -37,7 +39,8 @@ const TAG_COLORS: Record<string, string> = {
 
 export default function TemplatesPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user } = useUser();
+  const db = useDatabase();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

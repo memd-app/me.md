@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import { formatTime } from '@/utils/dateFormat';
+import { getContextStatus, compareSandboxStream } from '@/services/sandbox';
 
 interface ComparisonResult {
   prompt: string;
@@ -42,7 +44,8 @@ const EXAMPLE_PROMPTS = [
 ];
 
 export default function SandboxPage() {
-  const { user } = useAuth();
+  const { user } = useUser();
+  const db = useDatabase();
   const [prompt, setPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ComparisonResult | null>(null);
@@ -59,20 +62,14 @@ export default function SandboxPage() {
     if (!user?.id) return;
     const controller = new AbortController();
 
-    fetch('/api/sandbox/context-status', {
-      headers: { 'x-user-id': user.id },
-      signal: controller.signal,
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (!controller.signal.aborted) {
-          setContextStatus(data);
-        }
-      })
-      .catch((err) => {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-        /* ignore other context status errors */
-      });
+    try {
+      const data = getContextStatus(db);
+      if (!controller.signal.aborted) {
+        setContextStatus(data);
+      }
+    } catch {
+      /* ignore context status errors */
+    }
 
     return () => controller.abort();
   }, [user?.id]);
@@ -108,119 +105,39 @@ export default function SandboxPage() {
     setPersonalizedDone(false);
 
     try {
-      // Use the streaming endpoint
-      const response = await fetch('/api/sandbox/compare/stream', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify({ prompt: prompt.trim() }),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        // Non-streaming error responses (401, 400, etc.)
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `Server error: ${response.status}`);
-      }
-
-      // Parse the SSE stream
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('No response body');
-      }
-
-      const decoder = new TextDecoder();
-      let buffer = '';
+      // Use direct service call with streaming generators
+      const streams = compareSandboxStream(db, prompt.trim());
       let genericText = '';
       let personalizedText = '';
-      let finalResult: Partial<ComparisonResult> = { prompt: prompt.trim() };
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-
-        // Process complete SSE messages
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const dataStr = line.slice(6).trim();
-          if (!dataStr) continue;
-
-          try {
-            const event = JSON.parse(dataStr);
-
-            switch (event.type) {
-              case 'start':
-                // Initial metadata
-                break;
-
-              case 'generic_chunk':
-                genericText += event.content;
-                setGenericStreaming(genericText);
-                break;
-
-              case 'generic_done':
-                setGenericDone(true);
-                break;
-
-              case 'personalized_chunk':
-                personalizedText += event.content;
-                setPersonalizedStreaming(personalizedText);
-                break;
-
-              case 'personalized_done':
-                setPersonalizedDone(true);
-                break;
-
-              case 'complete':
-                finalResult = {
-                  ...finalResult,
-                  genericOutput: genericText,
-                  personalizedOutput: personalizedText,
-                  hasContext: event.hasContext,
-                  usedAI: event.usedAI,
-                  contextSummary: event.contextSummary,
-                  generatedAt: event.generatedAt,
-                };
-                if (!controller.signal.aborted) {
-                  setResult(finalResult as ComparisonResult);
-                }
-                break;
-
-              case 'error':
-                throw new Error(event.message || 'AI generation failed');
-            }
-          } catch (parseErr) {
-            // If it's not a parse error but a thrown error from inside switch, rethrow
-            if (parseErr instanceof Error && parseErr.message !== 'AI generation failed') {
-              // Only ignore JSON parse errors, not application errors
-              if (parseErr instanceof SyntaxError) continue;
-            }
-            throw parseErr;
-          }
-        }
+      // Stream generic response
+      const genericGen = streams.generic();
+      for await (const chunk of genericGen) {
+        if (controller.signal.aborted) return;
+        genericText += chunk;
+        setGenericStreaming(genericText);
       }
+      setGenericDone(true);
 
-      // If we finished reading but never got a 'complete' event, build result from what we have
-      if (!finalResult.generatedAt && (genericText || personalizedText)) {
-        finalResult = {
-          ...finalResult,
+      // Stream personalized response
+      const personalizedGen = streams.personalized();
+      for await (const chunk of personalizedGen) {
+        if (controller.signal.aborted) return;
+        personalizedText += chunk;
+        setPersonalizedStreaming(personalizedText);
+      }
+      setPersonalizedDone(true);
+
+      if (!controller.signal.aborted) {
+        setResult({
+          prompt: prompt.trim(),
           genericOutput: genericText,
           personalizedOutput: personalizedText,
-          hasContext: false,
+          hasContext: streams.hasContext,
           usedAI: true,
-          contextSummary: null,
+          contextSummary: streams.contextSummary as ComparisonResult["contextSummary"],
           generatedAt: new Date().toISOString(),
-        };
-        if (!controller.signal.aborted) {
-          setResult(finalResult as ComparisonResult);
-        }
+        });
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;

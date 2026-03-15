@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import VerifiedBadge from '@/components/VerifiedBadge';
 import { formatRelativeTime, formatDateTime } from '@/utils/dateFormat';
+import { getNotes, getNote } from '@/services/notes';
 
 type NoteFormat = 'full_analysis' | 'brief_summary' | 'decision_framework' | 'json';
 
@@ -162,7 +164,8 @@ function SimpleMarkdown({ content }: { content: string }) {
 }
 
 export default function NotesPage() {
-  const { user } = useAuth();
+  const { user } = useUser();
+  const db = useDatabase();
   const [notes, setNotes] = useState<NoteListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -185,12 +188,7 @@ export default function NotesPage() {
       setIsLoading(true);
       setError(null);
       try {
-        const res = await fetch('/api/notes', {
-          headers: { 'x-user-id': user.id },
-          signal: controller.signal,
-        });
-        if (!res.ok) throw new Error('Failed to load notes');
-        const data = await res.json();
+        const data = getNotes(db);
         setNotes(data.notes || []);
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
@@ -208,11 +206,7 @@ export default function NotesPage() {
     if (!user) return;
     setIsLoadingDetail(true);
     try {
-      const res = await fetch(`/api/notes/${noteId}`, {
-        headers: { 'x-user-id': user.id },
-      });
-      if (!res.ok) throw new Error('Failed to fetch note detail');
-      const data = await res.json();
+      const data = getNote(db, noteId);
       const note = data.note;
       // Find the enriched note from our list to get topicTitle
       const enrichedNote = notes.find(n => n.id === noteId);

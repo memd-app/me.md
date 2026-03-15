@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '@/contexts/ToastContext';
+import { getAssessmentHistory, startAssessment, submitAnswers, completeAssessment } from '@/services/assessment';
 
 // ============================================
 // Types
@@ -78,7 +80,8 @@ const AUTO_SAVE_INTERVAL = 10; // Save every 10 questions
 type Phase = 'loading' | 'landing' | 'test' | 'completing' | 'completed';
 
 export default function AssessmentPage() {
-  const { user } = useAuth();
+  const { user } = useUser();
+  const db = useDatabase();
   const { addToast } = useToast();
   const navigate = useNavigate();
 

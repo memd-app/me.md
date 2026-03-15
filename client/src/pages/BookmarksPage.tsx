@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { formatShortDate, formatTime, formatDateTime } from '@/utils/dateFormat';
+import { getBookmarks, deleteBookmark } from '@/services/bookmarks';
 
 interface BookmarkMessage {
   id: string;
@@ -35,7 +37,8 @@ interface Bookmark {
 }
 
 export default function BookmarksPage() {
-  const { user } = useAuth();
+  const { user } = useUser();
+  const db = useDatabase();
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,17 +51,8 @@ export default function BookmarksPage() {
       setIsLoading(true);
       setError(null);
       try {
-        const res = await fetch('/api/bookmarks', {
-          headers: { 'x-user-id': user.id },
-          signal: controller.signal,
-        });
-
-        if (!res.ok) {
-          throw new Error('Failed to load bookmarks');
-        }
-
-        const data = await res.json();
-        setBookmarks(data.bookmarks || []);
+        const data = getBookmarks(db);
+        setBookmarks((data.bookmarks || []) as Bookmark[]);
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         setError(err instanceof Error ? err.message : 'Failed to load bookmarks');
@@ -78,14 +72,7 @@ export default function BookmarksPage() {
     setBookmarks(prev => prev.filter(b => b.id !== bookmark.id));
 
     try {
-      const res = await fetch(`/api/bookmarks/${bookmark.messageId}`, {
-        method: 'DELETE',
-        headers: { 'x-user-id': user.id },
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to remove bookmark');
-      }
+      deleteBookmark(db, bookmark.messageId);
     } catch {
       // Revert on error
       setBookmarks(prev => [...prev, bookmark].sort((a, b) =>

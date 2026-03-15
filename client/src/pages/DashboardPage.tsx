@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import { formatActivityDate } from '@/utils/dateFormat';
+import { getDashboardStats, getActivityData } from '@/services/dashboard';
+import { getLatestAssessment } from '@/services/assessment';
 
 interface CategoryCompleteness {
   category: string;
@@ -71,7 +74,8 @@ const CATEGORY_ICONS: Record<string, string> = {
 };
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user } = useUser();
+  const db = useDatabase();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -89,35 +93,29 @@ export default function DashboardPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const [statsRes, activityRes, assessmentRes] = await Promise.all([
-        fetch('/api/dashboard/stats', { headers: { 'x-user-id': user.id }, signal }),
-        fetch('/api/dashboard/activity', { headers: { 'x-user-id': user.id }, signal }),
-        fetch('/api/assessment/latest', { headers: { 'x-user-id': user.id }, signal }).catch(() => null),
-      ]);
-
-      if (!statsRes.ok || !activityRes.ok) {
-        throw new Error('The server encountered an unexpected error. Please try again in a moment. If the problem persists, contact support.');
-      }
-
-      const statsData = await statsRes.json();
+      const statsData = getDashboardStats(db);
       setStats(statsData);
 
-      const activityData = await activityRes.json();
+      const activityData = getActivityData(db);
       setActivity(activityData.activity || []);
 
-      // Assessment data (optional - 404 means not taken)
-      if (assessmentRes && assessmentRes.ok) {
-        const aData = await assessmentRes.json();
-        setAssessmentStatus({
-          hasTaken: true,
-          lastCompletedAt: aData.completedAt,
-          attemptId: aData.attemptId,
-          domainScores: aData.domainScores?.map((d: { domain: string; domainScore: number }) => ({
-            domain: d.domain,
-            score: d.domainScore,
-          })) || null,
-        });
-      } else {
+      // Assessment data (optional - null means not taken)
+      try {
+        const aData = getLatestAssessment(db);
+        if (aData) {
+          setAssessmentStatus({
+            hasTaken: true,
+            lastCompletedAt: aData.completedAt,
+            attemptId: aData.attemptId,
+            domainScores: aData.domainScores?.map((d: { domain: string; domainScore: number }) => ({
+              domain: d.domain,
+              score: d.domainScore,
+            })) || null,
+          });
+        } else {
+          setAssessmentStatus({ hasTaken: false, lastCompletedAt: null, attemptId: null, domainScores: null });
+        }
+      } catch {
         setAssessmentStatus({ hasTaken: false, lastCompletedAt: null, attemptId: null, domainScores: null });
       }
     } catch (err) {
@@ -128,7 +126,7 @@ export default function DashboardPage() {
     } finally {
       if (!signal?.aborted) setIsLoading(false);
     }
-  }, [user]);
+  }, [user, db]);
 
   useEffect(() => {
     const controller = new AbortController();

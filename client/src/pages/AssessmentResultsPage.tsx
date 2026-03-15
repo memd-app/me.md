@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
+import { getAttemptResults, generateInsightsForAttempt } from '@/services/assessment';
 
 // ============================================
 // Types
@@ -447,7 +449,8 @@ function DomainCard({ domainScoreData, domainResult, animationDelay }: DomainCar
 export default function AssessmentResultsPage() {
   const { attemptId } = useParams<{ attemptId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user } = useUser();
+  const db = useDatabase();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { formatShortDate } from '@/utils/dateFormat';
 import * as d3 from 'd3';
+import { getGraphData } from '@/services/graph';
 
 interface GraphNode {
   id: string;
@@ -151,7 +153,8 @@ function getEdgeColor(edge: GraphEdge): string {
 }
 
 export default function KnowledgeGraphPage() {
-  const { user } = useAuth();
+  const { user } = useUser();
+  const db = useDatabase();
   const navigate = useNavigate();
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);

@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '@/contexts/ToastContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import { getTopics } from '@/services/topics';
+import { createSession, createMiniSession } from '@/services/sessions';
 
 interface Topic {
   id: string;
@@ -16,7 +19,8 @@ interface Topic {
 }
 
 export default function NewSessionPage() {
-  const { user } = useAuth();
+  const { user } = useUser();
+  const db = useDatabase();
   const navigate = useNavigate();
   const { addToast } = useToast();
   const [isStartingMini, setIsStartingMini] = useState(false);
@@ -36,17 +40,9 @@ export default function NewSessionPage() {
     const fetchTopics = async () => {
       setTopicLoadError(null);
       try {
-        const res = await fetch('/api/topics', {
-          headers: { 'x-user-id': user.id },
-          signal: controller.signal,
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (!controller.signal.aborted) {
-            setTopics(data.topics || []);
-          }
-        } else if (!controller.signal.aborted) {
-          setTopicLoadError('Failed to load your topics. Please refresh the page to try again.');
+        const data = getTopics(db);
+        if (!controller.signal.aborted) {
+          setTopics(data || []);
         }
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
@@ -72,20 +68,7 @@ export default function NewSessionPage() {
     setError(null);
 
     try {
-      const res = await fetch('/api/sessions/mini', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: 'Server error' }));
-        throw new Error(data.error || 'Failed to start mini session. Please try again.');
-      }
-
-      const data = await res.json();
+      const data = await createMiniSession(db);
       navigate(`/app/sessions/${data.session.id}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to start mini session';
@@ -120,31 +103,7 @@ export default function NewSessionPage() {
     setError(null);
 
     try {
-      const res = await fetch('/api/sessions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify({ topicId, enableResearch }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: 'Failed to start session' }));
-
-        // If topic was deleted (404), remove it from the local list and show actionable toast
-        if (res.status === 404) {
-          setTopics(prev => prev.filter(t => t.id !== topicId));
-          addToast('This topic was deleted or no longer exists. The list has been refreshed.', 'error', 5000);
-          setIsStartingTopic(null);
-          setIsResearching(null);
-          return;
-        }
-
-        throw new Error(data.error || 'Failed to start session. Please try again.');
-      }
-
-      const data = await res.json();
+      const data = await createSession(db, topicId, { enableResearch });
       if (enableResearch) {
         addToast('Research-driven session started! The AI has researched your topic for more informed questions.', 'success', 4000);
       }

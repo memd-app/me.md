@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '../contexts/ToastContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import ConflictsSection from '../components/verification/ConflictsSection';
 import SwipeableCard from '../components/verification/SwipeableCard';
+import { getInsightStats, getPendingInsights, getAllInsights, verifyInsight, rejectInsight, editInsight, getInsight } from '@/services/insights';
 import { formatDateTime as sharedFormatDateTime, formatShortDate } from '@/utils/dateFormat';
 
 interface Insight {
@@ -71,7 +73,8 @@ const INTERVAL_OPTIONS = [
 ];
 
 export default function VerificationPage() {
-  const { user } = useAuth();
+  const { user } = useUser();
+  const db = useDatabase();
   const { addToast } = useToast();
   const [pendingInsights, setPendingInsights] = useState<Insight[]>([]);
   const [verifiedInsights, setVerifiedInsights] = useState<Insight[]>([]);
@@ -100,35 +103,14 @@ export default function VerificationPage() {
     try {
       setError(null);
 
-      const [statsRes, pendingRes, verifiedRes] = await Promise.all([
-        fetch('/api/insights/stats', {
-          headers: { 'x-user-id': user.id },
-          signal,
-        }),
-        fetch('/api/insights/pending', {
-          headers: { 'x-user-id': user.id },
-          signal,
-        }),
-        fetch('/api/insights?status=verified', {
-          headers: { 'x-user-id': user.id },
-          signal,
-        }),
-      ]);
+      const statsData = getInsightStats(db);
+      setStats(statsData);
 
-      if (statsRes.ok) {
-        const statsData = await statsRes.json();
-        setStats(statsData);
-      }
+      const pendingData = getPendingInsights(db);
+      setPendingInsights(pendingData.insights || []);
 
-      if (pendingRes.ok) {
-        const pendingData = await pendingRes.json();
-        setPendingInsights(pendingData.insights || []);
-      }
-
-      if (verifiedRes.ok) {
-        const verifiedData = await verifiedRes.json();
-        setVerifiedInsights(verifiedData.insights || []);
-      }
+      const verifiedData = getAllInsights(db, 'verified');
+      setVerifiedInsights(verifiedData.insights || []);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error('Failed to fetch verification data:', err);
@@ -153,18 +135,7 @@ export default function VerificationPage() {
         body.reVerifyInterval = reVerifyInterval;
       }
 
-      const res = await fetch(`/api/insights/${insightId}/verify`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to verify insight');
-      }
+      verifyInsight(db, insightId, body.reVerifyInterval ? { reVerifyInterval: body.reVerifyInterval } : undefined);
 
       // Remove from pending list and update stats
       setPendingInsights(prev => prev.filter(i => i.id !== insightId));
@@ -188,18 +159,7 @@ export default function VerificationPage() {
     if (!user) return;
     setActionInProgress(insightId);
     try {
-      const res = await fetch(`/api/insights/${insightId}/reject`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify({ reason: 'Rejected by user' }),
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to reject insight');
-      }
+      rejectInsight(db, insightId, 'Rejected by user');
 
       // Remove from pending list and update stats
       setPendingInsights(prev => prev.filter(i => i.id !== insightId));
@@ -245,40 +205,10 @@ export default function VerificationPage() {
 
     setEditSaving(true);
     try {
-      const res = await fetch(`/api/insights/${editState.insightId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify({
+      const data = editInsight(db, editState.insightId, {
           content: editState.editedContent.trim(),
-          expectedUpdatedAt: editState.expectedUpdatedAt,
-        }),
-      });
-
-      if (res.status === 409) {
-        // Concurrent edit conflict detected
-        const conflictData = await res.json().catch(() => ({}));
-        // Update local state with the server's current content
-        setPendingInsights(prev =>
-          prev.map(i =>
-            i.id === editState.insightId
-              ? { ...i, content: conflictData.currentContent, updatedAt: conflictData.currentUpdatedAt }
-              : i
-          )
-        );
-        setEditState(null);
-        setError('This insight was modified in another session. The latest version has been loaded. Please review and try editing again.');
-        return;
-      }
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to save edit');
-      }
-
-      const data = await res.json();
+          expectedUpdatedAt: editState.expectedUpdatedAt || undefined,
+        });
 
       // Update the insight in the pending list with new content
       setPendingInsights(prev =>
@@ -310,13 +240,7 @@ export default function VerificationPage() {
     setHistoryState({ insightId, entries: [], loading: true });
 
     try {
-      const res = await fetch(`/api/insights/${insightId}`, {
-        headers: { 'x-user-id': user.id },
-      });
-
-      if (!res.ok) throw new Error('Failed to fetch insight history');
-
-      const data = await res.json();
+      const data = getInsight(db, insightId);
       const history: HistoryEntry[] = data.verificationHistory || [];
 
       // Sort chronologically (oldest first) for timeline display
@@ -339,21 +263,7 @@ export default function VerificationPage() {
     const newTier = currentTier === 'never_export' ? 'exportable' : 'never_export';
     setPrivacyUpdating(insightId);
     try {
-      const res = await fetch(`/api/insights/${insightId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify({ privacyTier: newTier }),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to update privacy tier');
-      }
-
-      const data = await res.json();
+      const data = editInsight(db, insightId, { privacyTier: newTier });
       const updatedTier = data.insight.privacyTier;
 
       // Update in pending insights
@@ -380,21 +290,7 @@ export default function VerificationPage() {
     if (!user) return;
     setAgreementUpdating(insightId);
     try {
-      const res = await fetch(`/api/insights/${insightId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify({ agreementScore: score }),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to update agreement score');
-      }
-
-      const data = await res.json();
+      const data = editInsight(db, insightId, { agreementScore: score });
       const updatedScore = data.insight.agreementScore;
 
       // Update in pending insights

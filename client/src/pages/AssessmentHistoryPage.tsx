@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
+import { getAssessmentHistory, compareAssessments, generateChangeInsights } from '@/services/assessment';
 
 // ============================================
 // Types
@@ -311,7 +313,8 @@ function TrendsChart({
 // ============================================
 
 export default function AssessmentHistoryPage() {
-  const { user } = useAuth();
+  const { user } = useUser();
+  const db = useDatabase();
   const [history, setHistory] = useState<HistoryAttempt[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -362,11 +365,7 @@ export default function AssessmentHistoryPage() {
     setComparison(null);
     setChangeInsights(null);
     try {
-      const res = await fetch(`/api/assessment/compare?attemptA=${compareA}&attemptB=${compareB}`, {
-        headers: { 'x-user-id': user.id },
-      });
-      if (!res.ok) throw new Error('Failed to compare assessments');
-      const data = await res.json();
+      const data = compareAssessments(db, compareA!, compareB!);
       setComparison(data.comparison || []);
     } catch (err) {
       console.error('Comparison error:', err);

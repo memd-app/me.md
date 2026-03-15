@@ -1,14 +1,17 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '@/contexts/ToastContext';
 import Modal from '@/components/common/Modal';
+import { getExportStatus, exportAsMarkdown, exportAsJson } from '@/services/profile';
 
 type ExportFormat = 'markdown' | 'json' | 'both';
 type ExportAction = 'download' | 'clipboard';
 
 export default function ExportPage() {
-  const { user } = useAuth();
+  const { user } = useUser();
+  const db = useDatabase();
   const { addToast } = useToast();
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('markdown');
   const [exporting, setExporting] = useState(false);
@@ -34,15 +37,9 @@ export default function ExportPage() {
 
     const checkExportStatus = async () => {
       try {
-        const res = await fetch('/api/profile/export/status', {
-          headers: { 'x-user-id': user.id },
-          signal: controller.signal,
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (!controller.signal.aborted) {
-            setExportStatus(data);
-          }
+        const data = getExportStatus(db);
+        if (!controller.signal.aborted) {
+          setExportStatus(data);
         }
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
@@ -80,7 +77,7 @@ export default function ExportPage() {
     try {
       setExporting(true);
       setStatus(null);
-      const safeName = user.name.replace(/[^a-zA-Z0-9]/g, '_');
+      const safeName = (user.name || 'user').replace(/[^a-zA-Z0-9]/g, '_');
 
       if (selectedFormat === 'markdown' || selectedFormat === 'both') {
         await downloadFile('/api/profile/export/markdown', `${safeName}_me.md`);

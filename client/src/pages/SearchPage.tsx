@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { formatShortDate } from '@/utils/dateFormat';
+import { searchAll } from '@/services/search';
 
 interface SearchResult {
   id: string;
@@ -66,7 +68,8 @@ const TYPE_COLORS: Record<string, string> = {
 const RESULTS_PER_PAGE = 20;
 
 export default function SearchPage() {
-  const { user } = useAuth();
+  const { user } = useUser();
+  const db = useDatabase();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 

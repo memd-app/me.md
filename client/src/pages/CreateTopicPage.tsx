@@ -1,9 +1,11 @@
 import { useState, useMemo, useEffect, useRef, useCallback, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '@/contexts/ToastContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
+import { checkTopicTitle, createTopic } from '@/services/topics';
 
 const INTENT_OPTIONS = [
   { value: 'articulate', label: 'Articulate', description: 'Express something you already know' },
@@ -17,7 +19,8 @@ const TAG_MAX_LENGTH = 50;
 const MAX_TAGS = 20;
 
 export default function CreateTopicPage() {
-  const { user } = useAuth();
+  const { user } = useUser();
+  const db = useDatabase();
   const navigate = useNavigate();
   const { addToast } = useToast();
 
@@ -65,11 +68,7 @@ export default function CreateTopicPage() {
       return;
     }
     try {
-      const res = await fetch(`/api/topics/check-title?title=${encodeURIComponent(trimmed)}`, {
-        headers: { 'x-user-id': user.id },
-      });
-      if (res.ok) {
-        const data = await res.json();
+        const data = checkTopicTitle(db, trimmed);
         if (data.exists && data.count > 0) {
           setDuplicateTitleWarning(
             `You already have ${data.count} topic${data.count > 1 ? 's' : ''} with this title. You can still create another — they will be distinguishable by their dates and descriptions.`
@@ -79,7 +78,6 @@ export default function CreateTopicPage() {
           setDuplicateTitleWarning(null);
           setDuplicateExistingTopics([]);
         }
-      }
     } catch {
       // Silently ignore check errors - this is a non-critical warning
     }

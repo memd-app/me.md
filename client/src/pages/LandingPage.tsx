@@ -21,20 +21,8 @@ export default function LandingPage() {
 
       setWaitlistLoading(true);
       try {
-        const res = await fetch('/api/waitlist', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: waitlistEmail.trim() }),
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          setWaitlistError(data.error || 'Something went wrong. Please try again.');
-          return;
-        }
-
-        setWaitlistMessage(data.message || "You're on the list! We'll be in touch soon.");
+        // Local-only app - no server waitlist
+        setWaitlistMessage("Thanks for your interest! This is a local-only app - you can start using it right away.");
         setWaitlistSubmitted(true);
       } catch {
         setWaitlistError('Network error. Please check your connection and try again.');

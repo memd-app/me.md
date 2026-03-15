@@ -1,7 +1,9 @@
 import { useState, useMemo, FormEvent } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 import { Link } from 'react-router-dom';
+import { importUrls, importText, importFile, importChatGPT, processImport } from '@/services/import';
 
 type ImportMethod = 'chatgpt' | 'url' | 'text' | 'file';
 
@@ -54,7 +56,8 @@ const CHATGPT_EXTRACTION_PROMPT = `I'd like you to help me extract a comprehensi
 Please be thorough and specific. Include concrete examples where possible. If you don't have information for a section, note that it's unknown rather than making assumptions.`;
 
 export default function ImportPage() {
-  const { user } = useAuth();
+  const { user } = useUser();
+  const db = useDatabase();
   const [activeMethod, setActiveMethod] = useState<ImportMethod>('chatgpt');
   const [importResults, setImportResults] = useState<ImportResult[]>([]);
 

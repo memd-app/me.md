@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import { Link, useLocation } from 'react-router-dom';
 import VerifiedBadge from '@/components/VerifiedBadge';
 import { formatDateTime } from '@/utils/dateFormat';
+import { getProfileSummary, regenerateProfile, exportAsMarkdown } from '@/services/profile';
+import { getLatestAssessment } from '@/services/assessment';
 
 interface BigFiveDomainScore {
   domain: string;
@@ -111,7 +114,8 @@ function SectionCard({
 }
 
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user } = useUser();
+  const db = useDatabase();
   const location = useLocation();
   const [summary, setSummary] = useState<ProfileSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -127,14 +131,7 @@ export default function ProfilePage() {
     try {
       if (showLoadingState) setLoading(true);
       setError(null);
-      const res = await fetch('/api/profile/summary', {
-        headers: { 'x-user-id': user.id },
-        signal,
-      });
-      if (!res.ok) {
-        throw new Error('Failed to fetch profile summary');
-      }
-      const data = await res.json();
+      const data = getProfileSummary(db);
       if (isMounted.current) {
         setSummary(data.summary);
         previousInsightCount.current = data.summary.totalVerifiedInsights;
@@ -155,17 +152,8 @@ export default function ProfilePage() {
   const fetchAssessment = useCallback(async (signal?: AbortSignal) => {
     if (!user) return;
     try {
-      const res = await fetch('/api/assessment/latest', {
-        headers: { 'x-user-id': user.id },
-        signal,
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (isMounted.current) setAssessmentData(data);
-      } else {
-        // 404 means no completed assessment - that's fine
-        if (isMounted.current) setAssessmentData(null);
-      }
+      const data = getLatestAssessment(db);
+      if (isMounted.current) setAssessmentData(data as AssessmentLatest | null);
     } catch {
       // ignore
     }
@@ -204,15 +192,7 @@ export default function ProfilePage() {
     if (!user) return;
     try {
       setRegenerating(true);
-      const res = await fetch('/api/profile/regenerate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-      });
-      if (!res.ok) throw new Error('Failed to regenerate profile');
-      const data = await res.json();
+      const data = regenerateProfile(db);
       setSummary(data.summary);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to regenerate');
@@ -225,15 +205,12 @@ export default function ProfilePage() {
     if (!user) return;
     try {
       setExporting(true);
-      const res = await fetch('/api/profile/export/markdown', {
-        headers: { 'x-user-id': user.id },
-      });
-      if (!res.ok) throw new Error('Failed to export profile');
-      const blob = await res.blob();
+      const markdown = exportAsMarkdown(db);
+      const blob = new Blob([markdown], { type: 'text/markdown' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${user.name.replace(/[^a-zA-Z0-9]/g, '_')}_me.md`;
+      a.download = `${(user.name || 'user').replace(/[^a-zA-Z0-9]/g, '_')}_me.md`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

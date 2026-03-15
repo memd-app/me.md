@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import Modal from '@/components/common/Modal';
 import VerifiedBadge from '@/components/VerifiedBadge';
 import { formatDateTime, formatShortDate } from '@/utils/dateFormat';
+import { getTopic, updateTopic, deleteTopic } from '@/services/topics';
+import { createSession, getSessionsByTopic } from '@/services/sessions';
 
 interface Topic {
   id: string;
@@ -93,7 +96,8 @@ const INTENT_LABELS: Record<string, string> = {
 export default function TopicDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user } = useUser();
+  const db = useDatabase();
   const [topic, setTopic] = useState<Topic | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [topicInsights, setTopicInsights] = useState<Insight[]>([]);
@@ -130,32 +134,19 @@ export default function TopicDetailPage() {
       setTopicNotFound(false);
       try {
         // Fetch topic details
-        const topicRes = await fetch(`/api/topics/${id}`, {
-          headers: { 'x-user-id': user.id },
-          signal: controller.signal,
-        });
-        if (topicRes.status === 404) {
+        const topicData = getTopic(db, id!);
+        if (!topicData) {
           setTopicNotFound(true);
           setTopic(null);
           throw new Error('This topic has been deleted or does not exist.');
         }
-        if (!topicRes.ok) {
-          throw new Error('Failed to load topic');
-        }
-        const topicData = await topicRes.json();
-        setTopic(topicData.topic);
+        setTopic(topicData);
         setTopicInsights(topicData.insights || []);
         setConnectedTopics(topicData.connectedTopics || []);
 
         // Fetch sessions for this topic
-        const sessionsRes = await fetch(`/api/sessions?topicId=${id}`, {
-          headers: { 'x-user-id': user.id },
-          signal: controller.signal,
-        });
-        if (sessionsRes.ok) {
-          const sessionsData = await sessionsRes.json();
-          setSessions(sessionsData.sessions || []);
-        }
+        const sessionsData = getSessionsByTopic(db, id!);
+        setSessions(sessionsData || []);
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         setError(err instanceof Error ? err.message : 'Failed to load topic');
@@ -185,22 +176,7 @@ export default function TopicDetailPage() {
     setIsStartingSession(true);
     setError(null);
     try {
-      const res = await fetch('/api/sessions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify({ topicId: topic.id }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (checkTopicDeleted(res.status, data.error)) return;
-        throw new Error(data.error || 'Failed to start session');
-      }
-
-      const data = await res.json();
+      const data = await createSession(db, topic.id);
       navigate(`/app/session/${data.session.id}`);
     } catch (err) {
       if (!topicNotFound) {
@@ -217,22 +193,7 @@ export default function TopicDetailPage() {
     setIsDeleting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/topics/${topic.id}`, {
-        method: 'DELETE',
-        headers: { 'x-user-id': user.id },
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        // If already deleted (404), just navigate away
-        if (res.status === 404) {
-          navigate('/app/topics', { replace: true });
-          return;
-        }
-        throw new Error(data.error || 'Failed to delete topic');
-      }
-
-      // Navigate back to topics list after successful deletion
+      deleteTopic(db, topic.id);
       navigate('/app/topics', { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete topic');
@@ -293,23 +254,8 @@ export default function TopicDetailPage() {
     setUrlError(null);
     try {
       const updatedUrls = [...currentUrls, trimmedUrl];
-      const res = await fetch(`/api/topics/${topic.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify({ referenceUrls: updatedUrls }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (checkTopicDeleted(res.status, data.error)) return;
-        throw new Error(data.error || 'Failed to add URL');
-      }
-
-      const data = await res.json();
-      setTopic(data.topic);
+      const data = updateTopic(db, topic.id, { referenceUrls: updatedUrls });
+      setTopic(data);
       setNewUrl('');
     } catch (err) {
       if (!topicNotFound) {
@@ -327,23 +273,8 @@ export default function TopicDetailPage() {
     const updatedUrls = currentUrls.filter(url => url !== urlToRemove);
 
     try {
-      const res = await fetch(`/api/topics/${topic.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify({ referenceUrls: updatedUrls }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (checkTopicDeleted(res.status, data.error)) return;
-        throw new Error(data.error || 'Failed to remove URL');
-      }
-
-      const data = await res.json();
-      setTopic(data.topic);
+      const data = updateTopic(db, topic.id, { referenceUrls: updatedUrls });
+      setTopic(data);
     } catch (err) {
       if (!topicNotFound) {
         setError(err instanceof Error ? err.message : 'Failed to remove URL');
@@ -401,29 +332,14 @@ export default function TopicDetailPage() {
     setIsSaving(true);
     setError(null);
     try {
-      const res = await fetch(`/api/topics/${topic.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': user.id,
-        },
-        body: JSON.stringify({
+      const data = updateTopic(db, topic.id, {
           title: editTitle.trim(),
           description: editDescription.trim() || null,
           priority: editPriority,
           intent: editIntent || null,
           tags: editTags.length > 0 ? editTags : null,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (checkTopicDeleted(res.status, data.error)) return;
-        throw new Error(data.error || 'Failed to update topic');
-      }
-
-      const data = await res.json();
-      setTopic(data.topic);
+        });
+      setTopic(data);
       setIsEditing(false);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);

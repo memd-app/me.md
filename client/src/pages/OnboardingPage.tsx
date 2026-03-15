@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect, useMemo, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/contexts/UserContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
+import { getPresetTopics, selectPresetTopics } from '@/services/topics';
+import { importUrls, importText, importFile } from '@/services/import';
 
 type OnboardingStep = 'welcome' | 'profile' | 'context' | 'topics';
 type ImportTab = 'url' | 'text' | 'file';
@@ -66,7 +69,8 @@ const CATEGORY_INFO: Record<string, { label: string; icon: string; color: string
 };
 
 export default function OnboardingPage() {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, createUser } = useUser();
+  const db = useDatabase();
   const navigate = useNavigate();
 
   const [currentStep, setCurrentStepRaw] = useState<OnboardingStep>('welcome');
