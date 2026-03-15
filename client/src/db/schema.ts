@@ -39,7 +39,7 @@ export const topics = sqliteTable('topics', {
   status: text('status').default('backlog'),
   priority: text('priority').default('medium'),
   intent: text('intent'),
-  trigger: text('trigger'),
+  trigger: text('trigger_text'),
   referenceUrls: text('reference_urls'),
   contextItems: text('context_items'),
   isPreset: integer('is_preset', { mode: 'boolean' }).default(false),
