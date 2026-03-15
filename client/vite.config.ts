@@ -19,6 +19,23 @@ export default defineConfig({
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
+      '/anthropic': {
+        target: 'https://api.anthropic.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/anthropic/, ''),
+      },
+    },
+  },
+  optimizeDeps: {
+    exclude: ['sql.js'],
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          sqljs: ['sql.js'],
+        },
+      },
     },
   },
 });
