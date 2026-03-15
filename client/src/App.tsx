@@ -1,14 +1,10 @@
-import { Routes, Route } from 'react-router-dom';
-import { AuthProvider } from '@/contexts/AuthContext';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { UserProvider, useUser } from '@/contexts/UserContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { ToastProvider } from '@/contexts/ToastContext';
 import ErrorBoundary from '@/components/ErrorBoundary';
-import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import OnboardingGuard from '@/components/auth/OnboardingGuard';
 import AppLayout from '@/components/layout/AppLayout';
-import LandingPage from '@/pages/LandingPage';
-import LoginPage from '@/pages/LoginPage';
-import RegisterPage from '@/pages/RegisterPage';
 import OnboardingPage from '@/pages/OnboardingPage';
 import DashboardPage from '@/pages/DashboardPage';
 import TopicsPage from '@/pages/TopicsPage';
@@ -22,8 +18,6 @@ import SearchPage from '@/pages/SearchPage';
 import ExportPage from '@/pages/ExportPage';
 import SettingsPage from '@/pages/SettingsPage';
 import NotFoundPage from '@/pages/NotFoundPage';
-import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
-import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import CreateTopicPage from '@/pages/CreateTopicPage';
 import TopicDetailPage from '@/pages/TopicDetailPage';
 import SessionPage from '@/pages/SessionPage';
@@ -34,40 +28,33 @@ import AssessmentPage from '@/pages/AssessmentPage';
 import AssessmentResultsPage from '@/pages/AssessmentResultsPage';
 import AssessmentHistoryPage from '@/pages/AssessmentHistoryPage';
 
+function RootRedirect() {
+  const { user, isLoading } = useUser()
+  if (isLoading) return null
+  return user ? <Navigate to="/dashboard" replace /> : <Navigate to="/onboarding" replace />
+}
+
 function App() {
   return (
     <ErrorBoundary>
-    <AuthProvider>
+    <UserProvider>
       <ThemeProvider>
       <ToastProvider>
       <div className="min-h-screen bg-white dark:bg-dark-bg text-gray-900 dark:text-gray-100">
         <Routes>
-          {/* Public routes */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          {/* Root redirect: user exists → dashboard, otherwise → onboarding */}
+          <Route path="/" element={<RootRedirect />} />
 
-          {/* Onboarding (protected, but no onboarding guard) */}
-          <Route
-            path="/onboarding"
-            element={
-              <ProtectedRoute>
-                <OnboardingPage />
-              </ProtectedRoute>
-            }
-          />
+          {/* Onboarding */}
+          <Route path="/onboarding" element={<OnboardingPage />} />
 
-          {/* Protected app routes (with onboarding guard) */}
+          {/* App routes (with onboarding guard) */}
           <Route
             path="/app"
             element={
-              <ProtectedRoute>
-                <OnboardingGuard>
-                  <AppLayout />
-                </OnboardingGuard>
-              </ProtectedRoute>
+              <OnboardingGuard>
+                <AppLayout />
+              </OnboardingGuard>
             }
           >
             <Route index element={<DashboardPage />} />
@@ -96,13 +83,16 @@ function App() {
             <Route path="*" element={<NotFoundPage />} />
           </Route>
 
+          {/* Convenience top-level redirect for /dashboard */}
+          <Route path="/dashboard" element={<Navigate to="/app/dashboard" replace />} />
+
           {/* 404 */}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </div>
       </ToastProvider>
       </ThemeProvider>
-    </AuthProvider>
+    </UserProvider>
     </ErrorBoundary>
   );
 }
