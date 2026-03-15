@@ -15,10 +15,6 @@ export default defineConfig({
     port: 5173,
     host: '0.0.0.0',
     proxy: {
-      '/api': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
       '/anthropic': {
         target: 'https://api.anthropic.com',
         changeOrigin: true,
@@ -26,9 +22,7 @@ export default defineConfig({
       },
     },
   },
-  optimizeDeps: {
-    exclude: ['sql.js'],
-  },
+  optimizeDeps: {},
   build: {
     rollupOptions: {
       output: {
