@@ -45,3 +45,31 @@ export async function readDatabaseFile(file: File): Promise<Uint8Array> {
     reader.readAsArrayBuffer(file)
   })
 }
+
+/**
+ * Import a database file: read bytes and write directly to IndexedDB.
+ * The caller should reload the page afterward to reinitialize from the new data.
+ */
+export async function importDatabaseFile(file: File): Promise<void> {
+  const bytes = await readDatabaseFile(file)
+  // Write directly to IndexedDB using the same store/key as the database module
+  const DB_KEY = 'memd_database'
+  const DB_STORE = 'memd_store'
+
+  const idb = await new Promise<IDBDatabase>((resolve, reject) => {
+    const req = indexedDB.open(DB_STORE, 1)
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(DB_STORE)
+    }
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+
+  await new Promise<void>((resolve, reject) => {
+    const tx = idb.transaction(DB_STORE, 'readwrite')
+    const store = tx.objectStore(DB_STORE)
+    store.put(bytes, DB_KEY)
+    tx.oncomplete = () => { idb.close(); resolve() }
+    tx.onerror = () => { idb.close(); reject(tx.error) }
+  })
+}

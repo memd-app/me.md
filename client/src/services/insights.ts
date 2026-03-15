@@ -489,7 +489,7 @@ export function editInsight(
 
   // Validate privacyTier
   if (data.privacyTier !== undefined && data.privacyTier !== null) {
-    const validTiers = ['public', 'connections', 'private']
+    const validTiers = ['public', 'connections', 'private', 'exportable', 'never_export']
     if (!validTiers.includes(data.privacyTier)) {
       throw new Error(`Invalid privacy tier "${data.privacyTier}". Must be one of: ${validTiers.join(', ')}`)
     }
