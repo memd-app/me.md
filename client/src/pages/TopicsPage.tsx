@@ -693,7 +693,7 @@ export default function TopicsPage() {
               </svg>
               {suggestionsSource === 'ai' ? (
                 <span className="flex items-center gap-1.5">
-                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-xs">
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gradient-to-r from-purple-500 to-primary-500 text-white text-xs">
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
@@ -771,7 +771,7 @@ export default function TopicsPage() {
 
                       {/* Tags and category */}
                       <div className="flex flex-wrap items-center gap-1 mb-2">
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 capitalize">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 capitalize">
                           {suggestion.category}
                         </span>
                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 capitalize">
@@ -902,7 +902,7 @@ export default function TopicsPage() {
                       {STATUS_LABELS[topic.status] || topic.status}
                     </span>
                     {topic.intent && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">
                         {topic.intent}
                       </span>
                     )}

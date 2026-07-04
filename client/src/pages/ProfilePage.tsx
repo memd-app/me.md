@@ -319,19 +319,19 @@ export default function ProfilePage() {
       {summary && (
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="card text-center py-3">
-            <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+            <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">
               {summary.totalVerifiedInsights}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-300">Verified Insights</p>
           </div>
           <div className="card text-center py-3">
-            <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+            <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">
               {summary.topicsExplored}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-300">Topics Explored</p>
           </div>
           <div className="card text-center py-3">
-            <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+            <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">
               {Object.values(summary.sections).filter(s => s.content.length > 0).length}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-300">Profile Sections</p>
@@ -351,7 +351,7 @@ export default function ProfilePage() {
             </div>
             <Link
               to={`/app/assessment/${assessmentData.attemptId}/results`}
-              className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+              className="text-sm text-primary-600 dark:text-primary-400 hover:underline"
             >
               View Full Results
             </Link>

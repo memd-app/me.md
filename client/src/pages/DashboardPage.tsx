@@ -167,8 +167,8 @@ export default function DashboardPage() {
   const ACTIVITY_CONFIG: Record<string, { icon: string; dotColor: string; badgeClass: string; badgeLabel: string }> = {
     topic_created: {
       icon: '📋',
-      dotColor: 'bg-indigo-500',
-      badgeClass: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
+      dotColor: 'bg-primary-500',
+      badgeClass: 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300',
       badgeLabel: 'Topic Created',
     },
     session_started: {
@@ -270,7 +270,7 @@ export default function DashboardPage() {
 
       {/* New user get-started guidance */}
       {isNewUser && (
-        <div className="mb-6 sm:mb-8 p-6 sm:p-8 rounded-2xl bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-indigo-900/20 dark:via-purple-900/20 dark:to-pink-900/20 border border-indigo-100 dark:border-indigo-800">
+        <div className="mb-6 sm:mb-8 p-6 sm:p-8 rounded-2xl bg-gradient-to-br from-primary-50 via-purple-50 to-pink-50 dark:from-primary-900/20 dark:via-purple-900/20 dark:to-pink-900/20 border border-primary-100 dark:border-primary-800">
           <div className="text-center mb-6">
             <span className="text-4xl sm:text-5xl block mb-3">&#x1F680;</span>
             <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-2">
@@ -286,7 +286,7 @@ export default function DashboardPage() {
             {/* Step 1: Create */}
             <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
               <div className="flex items-center gap-3 mb-3">
-                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-sm font-bold">
+                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/50 text-primary-600 dark:text-primary-400 text-sm font-bold">
                   1
                 </span>
                 <h3 className="font-semibold text-gray-900 dark:text-white">Create a Topic</h3>
@@ -296,7 +296,7 @@ export default function DashboardPage() {
               </p>
               <Link
                 to="/app/topics/new"
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -385,7 +385,7 @@ export default function DashboardPage() {
             {assessmentStatus.hasTaken && assessmentStatus.attemptId && (
               <Link
                 to={`/app/assessment/${assessmentStatus.attemptId}/results`}
-                className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+                className="text-sm text-primary-600 dark:text-primary-400 hover:underline"
               >
                 View Details
               </Link>
@@ -424,13 +424,13 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-3">
                   <Link
                     to="/app/assessment/history"
-                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                    className="text-xs text-primary-600 dark:text-primary-400 hover:underline"
                   >
                     View History
                   </Link>
                   <Link
                     to="/app/assessment"
-                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                    className="text-xs text-primary-600 dark:text-primary-400 hover:underline"
                   >
                     Take again
                   </Link>
@@ -443,19 +443,19 @@ export default function DashboardPage() {
                 const isOverdue = daysSinceLast >= MIN_RETEST_DAYS;
                 if (isOverdue) {
                   return (
-                    <div className="mt-3 p-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 flex items-center gap-2">
+                    <div className="mt-3 p-2.5 rounded-lg bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 flex items-center gap-2">
                       <span className="text-base">🔄</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-indigo-700 dark:text-indigo-300">
+                        <p className="text-xs font-medium text-primary-700 dark:text-primary-300">
                           Time for a retest!
                         </p>
-                        <p className="text-[11px] text-indigo-600 dark:text-indigo-400">
+                        <p className="text-[11px] text-primary-600 dark:text-primary-400">
                           It&apos;s been {daysSinceLast} days since your last assessment. Retake to track personality changes.
                         </p>
                       </div>
                       <Link
                         to="/app/assessment"
-                        className="text-xs px-2.5 py-1 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 font-medium whitespace-nowrap flex-shrink-0"
+                        className="text-xs px-2.5 py-1 rounded-md bg-primary-600 text-white hover:bg-primary-700 font-medium whitespace-nowrap flex-shrink-0"
                       >
                         Retake
                       </Link>
@@ -549,7 +549,7 @@ export default function DashboardPage() {
             <p className="text-gray-500 dark:text-gray-300 text-sm">
               No categorized topics yet. Create topics with preset categories to see progress here.
             </p>
-            <Link to="/app/topics" className="text-indigo-600 dark:text-indigo-300 text-sm hover:underline mt-2 inline-block min-h-[44px] flex items-center justify-center">
+            <Link to="/app/topics" className="text-primary-600 dark:text-primary-300 text-sm hover:underline mt-2 inline-block min-h-[44px] flex items-center justify-center">
               Browse Topics
             </Link>
           </div>
@@ -583,7 +583,7 @@ export default function DashboardPage() {
                       <span className="text-sm flex-shrink-0">{categoryIcon}</span>
                       <Link
                         to={`/app/topics/${topic.topicId}`}
-                        className="text-sm font-medium text-gray-900 dark:text-white truncate hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                        className="text-sm font-medium text-gray-900 dark:text-white truncate hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
                         title={topic.topicTitle}
                       >
                         {topic.topicTitle}
@@ -649,7 +649,7 @@ export default function DashboardPage() {
             <p className="text-gray-500 dark:text-gray-300 text-sm">
               No insights yet. Start an interview session to generate insights from your topics.
             </p>
-            <Link to="/app/session/new" className="text-indigo-600 dark:text-indigo-300 text-sm hover:underline mt-2 inline-block min-h-[44px] flex items-center justify-center">
+            <Link to="/app/session/new" className="text-primary-600 dark:text-primary-300 text-sm hover:underline mt-2 inline-block min-h-[44px] flex items-center justify-center">
               Start Interview
             </Link>
           </div>
@@ -714,7 +714,7 @@ export default function DashboardPage() {
             </p>
             <Link
               to="/app/topics/new"
-              className="text-indigo-600 dark:text-indigo-400 text-sm font-medium hover:underline"
+              className="text-primary-600 dark:text-primary-400 text-sm font-medium hover:underline"
             >
               Create your first topic to get started &rarr;
             </Link>

@@ -397,7 +397,7 @@ export default function SearchPage() {
             onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
             className={`px-3 py-1.5 rounded-full text-sm transition-colors flex-shrink-0 min-h-[36px] sm:ml-auto ${
               hasActiveAdvancedFilters
-                ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200'
+                ? 'bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200'
                 : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
             }`}
           >

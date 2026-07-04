@@ -31,7 +31,7 @@ const TAG_COLORS: Record<string, string> = {
   management_style: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
   feedback_style: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
   decision_making: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-  communication_preferences: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
+  communication_preferences: 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300',
   problem_solving: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
   creative_process: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300',
   work_priorities: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',

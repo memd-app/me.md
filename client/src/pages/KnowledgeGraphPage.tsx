@@ -75,7 +75,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 // Dimmed versions of category colors for gap nodes
 const CATEGORY_COLORS_DIM: Record<string, string> = {
-  identity: '#a5b4fc',     // indigo-300
+  identity: '#a5b4fc',     // primary-300
   skills: '#67e8f9',       // cyan-300
   experiences: '#fcd34d',  // amber-300
   perspectives: '#c4b5fd', // violet-300
@@ -699,7 +699,7 @@ export default function KnowledgeGraphPage() {
             </p>
             <button
               onClick={() => navigate('/app/topics')}
-              className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
             >
               Create Your First Topic
             </button>
@@ -726,7 +726,7 @@ export default function KnowledgeGraphPage() {
               type="checkbox"
               checked={showGaps}
               onChange={(e) => setShowGaps(e.target.checked)}
-              className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+              className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
             />
             <span className="hidden sm:inline">Show </span>Gaps
           </label>
@@ -736,7 +736,7 @@ export default function KnowledgeGraphPage() {
               type="checkbox"
               checked={showConcepts}
               onChange={(e) => setShowConcepts(e.target.checked)}
-              className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+              className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
             />
             <span className="hidden sm:inline">Show </span>Concepts
           </label>

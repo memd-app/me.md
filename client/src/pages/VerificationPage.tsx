@@ -723,7 +723,7 @@ export default function VerificationPage() {
               {pendingInsights.length > 0 && (
                 <button
                   onClick={startBatchReview}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
                 >
                   Review Remaining ({pendingInsights.length})
                 </button>
@@ -736,16 +736,16 @@ export default function VerificationPage() {
           return (
             <div className="space-y-4">
               {/* Batch progress indicator */}
-              <div className="card bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800">
+              <div className="card bg-primary-50 dark:bg-primary-900/20 border-primary-200 dark:border-primary-800">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300 ring-1 ring-indigo-300 dark:ring-indigo-700">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-primary-100 text-primary-800 dark:bg-primary-900/50 dark:text-primary-300 ring-1 ring-primary-300 dark:ring-primary-700">
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                       </svg>
                       Batch Review
                     </span>
-                    <span className="text-sm font-medium text-indigo-700 dark:text-indigo-300">
+                    <span className="text-sm font-medium text-primary-700 dark:text-primary-300">
                       {batchReviewed + 1} of {batchTotal}
                     </span>
                   </div>
@@ -760,13 +760,13 @@ export default function VerificationPage() {
                   </button>
                 </div>
                 {/* Progress bar */}
-                <div className="w-full h-2 bg-indigo-200 dark:bg-indigo-800 rounded-full overflow-hidden">
+                <div className="w-full h-2 bg-primary-200 dark:bg-primary-800 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-indigo-500 dark:bg-indigo-400 rounded-full transition-all duration-300"
+                    className="h-full bg-primary-500 dark:bg-primary-400 rounded-full transition-all duration-300"
                     style={{ width: `${(batchReviewed / batchTotal) * 100}%` }}
                   />
                 </div>
-                <div className="flex justify-between mt-1 text-xs text-indigo-600 dark:text-indigo-400">
+                <div className="flex justify-between mt-1 text-xs text-primary-600 dark:text-primary-400">
                   <span>{batchReviewed} reviewed</span>
                   <span>{batchTotal - batchReviewed} remaining</span>
                 </div>
@@ -777,7 +777,7 @@ export default function VerificationPage() {
                 className={`card border-2 transition-colors ${
                   isReVerification
                     ? 'border-purple-300 dark:border-purple-700 bg-purple-50/30 dark:bg-purple-900/10'
-                    : 'border-indigo-300 dark:border-indigo-700 bg-white dark:bg-gray-900'
+                    : 'border-primary-300 dark:border-primary-700 bg-white dark:bg-gray-900'
                 }`}
               >
                 {/* Re-verification banner */}
@@ -1005,7 +1005,7 @@ export default function VerificationPage() {
             {pendingInsights.length >= 2 && (
               <button
                 onClick={startBatchReview}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -1335,9 +1335,9 @@ export default function VerificationPage() {
                     onClick={() => handleToggleHistory(insight.id)}
                     aria-label={`View verification history${historyState?.insightId === insight.id ? ' (open)' : ''}`}
                     aria-expanded={historyState?.insightId === insight.id}
-                    className={`ml-auto inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${
+                    className={`ml-auto inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${
                       historyState?.insightId === insight.id
-                        ? 'text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/40 border border-indigo-300 dark:border-indigo-600'
+                        ? 'text-primary-700 dark:text-primary-300 bg-primary-100 dark:bg-primary-900/40 border border-primary-300 dark:border-primary-600'
                         : 'text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                     }`}
                     title="View verification history"

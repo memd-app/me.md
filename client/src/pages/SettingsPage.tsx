@@ -786,7 +786,7 @@ export default function SettingsPage() {
                     : 'border-gray-200 dark:border-dark-border hover:border-gray-300 dark:hover:border-gray-600'
                 }`}
               >
-                <svg className="w-5 h-5 text-indigo-500" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="w-5 h-5 text-primary-500" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
                 </svg>
                 <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Dark</span>

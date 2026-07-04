@@ -564,7 +564,7 @@ export default function AssessmentHistoryPage() {
                         {/* Dot */}
                         <div className={`relative z-10 flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ring-2 ring-white dark:ring-gray-900 ${
                           isCompleted
-                            ? 'bg-indigo-500 text-white'
+                            ? 'bg-primary-500 text-white'
                             : 'bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-300'
                         }`}>
                           {isCompleted ? attemptNum : '…'}
@@ -572,7 +572,7 @@ export default function AssessmentHistoryPage() {
 
                         {/* Content */}
                         <div className={`flex-1 card p-4 ${
-                          idx === 0 ? 'border-indigo-200 dark:border-indigo-800' : ''
+                          idx === 0 ? 'border-primary-200 dark:border-primary-800' : ''
                         }`}>
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
@@ -584,7 +584,7 @@ export default function AssessmentHistoryPage() {
                                 {isCompleted ? 'Completed' : 'In Progress'}
                               </span>
                               {idx === 0 && (
-                                <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 font-medium">
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 font-medium">
                                   Latest
                                 </span>
                               )}
@@ -624,7 +624,7 @@ export default function AssessmentHistoryPage() {
                             <div className="flex gap-2 mt-3">
                               <Link
                                 to={`/app/assessment/${attempt.attemptId}/results`}
-                                className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                                className="text-xs text-primary-600 dark:text-primary-400 hover:underline"
                               >
                                 View Full Results
                               </Link>
@@ -817,7 +817,7 @@ export default function AssessmentHistoryPage() {
               {/* Comparison results */}
               {isComparing && (
                 <div className="card p-6 text-center">
-                  <div className="animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full mx-auto mb-3" />
+                  <div className="animate-spin w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full mx-auto mb-3" />
                   <p className="text-sm text-gray-500 dark:text-gray-400">Comparing assessments...</p>
                 </div>
               )}
@@ -834,7 +834,7 @@ export default function AssessmentHistoryPage() {
                         A: {compareA ? getAttemptLabel(compareA) : ''}
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-primary-500" />
                         B: {compareB ? getAttemptLabel(compareB) : ''}
                       </span>
                     </div>
@@ -973,7 +973,7 @@ export default function AssessmentHistoryPage() {
                     {changeInsights ? (
                       <div className="space-y-3">
                         {changeInsights.insights.map((insight, idx) => (
-                          <div key={idx} className="flex gap-3 p-3 rounded-lg bg-indigo-50 dark:bg-indigo-900/20">
+                          <div key={idx} className="flex gap-3 p-3 rounded-lg bg-primary-50 dark:bg-primary-900/20">
                             <span className="text-base flex-shrink-0">💡</span>
                             <p className="text-sm text-gray-800 dark:text-gray-200">{insight}</p>
                           </div>
