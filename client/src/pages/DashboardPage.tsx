@@ -1,11 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
-import { formatActivityDate } from '@/utils/dateFormat';
+import { formatActivityDate, formatRelativeTime } from '@/utils/dateFormat';
 import { getDashboardStats, getActivityData } from '@/services/dashboard';
 import { getLatestAssessment } from '@/services/assessment';
+import { getSessions } from '@/services/sessions';
+import { SectionHeading, EmptyState } from '@/components/ui';
 
 interface CategoryCompleteness {
   category: string;
@@ -57,27 +59,40 @@ interface AssessmentStatus {
   domainScores: Array<{ domain: string; score: number }> | null;
 }
 
-const CATEGORY_COLORS: Record<string, { bg: string; fill: string; text: string }> = {
-  identity: { bg: 'bg-blue-100 dark:bg-blue-900/30', fill: 'bg-blue-500', text: 'text-blue-700 dark:text-blue-300' },
-  skills: { bg: 'bg-emerald-100 dark:bg-emerald-900/30', fill: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-300' },
-  experiences: { bg: 'bg-amber-100 dark:bg-amber-900/30', fill: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-300' },
-  perspectives: { bg: 'bg-purple-100 dark:bg-purple-900/30', fill: 'bg-purple-500', text: 'text-purple-700 dark:text-purple-300' },
-  goals: { bg: 'bg-rose-100 dark:bg-rose-900/30', fill: 'bg-rose-500', text: 'text-rose-700 dark:text-rose-300' },
-};
+interface SessionRow {
+  id: string;
+  topicId: string;
+  status: string;
+  isMiniSession?: boolean;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
 
-const CATEGORY_ICONS: Record<string, string> = {
-  identity: '🪪',
-  skills: '🛠️',
-  experiences: '🌍',
-  perspectives: '💡',
-  goals: '🎯',
-};
+// Quoted-title substring inside an activity description is rendered in
+// serif italic, matching "Recent activity" in the mockup.
+function ActivityLine({ item }: { item: ActivityItem }) {
+  const quoted = `"${item.title}"`;
+  const idx = item.description.indexOf(quoted);
+  if (idx === -1) {
+    return <>{item.description}</>;
+  }
+  const before = item.description.slice(0, idx);
+  const after = item.description.slice(idx + quoted.length);
+  return (
+    <>
+      {before}
+      <em className="font-serif italic text-gray-900 dark:text-white">{item.title}</em>
+      {after}
+    </>
+  );
+}
 
 export default function DashboardPage() {
   const { user } = useUser();
   const db = useDatabase();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fetchVersion, setFetchVersion] = useState(0);
@@ -98,6 +113,10 @@ export default function DashboardPage() {
 
       const activityData = getActivityData(db);
       setActivity(activityData.activity || []);
+
+      // Resumable session (for the "Continue reading" lead) — the one
+      // additional service call needed beyond the existing data layer.
+      setSessions(getSessions(db) || []);
 
       // Assessment data (optional - null means not taken)
       try {
@@ -134,630 +153,378 @@ export default function DashboardPage() {
     return () => controller.abort();
   }, [fetchDashboard, fetchVersion]);
 
-  const statCards = [
-    {
-      label: 'Topics Explored',
-      value: `${stats?.topicsExplored ?? 0} / ${stats?.topics ?? 0}`,
-      icon: '📋',
-      sublabel: stats?.topics ? `${Math.round(((stats?.topicsExplored ?? 0) / stats.topics) * 100)}% explored` : 'No topics yet',
-    },
-    {
-      label: 'Verified Insights',
-      value: stats?.verifiedInsights ?? 0,
-      icon: '✅',
-      sublabel: `of ${stats?.insights ?? 0} total`,
-    },
-    {
-      label: 'Sessions Completed',
-      value: stats?.completedSessions ?? 0,
-      icon: '💬',
-      sublabel: `of ${stats?.sessions ?? 0} total`,
-    },
-    {
-      label: 'Verification Rate',
-      value: `${stats?.verificationRate ?? 0}%`,
-      icon: '📊',
-      sublabel: stats && (stats.verifiedInsights + stats.rejectedInsights) > 0
-        ? `${stats.verifiedInsights} approved, ${stats.rejectedInsights} rejected`
-        : 'No reviews yet',
-    },
-  ];
-
-  // Activity type styling configuration
-  const ACTIVITY_CONFIG: Record<string, { icon: string; dotColor: string; badgeClass: string; badgeLabel: string }> = {
-    topic_created: {
-      icon: '📋',
-      dotColor: 'bg-primary-500',
-      badgeClass: 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300',
-      badgeLabel: 'Topic Created',
-    },
-    session_started: {
-      icon: '💬',
-      dotColor: 'bg-blue-500',
-      badgeClass: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-      badgeLabel: 'Session Started',
-    },
-    session_completed: {
-      icon: '✅',
-      dotColor: 'bg-green-500',
-      badgeClass: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-      badgeLabel: 'Session Completed',
-    },
-    session_paused: {
-      icon: '⏸️',
-      dotColor: 'bg-amber-500',
-      badgeClass: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-      badgeLabel: 'Session Paused',
-    },
-    insight_verified: {
-      icon: '🛡️',
-      dotColor: 'bg-emerald-500',
-      badgeClass: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
-      badgeLabel: 'Insight Verified',
-    },
-    insight_rejected: {
-      icon: '❌',
-      dotColor: 'bg-red-500',
-      badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
-      badgeLabel: 'Insight Rejected',
-    },
-    insight_edited: {
-      icon: '✏️',
-      dotColor: 'bg-purple-500',
-      badgeClass: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-      badgeLabel: 'Insight Edited',
-    },
-    insight_action: {
-      icon: '🔍',
-      dotColor: 'bg-gray-500',
-      badgeClass: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300',
-      badgeLabel: 'Insight Action',
-    },
-    note_created: {
-      icon: '📝',
-      dotColor: 'bg-cyan-500',
-      badgeClass: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300',
-      badgeLabel: 'Note Created',
-    },
-    bookmark_added: {
-      icon: '⭐',
-      dotColor: 'bg-yellow-500',
-      badgeClass: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
-      badgeLabel: 'Bookmark Added',
-    },
-    export_profile: {
-      icon: '📤',
-      dotColor: 'bg-teal-500',
-      badgeClass: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',
-      badgeLabel: 'Profile Exported',
-    },
-  };
-
-  const getActivityConfig = (type: string) => {
-    return ACTIVITY_CONFIG[type] || {
-      icon: '📌',
-      dotColor: 'bg-gray-400',
-      badgeClass: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300',
-      badgeLabel: type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-    };
-  };
-
   // Determine if user is brand new (no data at all)
   const isNewUser = !isLoading && stats && stats.topics === 0 && stats.sessions === 0 && stats.insights === 0;
 
+  // Most recently touched active/paused session, for the lead "Continue" block.
+  const resumableSession = useMemo(() => {
+    const candidates = sessions
+      .filter((s) => s.status === 'active' || s.status === 'paused')
+      .sort((a, b) => {
+        const aTime = new Date(a.updatedAt || a.createdAt || 0).getTime();
+        const bTime = new Date(b.updatedAt || b.createdAt || 0).getTime();
+        return bTime - aTime;
+      });
+    return candidates[0] || null;
+  }, [sessions]);
+
+  const resumableTopicTitle = useMemo(() => {
+    if (!resumableSession) return null;
+    const fromBreakdown = stats?.topicInsightBreakdown.find((t) => t.topicId === resumableSession.topicId);
+    if (fromBreakdown) return fromBreakdown.topicTitle;
+    const fromActivity = activity.find(
+      (a) => a.id === `session-paused-${resumableSession.id}` || a.id === `session-started-${resumableSession.id}`
+    );
+    if (fromActivity) return fromActivity.title;
+    return 'this topic';
+  }, [resumableSession, stats, activity]);
+
+  const resumableInsightsCount = useMemo(() => {
+    if (!resumableSession) return 0;
+    return stats?.topicInsightBreakdown.find((t) => t.topicId === resumableSession.topicId)?.totalInsights ?? 0;
+  }, [resumableSession, stats]);
+
+  const resumableWhenLabel = useMemo(() => {
+    if (!resumableSession) return '';
+    if (resumableSession.status === 'paused') {
+      return `Paused ${formatRelativeTime(resumableSession.updatedAt || resumableSession.createdAt)}`;
+    }
+    return `Started ${formatRelativeTime(resumableSession.createdAt)}`;
+  }, [resumableSession]);
+
+  // Insights awaiting a verify/reject decision — derived from already-fetched stats.
+  const pendingInsightsCount = stats ? Math.max(stats.insights - stats.verifiedInsights - stats.rejectedInsights, 0) : 0;
+
+  const dateline = new Date().toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  const firstName = user?.name?.split(' ')[0] || 'there';
+
+  const glanceItems = [
+    { key: 'topics', value: stats?.topicsExplored ?? 0, label: 'Topics explored' },
+    { key: 'verified', value: stats?.verifiedInsights ?? 0, label: 'Verified insights' },
+    { key: 'pending', value: pendingInsightsCount, label: 'Awaiting review', linked: true },
+    { key: 'sessions', value: stats?.completedSessions ?? 0, label: 'Sessions completed' },
+  ];
+
+  const quickActions = [
+    { label: 'Start an interview', to: '/app/session/new' },
+    { label: 'Add a topic', to: '/app/topics/new' },
+    { label: 'Explore the graph', to: '/app/graph' },
+    { label: 'Try the sandbox', to: '/app/sandbox' },
+  ];
+
+  const hasCategorizedTopics = !!stats?.categoryCompleteness?.some((c) => c.totalTopics > 0);
+
   return (
     <div className="max-w-6xl mx-auto overflow-x-hidden">
-      <div className="mb-6 sm:mb-8">
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
-          {isNewUser ? `Welcome, ${user?.name || 'there'}!` : `Welcome back, ${user?.name || 'there'}`}
-        </h1>
-        <p className="mt-1 text-gray-600 dark:text-gray-300 text-sm sm:text-base">
-          {isNewUser
-            ? 'Let\u2019s get started building your personal knowledge system'
-            : 'Here\u2019s your knowledge overview'}
-        </p>
-      </div>
-
-      {/* Error state */}
       {error && (
         <ApiErrorAlert
           message={error}
-          onRetry={() => { setError(null); setFetchVersion(v => v + 1); }}
+          onRetry={() => { setError(null); setFetchVersion((v) => v + 1); }}
           onDismiss={() => setError(null)}
           className="mb-6"
         />
       )}
 
-      {/* New user get-started guidance */}
-      {isNewUser && (
-        <div className="mb-6 sm:mb-8 p-6 sm:p-8 rounded-2xl bg-gradient-to-br from-primary-50 via-purple-50 to-pink-50 dark:from-primary-900/20 dark:via-purple-900/20 dark:to-pink-900/20 border border-primary-100 dark:border-primary-800">
-          <div className="text-center mb-6">
-            <span className="text-4xl sm:text-5xl block mb-3">&#x1F680;</span>
-            <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-2">
-              Get Started with me.md
-            </h2>
-            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 max-w-xl mx-auto">
-              Build a comprehensive understanding of yourself through AI-guided conversations.
-              Here&apos;s how to begin your journey in 3 simple steps:
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-            {/* Step 1: Create */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
-              <div className="flex items-center gap-3 mb-3">
-                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/50 text-primary-600 dark:text-primary-400 text-sm font-bold">
-                  1
-                </span>
-                <h3 className="font-semibold text-gray-900 dark:text-white">Create a Topic</h3>
-              </div>
-              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-                Start by creating a topic you&apos;d like to explore &mdash; your values, skills, goals, or experiences.
-              </p>
-              <Link
-                to="/app/topics/new"
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                Create Your First Topic
-              </Link>
-            </div>
-
-            {/* Step 2: Interview */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
-              <div className="flex items-center gap-3 mb-3">
-                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 text-sm font-bold">
-                  2
-                </span>
-                <h3 className="font-semibold text-gray-900 dark:text-white">Have an Interview</h3>
-              </div>
-              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-                Start an AI-guided conversation. The interviewer uses proven techniques to help you articulate your thoughts.
-              </p>
-              <Link
-                to="/app/session/new"
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-                Start Quick Interview
-              </Link>
-            </div>
-
-            {/* Step 3: Verify */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
-              <div className="flex items-center gap-3 mb-3">
-                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-pink-100 dark:bg-pink-900/50 text-pink-600 dark:text-pink-400 text-sm font-bold">
-                  3
-                </span>
-                <h3 className="font-semibold text-gray-900 dark:text-white">Verify Insights</h3>
-              </div>
-              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-                Review AI-extracted insights about you. Approve, edit, or reject each one to build your verified profile.
-              </p>
-              <Link
-                to="/app/review"
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Go to Verification
-              </Link>
-            </div>
-          </div>
+      {/* Masthead */}
+      <div className="flex items-baseline justify-between gap-4 pb-4 border-b border-ink dark:border-dark-border">
+        <div className="flex items-baseline gap-2 text-[11px] tracking-[0.16em] uppercase font-sans font-bold">
+          <span className="text-primary-600 dark:text-primary-400">The Desk</span>
+          <span className="text-gray-400 dark:text-gray-600" aria-hidden="true">&middot;</span>
+          <span className="text-gray-600 dark:text-gray-400 font-semibold">{dateline}</span>
         </div>
-      )}
-
-      {/* Stats cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
-        {statCards.map((stat) => (
-          <div key={stat.label} className="card flex items-center gap-3 sm:gap-4 min-h-[80px] sm:min-h-[88px] p-4 sm:p-6">
-            <span className="text-xl sm:text-2xl flex-shrink-0">{stat.icon}</span>
-            <div className="min-w-0">
-              {isLoading ? (
-                <div className="h-7 sm:h-8 w-16 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-              ) : (
-                <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white truncate">{stat.value}</p>
-              )}
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-300">{stat.label}</p>
-              {!isLoading && stat.sublabel && (
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{stat.sublabel}</p>
-              )}
-            </div>
-          </div>
-        ))}
+        <div className="text-[11px] tracking-[0.1em] uppercase font-sans font-semibold text-gray-400 dark:text-gray-600 whitespace-nowrap">
+          Personal Edition
+        </div>
       </div>
 
-      {/* Personality Assessment Widget */}
-      {!isLoading && (
-        <div className="card mb-6 sm:mb-8 p-4 sm:p-6">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xl">🧠</span>
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
-                Personality Assessment
-              </h2>
-            </div>
-            {assessmentStatus.hasTaken && assessmentStatus.attemptId && (
-              <Link
-                to={`/app/personality/${assessmentStatus.attemptId}/results`}
-                className="text-sm text-primary-600 dark:text-primary-400 hover:underline"
-              >
-                View Details
-              </Link>
-            )}
-          </div>
+      <h1 className="font-serif italic font-medium text-3xl sm:text-4xl md:text-[42px] leading-[1.1] tracking-tight mt-5 mb-2 text-gray-900 dark:text-white">
+        Where were we, {firstName}?
+      </h1>
+      <p className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-8">
+        {isNewUser
+          ? "Let’s start your first conversation."
+          : 'Your knowledge, gathered one conversation at a time.'}
+      </p>
 
-          {assessmentStatus.hasTaken && assessmentStatus.domainScores ? (
-            <>
-              <div className="flex items-center gap-2 sm:gap-3 mb-3">
-                {assessmentStatus.domainScores.map(ds => {
-                  const domainLabels: Record<string, string> = { O: 'Openness', C: 'Conscientiousness', E: 'Extraversion', A: 'Agreeableness', N: 'Neuroticism' };
-                  const domainColors: Record<string, string> = { O: 'bg-blue-500', C: 'bg-purple-500', E: 'bg-amber-500', A: 'bg-emerald-500', N: 'bg-rose-500' };
-                  const pct = Math.round((ds.score / 5) * 100);
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] xl:gap-14 gap-10">
+        {/* LEAD COLUMN */}
+        <div className="xl:pr-14 xl:border-r xl:border-rule dark:xl:border-dark-border">
+          {/* Lead "Continue"/"Start" feature */}
+          <section aria-labelledby="lead-heading" className="pt-1 pb-7 border-b border-rule dark:border-dark-border">
+            {isLoading ? (
+              <div className="space-y-3" aria-hidden="true">
+                <div className="h-3 w-32 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
+                <div className="h-9 w-2/3 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
+                <div className="h-3 w-1/2 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
+              </div>
+            ) : resumableSession ? (
+              <>
+                <p className="text-[11px] tracking-[0.16em] uppercase font-sans font-bold text-primary-600 dark:text-primary-400 mb-2">
+                  Continue reading
+                </p>
+                <h2
+                  id="lead-heading"
+                  className="font-serif italic font-medium text-3xl sm:text-4xl leading-[1.06] tracking-tight text-gray-900 dark:text-white mb-3"
+                >
+                  {resumableTopicTitle}
+                </h2>
+                <p className="flex flex-wrap items-center gap-2 text-xs tracking-wide font-medium text-gray-500 dark:text-gray-400 mb-6">
+                  <span>{resumableSession.isMiniSession ? 'Quick session' : 'Standard session'}</span>
+                  <span aria-hidden="true" className="text-gray-300 dark:text-gray-700">&middot;</span>
+                  <span>{resumableWhenLabel}</span>
+                  <span aria-hidden="true" className="text-gray-300 dark:text-gray-700">&middot;</span>
+                  <span>{resumableInsightsCount} insight{resumableInsightsCount === 1 ? '' : 's'} so far</span>
+                </p>
+                <Link
+                  to={`/app/sessions/${resumableSession.id}`}
+                  className="btn-primary inline-flex items-center gap-2"
+                >
+                  Resume the conversation
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
+                  </svg>
+                </Link>
+              </>
+            ) : (
+              <>
+                <p className="text-[11px] tracking-[0.16em] uppercase font-sans font-bold text-primary-600 dark:text-primary-400 mb-2">
+                  {isNewUser ? 'Get started' : 'Start here'}
+                </p>
+                <h2
+                  id="lead-heading"
+                  className="font-serif italic font-medium text-3xl sm:text-4xl leading-[1.06] tracking-tight text-gray-900 dark:text-white mb-3"
+                >
+                  {isNewUser ? 'Your story starts here.' : 'Ready for the next chapter?'}
+                </h2>
+                <p className="text-xs tracking-wide font-medium text-gray-500 dark:text-gray-400 mb-6">
+                  {isNewUser
+                    ? 'Your first conversation is a few minutes away.'
+                    : `${stats?.topicsExplored ?? 0} topics explored so far.`}
+                </p>
+                <Link to="/app/session/new" className="btn-primary inline-flex items-center gap-2">
+                  Start an interview
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
+                  </svg>
+                </Link>
+              </>
+            )}
+          </section>
+
+          {/* At a glance */}
+          <section aria-label="At a glance" className="py-7 border-b border-rule dark:border-dark-border">
+            <SectionHeading className="mb-5">At a glance</SectionHeading>
+            {isLoading ? (
+              <div className="flex gap-6" aria-hidden="true">
+                {[0, 1, 2, 3].map((i) => (
+                  <div key={i} className="flex-1 space-y-2">
+                    <div className="h-8 w-10 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
+                    <div className="h-2.5 w-16 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-y-6 overflow-x-auto">
+                {glanceItems.map((item, idx) => {
+                  const content = (
+                    <>
+                      <p
+                        className={`font-serif italic font-medium text-3xl leading-none ${
+                          item.linked ? 'text-primary-600 dark:text-primary-400' : 'text-gray-900 dark:text-white'
+                        }`}
+                      >
+                        {item.value}
+                      </p>
+                      <p
+                        className={`mt-2 text-[11px] tracking-[0.08em] uppercase font-sans font-semibold ${
+                          item.linked
+                            ? 'text-primary-600 dark:text-primary-400 border-b border-primary-300/60 dark:border-primary-700/60 inline-block pb-0.5'
+                            : 'text-gray-500 dark:text-gray-400'
+                        }`}
+                      >
+                        {item.label}
+                      </p>
+                    </>
+                  );
                   return (
-                    <div key={ds.domain} className="flex-1 text-center">
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 truncate" title={domainLabels[ds.domain] || ds.domain}>
-                        {domainLabels[ds.domain] || ds.domain}
-                      </p>
-                      <div className="w-full h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${domainColors[ds.domain] || 'bg-gray-500'} transition-all duration-500`}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mt-1">
-                        {ds.score.toFixed(1)}
-                      </p>
+                    <div
+                      key={item.key}
+                      className={`min-w-[130px] px-6 first:pl-0 last:pr-0 ${
+                        idx !== glanceItems.length - 1 ? 'border-r border-rule dark:border-dark-border' : ''
+                      }`}
+                    >
+                      {item.linked ? (
+                        <Link
+                          to="/app/review"
+                          className="block rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500"
+                        >
+                          {content}
+                        </Link>
+                      ) : (
+                        content
+                      )}
                     </div>
                   );
                 })}
               </div>
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Last taken: {assessmentStatus.lastCompletedAt ? formatActivityDate(assessmentStatus.lastCompletedAt) : 'Unknown'}
-                </p>
-                <div className="flex items-center gap-3">
-                  <Link
-                    to="/app/personality/history"
-                    className="text-xs text-primary-600 dark:text-primary-400 hover:underline"
-                  >
-                    View History
-                  </Link>
-                  <Link
-                    to="/app/personality"
-                    className="text-xs text-primary-600 dark:text-primary-400 hover:underline"
-                  >
-                    Take again
-                  </Link>
-                </div>
+            )}
+          </section>
+
+          {/* Recent activity */}
+          <section aria-label="Recent activity" className="pt-7">
+            <SectionHeading className="mb-4">Recent activity</SectionHeading>
+            {isLoading ? (
+              <div className="space-y-3" aria-hidden="true">
+                {[0, 1, 2, 3].map((i) => (
+                  <div key={i} className="h-4 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
+                ))}
               </div>
-              {/* Retest suggestion widget */}
-              {assessmentStatus.lastCompletedAt && (() => {
-                const daysSinceLast = Math.floor((Date.now() - new Date(assessmentStatus.lastCompletedAt).getTime()) / (1000 * 60 * 60 * 24));
-                const MIN_RETEST_DAYS = 90;
-                const isOverdue = daysSinceLast >= MIN_RETEST_DAYS;
-                if (isOverdue) {
-                  return (
-                    <div className="mt-3 p-2.5 rounded-lg bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 flex items-center gap-2">
-                      <span className="text-base">🔄</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-primary-700 dark:text-primary-300">
-                          Time for a retest!
-                        </p>
-                        <p className="text-[11px] text-primary-600 dark:text-primary-400">
-                          It&apos;s been {daysSinceLast} days since your last assessment. Retake to track personality changes.
-                        </p>
-                      </div>
-                      <Link
-                        to="/app/personality"
-                        className="text-xs px-2.5 py-1 rounded-md bg-primary-600 text-white hover:bg-primary-700 font-medium whitespace-nowrap flex-shrink-0"
-                      >
-                        Retake
-                      </Link>
-                    </div>
-                  );
+            ) : activity.length === 0 ? (
+              <EmptyState
+                message="Nothing yet — your first conversation will appear here."
+                action={
+                  <Link to="/app/session/new" className="btn-secondary text-sm">
+                    Start an interview
+                  </Link>
                 }
-                return (
-                  <div className="mt-2 flex items-center gap-1.5 text-[11px] text-gray-400 dark:text-gray-500">
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Next retest recommended in {MIN_RETEST_DAYS - daysSinceLast} days
-                  </div>
-                );
-              })()}
-            </>
-          ) : (
-            <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">
-                  Discover your Big Five personality traits with a scientifically-validated assessment.
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  120 questions &middot; ~15 minutes
-                </p>
-              </div>
-              <Link
-                to="/app/personality"
-                className="btn-primary text-sm whitespace-nowrap flex-shrink-0"
-              >
-                Take Test
-              </Link>
-            </div>
-          )}
+              />
+            ) : (
+              <ul className="divide-y divide-rule dark:divide-dark-border">
+                {activity.map((item) => (
+                  <li key={item.id} className="flex items-baseline justify-between gap-4 py-3">
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-0">
+                      <span className="text-primary-600 dark:text-primary-400 mr-2" aria-hidden="true">&middot;</span>
+                      <ActivityLine item={item} />
+                    </p>
+                    <span className="flex-shrink-0 text-[11px] tracking-wide text-gray-400 dark:text-gray-600 whitespace-nowrap">
+                      {formatActivityDate(item.date)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
-      )}
 
-      {/* Knowledge Completeness by Category */}
-      <div className="card mb-6 sm:mb-8 p-4 sm:p-6">
-        <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-2 sm:mb-4">
-          Knowledge Completeness
-        </h2>
-        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-300 mb-4 sm:mb-6">
-          Track your progress across the 5 knowledge categories
-        </p>
-        {isLoading ? (
-          <div className="space-y-4">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-12 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
-            ))}
-          </div>
-        ) : stats?.categoryCompleteness && stats.categoryCompleteness.length > 0 ? (
-          <div className="space-y-4 sm:space-y-5">
-            {stats.categoryCompleteness.map((cat) => {
-              const colors = CATEGORY_COLORS[cat.category] || CATEGORY_COLORS.identity;
-              const icon = CATEGORY_ICONS[cat.category] || '📂';
-              return (
-                <div key={cat.category}>
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-1.5 gap-0.5 sm:gap-0">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-base flex-shrink-0">{icon}</span>
-                      <span className={`text-sm font-medium ${colors.text} truncate`}>
-                        {cat.label}
-                      </span>
-                      {/* Show percentage inline on mobile */}
-                      <span className="sm:hidden text-xs font-semibold text-gray-700 dark:text-gray-300 ml-auto">
-                        {cat.completeness}%
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 sm:gap-3 text-xs text-gray-500 dark:text-gray-300 flex-shrink-0 pl-7 sm:pl-0">
-                      <span>{cat.exploredTopics}/{cat.totalTopics} topics</span>
-                      <span>{cat.verifiedInsights} verified</span>
-                      <span className="hidden sm:inline font-semibold text-gray-700 dark:text-gray-300">
-                        {cat.completeness}%
-                      </span>
-                    </div>
-                  </div>
-                  {/* Progress bar */}
-                  <div className={`w-full h-2.5 sm:h-3 rounded-full ${colors.bg} overflow-hidden`}>
-                    <div
-                      className={`h-full rounded-full ${colors.fill} transition-all duration-500 ease-out`}
-                      style={{ width: `${cat.completeness}%`, minWidth: cat.completeness > 0 ? '8px' : '0px' }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="text-center py-6">
-            <p className="text-gray-500 dark:text-gray-300 text-sm">
-              No categorized topics yet. Create topics with preset categories to see progress here.
-            </p>
-            <Link to="/app/topics" className="text-primary-600 dark:text-primary-300 text-sm hover:underline mt-2 inline-block min-h-[44px] flex items-center justify-center">
-              Browse Topics
-            </Link>
-          </div>
-        )}
-      </div>
+        {/* RAIL */}
+        <div className="flex flex-col gap-10">
+          {/* In review */}
+          <section aria-label="In review">
+            <SectionHeading className="mb-4">In review</SectionHeading>
+            {isLoading ? (
+              <div className="h-10 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" aria-hidden="true" />
+            ) : pendingInsightsCount > 0 ? (
+              <>
+                <p className="font-serif italic text-lg leading-snug text-gray-900 dark:text-white mb-2">
+                  {pendingInsightsCount} insight{pendingInsightsCount === 1 ? '' : 's'} awaiting your review.
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                  Confirm, edit, or set aside what the interviewer surfaced.
+                </p>
+                <Link
+                  to="/app/review"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+                >
+                  Open review queue <span aria-hidden="true">&rarr;</span>
+                </Link>
+              </>
+            ) : (
+              <EmptyState message="Nothing waiting on you right now." className="py-4" />
+            )}
+          </section>
 
-      {/* Insights per Topic Breakdown */}
-      <div className="card mb-6 sm:mb-8 p-4 sm:p-6">
-        <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-2 sm:mb-4">
-          Insights per Topic
-        </h2>
-        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-300 mb-4 sm:mb-6">
-          Breakdown of insights across your topics
-        </p>
-        {isLoading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-10 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
-            ))}
-          </div>
-        ) : stats?.topicInsightBreakdown && stats.topicInsightBreakdown.length > 0 ? (
-          <div className="space-y-3">
-            {stats.topicInsightBreakdown.map((topic) => {
-              const maxInsights = Math.max(...stats.topicInsightBreakdown.map(t => t.totalInsights), 1);
-              const barWidth = Math.round((topic.totalInsights / maxInsights) * 100);
-              const categoryIcon = CATEGORY_ICONS[topic.category] || '📂';
-              return (
-                <div key={topic.topicId} className="group">
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <span className="text-sm flex-shrink-0">{categoryIcon}</span>
-                      <Link
-                        to={`/app/topics/${topic.topicId}`}
-                        className="text-sm font-medium text-gray-900 dark:text-white truncate hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
-                        title={topic.topicTitle}
-                      >
-                        {topic.topicTitle}
-                      </Link>
-                    </div>
-                    <div className="flex items-center gap-2 sm:gap-3 text-xs text-gray-500 dark:text-gray-300 flex-shrink-0 ml-2">
-                      <span className="font-semibold text-gray-700 dark:text-gray-200">{topic.totalInsights}</span>
-                      {topic.verified > 0 && (
-                        <span className="text-emerald-600 dark:text-emerald-400" title="Verified">{topic.verified} verified</span>
-                      )}
-                      {topic.unverified > 0 && (
-                        <span className="text-amber-600 dark:text-amber-400 hidden sm:inline" title="Pending">{topic.unverified} pending</span>
-                      )}
-                      {topic.rejected > 0 && (
-                        <span className="text-red-600 dark:text-red-400 hidden sm:inline" title="Rejected">{topic.rejected} rejected</span>
-                      )}
-                    </div>
-                  </div>
-                  {/* Stacked bar showing verified/unverified/rejected proportions */}
-                  <div className="w-full h-2 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
-                    <div className="h-full flex" style={{ width: `${barWidth}%`, minWidth: barWidth > 0 ? '8px' : '0px' }}>
-                      {topic.verified > 0 && (
-                        <div
-                          className="h-full bg-emerald-500 transition-all duration-500"
-                          style={{ width: `${(topic.verified / topic.totalInsights) * 100}%` }}
-                        />
-                      )}
-                      {topic.unverified > 0 && (
-                        <div
-                          className="h-full bg-amber-400 transition-all duration-500"
-                          style={{ width: `${(topic.unverified / topic.totalInsights) * 100}%` }}
-                        />
-                      )}
-                      {topic.rejected > 0 && (
-                        <div
-                          className="h-full bg-red-400 transition-all duration-500"
-                          style={{ width: `${(topic.rejected / topic.totalInsights) * 100}%` }}
-                        />
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            {/* Legend */}
-            <div className="flex items-center gap-4 pt-2 text-xs text-gray-500 dark:text-gray-400">
-              <div className="flex items-center gap-1">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                <span>Verified</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-                <span>Pending</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-2.5 h-2.5 rounded-full bg-red-400" />
-                <span>Rejected</span>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="text-center py-6">
-            <p className="text-gray-500 dark:text-gray-300 text-sm">
-              No insights yet. Start an interview session to generate insights from your topics.
-            </p>
-            <Link to="/app/session/new" className="text-primary-600 dark:text-primary-300 text-sm hover:underline mt-2 inline-block min-h-[44px] flex items-center justify-center">
-              Start Interview
-            </Link>
-          </div>
-        )}
-      </div>
-
-      {/* Quick actions */}
-      <div className="card mb-6 sm:mb-8 p-4 sm:p-6">
-        <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">
-          Quick Actions
-        </h2>
-        <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 mb-4">
-          Jump into an interview, create a topic, or explore your knowledge graph.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
-          <Link to="/app/session/new" className="btn-primary text-center min-h-[44px] flex items-center justify-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            Start Interview
-          </Link>
-          <Link to="/app/topics/new" className="btn-secondary text-center min-h-[44px] flex items-center justify-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            Create Topic
-          </Link>
-          <Link to="/app/graph" className="btn-secondary text-center min-h-[44px] flex items-center justify-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-            </svg>
-            Explore Graph
-          </Link>
-          <Link to="/app/topics" className="btn-secondary text-center min-h-[44px] flex items-center justify-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-            </svg>
-            Browse Topics
-          </Link>
-        </div>
-      </div>
-
-      {/* Recent Activity Feed */}
-      <div className="card p-4 sm:p-6">
-        <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-1">
-          Recent Activity
-        </h2>
-        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-300 mb-3 sm:mb-4">
-          Your latest actions across the platform
-        </p>
-        {isLoading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-14 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
-            ))}
-          </div>
-        ) : activity.length === 0 ? (
-          <div className="text-center py-8">
-            <span className="text-3xl block mb-2">&#x1F4AD;</span>
-            <p className="text-gray-500 dark:text-gray-300 text-sm mb-3">
-              No activity yet. Your recent actions will appear here as you use the platform.
-            </p>
-            <Link
-              to="/app/topics/new"
-              className="text-primary-600 dark:text-primary-400 text-sm font-medium hover:underline"
-            >
-              Create your first topic to get started &rarr;
-            </Link>
-          </div>
-        ) : (
-          <div className="relative">
-            {/* Timeline line */}
-            <div className="absolute left-[19px] sm:left-[23px] top-4 bottom-4 w-0.5 bg-gray-200 dark:bg-gray-700" />
-            <div className="space-y-1">
-              {activity.map((item) => {
-                const config = getActivityConfig(item.type);
-                return (
-                  <div
-                    key={item.id}
-                    className="relative flex items-start gap-3 sm:gap-4 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors min-h-[56px] group"
+          {/* Quick actions */}
+          <section aria-label="Quick actions">
+            <SectionHeading className="mb-2">Quick actions</SectionHeading>
+            <nav aria-label="Quick actions" className="flex flex-col divide-y divide-rule dark:divide-dark-border">
+              {quickActions.map((qa) => (
+                <Link
+                  key={qa.to}
+                  to={qa.to}
+                  className="group flex items-center justify-between py-3 text-[13.5px] font-semibold text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+                >
+                  <span>{qa.label}</span>
+                  <span
+                    aria-hidden="true"
+                    className="text-gray-400 dark:text-gray-600 group-hover:text-primary-600 dark:group-hover:text-primary-400 group-hover:translate-x-0.5 transition-transform"
                   >
-                    {/* Timeline dot with icon */}
-                    <div className="relative z-10 flex-shrink-0 mt-0.5">
-                      <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full ${config.dotColor} ring-2 ring-white dark:ring-gray-900 group-hover:ring-gray-50 dark:group-hover:ring-gray-800 flex items-center justify-center text-sm`}>
-                        <span className="text-white text-xs sm:text-sm">{config.icon}</span>
-                      </div>
+                    &rarr;
+                  </span>
+                </Link>
+              ))}
+            </nav>
+          </section>
+
+          {/* Category completeness */}
+          <section aria-label="Category completeness">
+            <SectionHeading className="mb-5">Category completeness</SectionHeading>
+            {isLoading ? (
+              <div className="space-y-4" aria-hidden="true">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-6 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
+                ))}
+              </div>
+            ) : hasCategorizedTopics ? (
+              <div className="flex flex-col gap-4">
+                {stats?.categoryCompleteness.map((cat) => (
+                  <div key={cat.category}>
+                    <div className="flex items-baseline justify-between mb-2">
+                      <span className="text-[12.5px] font-semibold text-gray-700 dark:text-gray-300">{cat.label}</span>
+                      <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">{cat.completeness}%</span>
                     </div>
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                          {item.description}
-                        </p>
-                        <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${config.badgeClass}`}>
-                          {config.badgeLabel}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-300 mt-0.5">
-                        {formatActivityDate(item.date)}
-                      </p>
+                    <div
+                      className="h-[2px] bg-rule dark:bg-dark-border rounded-full overflow-hidden"
+                      role="progressbar"
+                      aria-valuenow={cat.completeness}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label={`${cat.label} completeness`}
+                    >
+                      <div
+                        className="h-full bg-primary-500 dark:bg-primary-400 rounded-full transition-all duration-500"
+                        style={{ width: `${cat.completeness}%` }}
+                      />
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                message="No categorized topics yet."
+                action={
+                  <Link to="/app/topics" className="btn-secondary text-sm">
+                    Browse topics
+                  </Link>
+                }
+                className="py-4"
+              />
+            )}
+          </section>
+        </div>
       </div>
+
+      {/* Personality assessment nudge */}
+      {!isLoading && !assessmentStatus.hasTaken && (
+        <section
+          aria-label="Personality assessment"
+          className="mt-12 rounded-lg bg-panel dark:bg-dark-card px-6 py-6 sm:px-8 sm:py-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+        >
+          <div>
+            <h2 className="font-serif italic text-xl text-gray-900 dark:text-white mb-1">Who are you, really?</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-300 max-w-md">
+              A scientifically validated Big Five assessment &mdash; 120 questions, about 15 minutes.
+            </p>
+          </div>
+          <Link to="/app/personality" className="btn-primary whitespace-nowrap text-center flex-shrink-0">
+            Take the test
+          </Link>
+        </section>
+      )}
     </div>
   );
 }
