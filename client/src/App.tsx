@@ -21,6 +21,7 @@ import NotFoundPage from '@/pages/NotFoundPage';
 import CreateTopicPage from '@/pages/CreateTopicPage';
 import TopicDetailPage from '@/pages/TopicDetailPage';
 import SessionPage from '@/pages/SessionPage';
+import ChatPage from '@/pages/ChatPage';
 import TemplatesPage from '@/pages/TemplatesPage';
 import NotesPage from '@/pages/NotesPage';
 import ImportPage from '@/pages/ImportPage';
@@ -83,6 +84,7 @@ function App() {
             <Route path="graph" element={<KnowledgeGraphPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="review" element={<VerificationPage />} />
+            <Route path="chat" element={<ChatPage />} />
             <Route path="verify" element={<Navigate to="/app/review" replace />} />
             <Route path="sandbox" element={<SandboxPage />} />
             <Route path="bookmarks" element={<Navigate to="/app/notes/bookmarks" replace />} />
