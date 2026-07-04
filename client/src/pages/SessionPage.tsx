@@ -124,84 +124,79 @@ function renderMessageContent(content: string) {
   });
 }
 
-// Memoized message bubble component to prevent re-renders of all messages when new ones arrive
+// Memoized manuscript entry — numbered exchange with small-caps speaker label
+// (Modern Editorial; replaces the chat-bubble treatment)
 const MessageBubble = memo(function MessageBubble({
   message,
+  exchangeNumber,
   onToggleBookmark,
 }: {
   message: Message;
+  exchangeNumber: number;
   onToggleBookmark: (message: Message) => void;
 }) {
+  const isUser = message.role === 'user';
   return (
     <div
-      className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+      className="group flex gap-4"
       role="article"
-      aria-label={`${message.role === 'user' ? 'Your' : 'AI Interviewer'} message`}
+      aria-label={`${isUser ? 'Your' : 'Interviewer'} message`}
     >
-      <div
-        className={`max-w-[80%] ${
-          message.role === 'user'
-            ? 'bg-primary-600 text-white rounded-2xl rounded-br-md px-4 py-3'
-            : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-2xl rounded-bl-md px-4 py-3'
-        }`}
+      {/* Exchange marker */}
+      <span
+        className="w-7 shrink-0 pt-1 text-right font-sans text-[11px] tabular-nums text-gray-400 dark:text-gray-600 select-none"
+        aria-hidden="true"
       >
-        {/* Role indicator */}
-        <div className={`text-xs font-medium mb-1 flex items-center gap-1 ${
-          message.role === 'user'
-            ? 'text-primary-200'
-            : 'text-gray-500 dark:text-gray-300'
-        }`}>
-          {message.role === 'user' ? 'You' : 'AI Interviewer'}
+        {String(exchangeNumber).padStart(2, '0')}
+      </span>
+
+      <div className={`flex-1 min-w-0 ${message.isBookmarked ? 'border-l-2 border-primary-400 dark:border-primary-500 pl-4' : ''}`}>
+        {/* Speaker label + voice + bookmark control */}
+        <div className="flex items-center gap-2 mb-1.5">
+          <span
+            className={`text-[11px] uppercase tracking-[0.08em] font-medium font-sans ${
+              isUser ? 'text-gray-500 dark:text-gray-400' : 'text-primary-600 dark:text-primary-400'
+            }`}
+          >
+            {isUser ? 'You' : 'Interviewer'}
+          </span>
           {message.isVoiceInput && (
-            <span className="inline-flex" aria-label="Voice input">
+            <span className="inline-flex text-gray-400 dark:text-gray-600" aria-label="Voice input">
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
               </svg>
             </span>
           )}
-        </div>
-
-        {/* Message content */}
-        <div className={`text-sm leading-relaxed break-words overflow-hidden ${
-          message.role === 'user' ? 'text-white' : ''
-        }`}>
-          {renderMessageContent(message.content)}
-        </div>
-
-        {/* Timestamp and bookmark */}
-        <div className={`flex items-center justify-between mt-2 ${
-          message.role === 'user'
-            ? 'text-primary-300'
-            : 'text-gray-500 dark:text-gray-300'
-        }`}>
-          <span className="text-xs">
-            {formatTime(message.createdAt)}
-          </span>
-          {/* Bookmark button - only show for real messages (not temp) */}
           {!message.id.startsWith('temp-') && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleBookmark(message);
               }}
-              className={`ml-2 p-0.5 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-1 ${
+              className={`p-0.5 rounded transition-all focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-1 ${
                 message.isBookmarked
-                  ? message.role === 'user'
-                    ? 'text-yellow-300 hover:text-yellow-200'
-                    : 'text-yellow-500 hover:text-yellow-600 dark:text-yellow-400 dark:hover:text-yellow-300'
-                  : message.role === 'user'
-                    ? 'text-primary-300 hover:text-yellow-300 opacity-60 hover:opacity-100'
-                    : 'text-gray-300 dark:text-gray-600 hover:text-yellow-500 dark:hover:text-yellow-400 opacity-60 hover:opacity-100'
+                  ? 'text-primary-500 hover:text-primary-600 dark:text-primary-400'
+                  : 'text-gray-300 dark:text-gray-700 opacity-40 group-hover:opacity-100 hover:text-primary-500 dark:hover:text-primary-400'
               }`}
               title={message.isBookmarked ? 'Remove bookmark' : 'Bookmark this message'}
               aria-label={message.isBookmarked ? 'Remove bookmark from this message' : 'Bookmark this message'}
               aria-pressed={message.isBookmarked}
             >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill={message.isBookmarked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill={message.isBookmarked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
               </svg>
             </button>
           )}
+        </div>
+
+        {/* Prose */}
+        <div
+          className={`font-serif text-[17px] leading-[1.7] break-words overflow-hidden ${
+            isUser ? 'text-ink dark:text-gray-100' : 'text-gray-700 dark:text-gray-300'
+          }`}
+          title={formatTime(message.createdAt)}
+        >
+          {renderMessageContent(message.content)}
         </div>
       </div>
     </div>
@@ -1516,9 +1511,9 @@ export default function SessionPage() {
   }
 
   return (
-    <div className={`flex flex-col ${isFullscreen ? 'fixed inset-0 z-[60] bg-gray-50 dark:bg-dark-bg' : 'h-[calc(100vh-4rem)] sm:h-full max-w-4xl mx-auto -m-4 sm:-m-6'}`}>
+    <div className={`flex flex-col ${isFullscreen ? 'fixed inset-0 z-[60] bg-paper dark:bg-dark-bg' : 'h-[calc(100vh-4rem)] sm:h-full max-w-4xl mx-auto -m-4 sm:-m-6'}`}>
       {/* Session header with breadcrumb */}
-      <div className="flex items-center justify-between px-3 sm:px-6 py-2 sm:py-3 bg-white dark:bg-dark-surface border-b border-gray-200 dark:border-dark-border shrink-0">
+      <div className="flex items-center justify-between px-3 sm:px-6 py-2 sm:py-3 bg-paper dark:bg-dark-bg border-b border-rule dark:border-dark-border shrink-0">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           {!isFullscreen && (
             <Link
@@ -1547,13 +1542,14 @@ export default function SessionPage() {
                 <span className="text-gray-600 dark:text-gray-300">Session</span>
               </nav>
             )}
-            <div className="flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${isSessionActive ? 'bg-green-500 animate-pulse' : isSessionPaused ? 'bg-amber-500' : 'bg-gray-400'}`} />
-              <span className="text-xs text-gray-500 dark:text-gray-300 truncate">
-                {isFullscreen ? `${topic.title} — ` : ''}
-                <span className="sm:hidden">{topic.title.length > 20 ? topic.title.slice(0, 20) + '...' : topic.title}</span>
-                <span className="hidden sm:inline">{isSessionActive ? 'Interview Session' : isSessionPaused ? 'Session Paused' : 'Session Completed'}</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isSessionActive ? 'bg-primary-500 animate-pulse' : isSessionPaused ? 'bg-primary-400' : 'bg-gray-400'}`} />
+              <span className="hidden sm:inline text-[11px] uppercase tracking-[0.08em] font-medium text-gray-500 dark:text-gray-400 shrink-0">
+                {isSessionActive ? 'Interview session' : isSessionPaused ? 'Paused' : 'Completed'}
               </span>
+              <h1 className="font-serif italic text-base sm:text-lg leading-tight text-ink dark:text-gray-100 truncate">
+                {topic.title}
+              </h1>
             </div>
           </div>
         </div>
@@ -1562,7 +1558,7 @@ export default function SessionPage() {
           {session.researchData && parseResearchData(session.researchData) && (
             <button
               onClick={() => setShowResearchPanel(!showResearchPanel)}
-              className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-800/40 transition-colors cursor-pointer"
+              className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 text-[11px] uppercase tracking-[0.08em] font-medium rounded-md border border-rule dark:border-dark-border text-gray-600 dark:text-gray-400 hover:border-primary-500 hover:text-primary-600 dark:hover:text-primary-400 transition-colors cursor-pointer"
               title="Research-driven session — click to view research sources"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1573,7 +1569,7 @@ export default function SessionPage() {
           )}
           {/* Suggested duration badge */}
           {session.suggestedDurationMinutes && (
-            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300" title={`Suggested duration: ${session.suggestedDurationMinutes} minutes`}>
+            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 text-[11px] uppercase tracking-[0.08em] font-medium rounded-md border border-rule dark:border-dark-border text-gray-600 dark:text-gray-400" title={`Suggested duration: ${session.suggestedDurationMinutes} minutes`}>
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -1605,12 +1601,12 @@ export default function SessionPage() {
             <button
               onClick={handlePauseSession}
               disabled={isPausing || isSending || isDistilling}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+              className="btn-secondary flex items-center gap-2 px-3 py-1.5 text-sm"
               aria-label="Pause session"
             >
               {isPausing ? (
                 <>
-                  <div className="animate-spin w-3.5 h-3.5 border-2 border-amber-300 border-t-amber-600 rounded-full" />
+                  <div className="animate-spin w-3.5 h-3.5 border-2 border-gray-300 border-t-gray-600 rounded-full" />
                   Pausing...
                 </>
               ) : (
@@ -1628,7 +1624,7 @@ export default function SessionPage() {
             <button
               onClick={handleResumeSession}
               disabled={isResuming}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg bg-primary-600 hover:bg-primary-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+              className="btn-primary flex items-center gap-2 px-3 py-1.5 text-sm"
               aria-label="Resume session"
             >
               {isResuming ? (
@@ -1652,7 +1648,7 @@ export default function SessionPage() {
             <button
               onClick={handleFinishAndDistill}
               disabled={isDistilling}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+              className="btn-primary flex items-center gap-2 px-3 py-1.5 text-sm"
               aria-label="Finish session and distill notes"
             >
               {isDistilling ? (
@@ -1674,7 +1670,7 @@ export default function SessionPage() {
           {isSessionCompleted && note && (
             <button
               onClick={() => setShowDistillation(true)}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg bg-primary-600 hover:bg-primary-700 text-white transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+              className="btn-secondary flex items-center gap-2 px-3 py-1.5 text-sm"
               aria-label="View distilled notes"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1832,23 +1828,25 @@ export default function SessionPage() {
       )}
 
       {/* Messages area */}
-      <div className={`flex-1 overflow-y-auto px-3 sm:px-6 py-4 space-y-4 ${isFullscreen ? 'max-w-4xl mx-auto w-full' : ''}`} role="log" aria-label="Chat messages" aria-live="polite">
-        {messages.map((message) => (
+      <div className={`flex-1 overflow-y-auto px-3 sm:px-8 py-6 space-y-7 ${isFullscreen ? 'max-w-3xl mx-auto w-full' : ''}`} role="log" aria-label="Interview transcript" aria-live="polite">
+        {messages.map((message, i) => (
           <MessageBubble
             key={message.id}
             message={message}
+            exchangeNumber={i + 1}
             onToggleBookmark={toggleBookmark}
           />
         ))}
 
         {/* Streaming AI response bubble */}
         {isStreaming && streamingContent && (
-          <div className="flex justify-start" aria-live="polite" aria-label="AI is responding">
-            <div className="max-w-[80%] bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-2xl rounded-bl-md px-4 py-3">
-              <div className="text-xs font-medium text-gray-500 dark:text-gray-300 mb-1">
-                AI Interviewer
+          <div className="flex gap-4" aria-live="polite" aria-label="AI is responding">
+            <span className="w-7 shrink-0 pt-1 text-right font-sans text-[11px] text-gray-300 dark:text-gray-700 select-none" aria-hidden="true">··</span>
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] uppercase tracking-[0.08em] font-medium font-sans text-primary-600 dark:text-primary-400 mb-1.5">
+                Interviewer
               </div>
-              <div className="text-sm leading-relaxed">
+              <div className="font-serif text-[17px] leading-[1.7] text-gray-700 dark:text-gray-300">
                 {renderMessageContent(streamingContent)}
                 <span className="inline-block w-1.5 h-4 bg-primary-500 dark:bg-primary-400 animate-pulse ml-0.5 align-text-bottom rounded-sm" />
               </div>
@@ -1858,15 +1856,16 @@ export default function SessionPage() {
 
         {/* Thinking indicator when sending but not yet streaming */}
         {(isSending || isRetrying) && !isStreaming && (
-          <div className="flex justify-start">
-            <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-bl-md px-4 py-3">
-              <div className="text-xs font-medium text-gray-500 dark:text-gray-300 mb-1">
-                {isRetrying ? 'AI Interviewer (Retrying...)' : 'AI Interviewer'}
+          <div className="flex gap-4">
+            <span className="w-7 shrink-0 pt-1 text-right font-sans text-[11px] text-gray-300 dark:text-gray-700 select-none" aria-hidden="true">··</span>
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] uppercase tracking-[0.08em] font-medium font-sans text-primary-600 dark:text-primary-400 mb-1.5">
+                {isRetrying ? 'Interviewer · retrying' : 'Interviewer'}
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+              <div className="flex items-center gap-1.5 pt-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-gray-500 animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
           </div>
@@ -1949,13 +1948,13 @@ export default function SessionPage() {
 
       {/* Quick replies */}
       {quickReplies.length > 0 && isSessionActive && !isSending && !isDistilling && !isSessionPaused && (
-        <div className={`px-3 sm:px-6 py-2 flex flex-wrap gap-2 shrink-0 ${isFullscreen ? 'max-w-4xl mx-auto w-full' : ''}`} role="group" aria-label="Quick reply options">
+        <div className={`px-3 sm:px-8 py-2 sm:pl-[4.75rem] flex flex-wrap gap-2 shrink-0 ${isFullscreen ? 'max-w-3xl mx-auto w-full' : ''}`} role="group" aria-label="Quick reply options">
           {quickReplies.map((reply, index) => (
             <button
               key={index}
               onClick={() => handleQuickReply(reply)}
               disabled={isSending}
-              className="px-4 py-2.5 min-h-[44px] text-sm rounded-full border border-primary-300 dark:border-primary-700 text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/40 transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+              className="px-4 py-2.5 min-h-[44px] text-sm font-sans rounded-md border border-gray-200 dark:border-dark-border bg-transparent text-gray-700 dark:text-gray-300 hover:border-primary-500 hover:text-primary-700 dark:hover:text-primary-400 hover:bg-panel/50 dark:hover:bg-dark-card/50 transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
               aria-label={`Quick reply: ${reply}`}
             >
               {reply}
@@ -2019,7 +2018,7 @@ export default function SessionPage() {
 
       {/* Input area */}
       {isSessionActive && !isDistilling && (
-        <div className={`px-3 sm:px-6 py-3 sm:py-4 bg-white dark:bg-dark-surface border-t border-gray-200 dark:border-dark-border shrink-0 ${isFullscreen ? 'max-w-4xl mx-auto w-full' : ''}`}>
+        <div className={`px-3 sm:px-8 py-3 sm:py-4 bg-paper dark:bg-dark-bg border-t border-rule dark:border-dark-border shrink-0 ${isFullscreen ? 'max-w-3xl mx-auto w-full' : ''}`}>
           <form onSubmit={handleSubmit} className="flex items-end gap-2 sm:gap-3">
             <div className="flex-1 relative">
               <label htmlFor="session-message-input" className="sr-only">Type your response</label>
@@ -2029,9 +2028,9 @@ export default function SessionPage() {
                 value={inputValue}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
-                placeholder={isRecording ? 'Listening... speak now' : 'Type your response...'}
+                placeholder={isRecording ? 'Listening… speak now' : 'Take your time…'}
                 rows={1}
-                className={`input-field resize-none min-h-[44px] max-h-32 py-2.5 pr-3 ${isRecording ? 'ring-2 ring-red-400 dark:ring-red-500 border-red-300 dark:border-red-600' : ''}`}
+                className={`input-field resize-none min-h-[44px] max-h-32 py-2.5 pr-3 font-serif text-[16px] placeholder:italic placeholder:font-serif ${isRecording ? 'ring-2 ring-red-400 dark:ring-red-500 border-red-300 dark:border-red-600' : ''}`}
                 style={{
                   height: 'auto',
                   minHeight: '44px',
@@ -2050,10 +2049,10 @@ export default function SessionPage() {
                 type="button"
                 onClick={toggleRecording}
                 disabled={isSending}
-                className={`flex items-center justify-center w-11 h-11 p-0 shrink-0 rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${
+                className={`flex items-center justify-center w-11 h-11 p-0 shrink-0 rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${
                   isRecording
                     ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse shadow-lg shadow-red-500/25'
-                    : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300'
+                    : 'border border-rule dark:border-dark-border bg-transparent hover:border-primary-500 text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
                 title={isRecording ? 'Stop recording' : 'Voice input'}
                 aria-label={isRecording ? 'Stop recording' : 'Start voice input'}
@@ -2074,7 +2073,7 @@ export default function SessionPage() {
             <button
               type="submit"
               disabled={!inputValue.trim() || isSending}
-              className="btn-primary flex items-center justify-center w-11 h-11 p-0 shrink-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+              className="btn-primary flex items-center justify-center w-11 h-11 !p-0 shrink-0 !rounded-full focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
               title="Send message"
               aria-label="Send message"
             >
