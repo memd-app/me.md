@@ -17,7 +17,6 @@ interface Insight {
   content: string;
   confidenceScore: number | null;
   verificationStatus: string;
-  agreementScore: number | null;
   privacyTier: string | null;
   extractionMethod: string | null; // 'ai' | 'fallback'
   sourceSessionId: string | null;
@@ -71,7 +70,6 @@ export default function VerificationPage() {
   const [editSaving, setEditSaving] = useState(false);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [historyState, setHistoryState] = useState<HistoryState | null>(null);
-  const [agreementUpdating, setAgreementUpdating] = useState<string | null>(null);
 
   // Batch review mode state
   const [batchMode, setBatchMode] = useState(false);
@@ -233,33 +231,6 @@ export default function VerificationPage() {
     }
   };
 
-  const handleSetAgreement = async (insightId: string, score: number) => {
-    if (!user) return;
-    setAgreementUpdating(insightId);
-    try {
-      const data = editInsight(db, insightId, { agreementScore: score });
-      const updatedScore = data.insight.agreementScore;
-
-      // Update in pending insights
-      setPendingInsights(prev =>
-        prev.map(i =>
-          i.id === insightId ? { ...i, agreementScore: updatedScore, updatedAt: data.insight.updatedAt } : i
-        )
-      );
-      // Update in verified insights
-      setVerifiedInsights(prev =>
-        prev.map(i =>
-          i.id === insightId ? { ...i, agreementScore: updatedScore, updatedAt: data.insight.updatedAt } : i
-        )
-      );
-    } catch (err) {
-      console.error('Failed to update agreement score:', err);
-      setError(err instanceof Error ? err.message : 'Failed to update agreement score');
-    } finally {
-      setAgreementUpdating(null);
-    }
-  };
-
   // ============================================
   // Batch Review Mode Handlers
   // ============================================
@@ -334,27 +305,6 @@ export default function VerificationPage() {
 
   const currentBatchInsight = batchMode ? getCurrentBatchInsight() : null;
   const batchComplete = batchMode && currentBatchInsight === null;
-
-  // Quiet warm scale for the 1-10 agreement rating: gray hairline steps,
-  // amber reserved for the selected value only (DESIGN.md "single amber").
-  const agreementStepClass = (score: number, current: number | null): string => {
-    if (current === score) {
-      return 'bg-primary-500 dark:bg-primary-400 border-primary-500 dark:border-primary-400 text-white dark:text-dark-bg';
-    }
-    if (current !== null && score < current) {
-      return 'bg-transparent border-gray-400 dark:border-gray-600 text-gray-600 dark:text-gray-300';
-    }
-    return 'bg-transparent border-rule dark:border-dark-border text-gray-400 dark:text-gray-600 hover:border-gray-400 dark:hover:border-gray-500 hover:text-gray-600 dark:hover:text-gray-300';
-  };
-
-  const getAgreementLabel = (score: number | null): string => {
-    if (score === null) return 'Not rated';
-    if (score >= 9) return 'Strongly agree';
-    if (score >= 7) return 'Agree';
-    if (score >= 5) return 'Somewhat agree';
-    if (score >= 3) return 'Somewhat disagree';
-    return 'Strongly disagree';
-  };
 
   const getActionLabel = (action: string): string => {
     switch (action) {
@@ -601,35 +551,6 @@ export default function VerificationPage() {
                   )}
                 </div>
 
-                {/* Agreement Scale */}
-                <div className="mb-5 px-4 py-3.5 bg-panel dark:bg-dark-card rounded-md">
-                  <div className="flex items-center justify-between mb-2.5">
-                    <span className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-600 dark:text-gray-400">
-                      Agreement &middot; {getAgreementLabel(insight.agreementScore)}
-                    </span>
-                    {insight.agreementScore !== null && (
-                      <span className="font-serif italic text-sm text-primary-600 dark:text-primary-400">
-                        {insight.agreementScore}/10
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex gap-1">
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(score => (
-                      <button
-                        key={score}
-                        onClick={() => handleSetAgreement(insight.id, score)}
-                        disabled={agreementUpdating === insight.id}
-                        className={`flex-1 h-8 rounded-sm border text-xs font-medium transition-colors ${agreementStepClass(score, insight.agreementScore)} ${
-                          agreementUpdating === insight.id ? 'opacity-50 cursor-wait' : 'cursor-pointer'
-                        }`}
-                        title={`Set agreement to ${score}/10`}
-                      >
-                        {score}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 {/* Batch action buttons */}
                 {editState?.insightId !== insight.id && (
                   <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-rule dark:border-dark-border">
@@ -796,8 +717,6 @@ export default function VerificationPage() {
                   </>
                 )}
 
-                {/* Note: Re-verification badge/info shown in card banner above for re-check items */}
-
                 {/* Privacy tier indicator — passive small-caps marker, managed in Settings (single owner) */}
                 <span aria-hidden="true" className="text-gray-300 dark:text-gray-700">&middot;</span>
                 <span
@@ -810,35 +729,6 @@ export default function VerificationPage() {
                 >
                   {insight.privacyTier === 'never_export' ? 'Never export' : 'Exportable'}
                 </span>
-              </div>
-
-              {/* Agreement Scale 1-10 */}
-              <div className="mb-4 px-4 py-3.5 bg-panel dark:bg-dark-card rounded-md">
-                <div className="flex items-center justify-between mb-2.5">
-                  <span className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-600 dark:text-gray-400">
-                    Agreement &middot; {getAgreementLabel(insight.agreementScore)}
-                  </span>
-                  {insight.agreementScore !== null && (
-                    <span className="font-serif italic text-sm text-primary-600 dark:text-primary-400">
-                      {insight.agreementScore}/10
-                    </span>
-                  )}
-                </div>
-                <div className="flex gap-1">
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(score => (
-                    <button
-                      key={score}
-                      onClick={() => handleSetAgreement(insight.id, score)}
-                      disabled={agreementUpdating === insight.id}
-                      className={`flex-1 h-7 rounded-sm border text-xs font-medium transition-colors ${agreementStepClass(score, insight.agreementScore)} ${
-                        agreementUpdating === insight.id ? 'opacity-50 cursor-wait' : 'cursor-pointer'
-                      }`}
-                      title={`Set agreement to ${score}/10`}
-                    >
-                      {score}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               {/* Action buttons - hidden during edit mode */}

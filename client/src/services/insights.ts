@@ -367,7 +367,7 @@ export function rejectInsight(db: Db, id: string, reason?: string) {
 }
 
 /**
- * Edit an insight's content, agreement score, or privacy tier.
+ * Edit an insight's content or privacy tier.
  * Supports optimistic concurrency control via expectedUpdatedAt.
  */
 export function editInsight(
@@ -375,7 +375,6 @@ export function editInsight(
   id: string,
   data: {
     content?: string
-    agreementScore?: number
     privacyTier?: string
     expectedUpdatedAt?: string
   }
@@ -405,14 +404,6 @@ export function editInsight(
     }
   }
 
-  // Validate agreementScore
-  if (data.agreementScore !== undefined && data.agreementScore !== null) {
-    const score = Number(data.agreementScore)
-    if (isNaN(score) || score < 0 || score > 100) {
-      throw new Error('Agreement score must be a number between 0 and 100.')
-    }
-  }
-
   // Validate privacyTier
   if (data.privacyTier !== undefined && data.privacyTier !== null) {
     const validTiers = ['public', 'connections', 'private', 'exportable', 'never_export']
@@ -434,7 +425,6 @@ export function editInsight(
       newContent: data.content,
     }).run()
   }
-  if (data.agreementScore !== undefined) updates.agreementScore = data.agreementScore
   if (data.privacyTier !== undefined) updates.privacyTier = data.privacyTier
 
   const updated = db.update(insights).set(updates)
