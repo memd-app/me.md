@@ -3,7 +3,6 @@ import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '../contexts/ToastContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
-import ConflictsSection from '../components/verification/ConflictsSection';
 import SwipeableCard from '../components/verification/SwipeableCard';
 import { Badge, Button, EmptyState, PageHeader, SectionHeading } from '@/components/ui';
 import { getInsightStats, getPendingInsights, getAllInsights, verifyInsight, rejectInsight, editInsight, getInsight } from '@/services/insights';
@@ -853,11 +852,6 @@ export default function VerificationPage() {
           })}
         </div>
       ))}
-
-      {/* Insight Conflicts Section - only in verification view */}
-      <div className="mt-12 pt-8 border-t border-rule dark:border-dark-border">
-        <ConflictsSection />
-      </div>
     </div>
   );
 }
