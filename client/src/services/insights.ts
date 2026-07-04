@@ -1,4 +1,4 @@
-import { eq, and, desc, or, lte } from 'drizzle-orm'
+import { eq, and, desc, or } from 'drizzle-orm'
 import { scheduleSave } from '@/db/persistence'
 import { LOCAL_USER_ID } from '@/contexts/UserContext'
 import { insights, topics, verificationHistory, conceptNodes, conceptEdges } from '@/db/schema'
@@ -70,47 +70,6 @@ function calculateReVerifyAt(interval: string): string {
   }
 
   return now.toISOString()
-}
-
-/**
- * Check for insights that are due for re-verification and mark them.
- */
-export function checkReVerificationDue(db: Db, asOfDate?: string): number {
-  const now = asOfDate || new Date().toISOString()
-
-  const dueInsights = db.select().from(insights)
-    .where(
-      and(
-        eq(insights.verificationStatus, 'verified'),
-        lte(insights.reVerifyAt, now)
-      )
-    )
-    .all()
-    .filter((i: any) => i.reVerifyAt !== null)
-
-  let count = 0
-  for (const insight of dueInsights) {
-    db.update(insights).set({
-      verificationStatus: 're_verification_pending',
-      updatedAt: now,
-    }).where(eq(insights.id, insight.id)).run()
-
-    db.insert(verificationHistory).values({
-      id: crypto.randomUUID(),
-      insightId: insight.id,
-      action: 're_verification_triggered',
-      previousContent: insight.content,
-      newContent: `Re-verification triggered (interval: ${insight.reVerifyInterval})`,
-    }).run()
-
-    count++
-  }
-
-  if (count > 0) {
-    scheduleSave()
-  }
-
-  return count
 }
 
 /**
@@ -405,39 +364,6 @@ export function rejectInsight(db: Db, id: string, reason?: string) {
     removedConceptNodes: linkedConceptNodes.length,
     topicRefined,
   }
-}
-
-/**
- * Set re-verification interval for an insight.
- */
-export function setReVerifyInterval(db: Db, id: string, interval: string) {
-  const userId = LOCAL_USER_ID
-
-  const validIntervals = ['weekly', 'monthly', 'quarterly', 'biannual', 'annual']
-  if (!interval || !validIntervals.includes(interval)) {
-    throw new Error('Invalid interval. Must be one of: weekly, monthly, quarterly, biannual, annual')
-  }
-
-  const insight = db.select().from(insights).where(
-    and(eq(insights.id, id), eq(insights.userId, userId))
-  ).get()
-
-  if (!insight) {
-    throw new Error('Insight not found')
-  }
-
-  const now = new Date().toISOString()
-  const reVerifyAt = calculateReVerifyAt(interval)
-
-  const updated = db.update(insights).set({
-    reVerifyInterval: interval,
-    reVerifyAt,
-    updatedAt: now,
-  }).where(eq(insights.id, id)).returning().get()
-
-  scheduleSave()
-
-  return { insight: updated, message: `Re-verification interval set to ${interval}` }
 }
 
 /**

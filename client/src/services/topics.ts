@@ -10,7 +10,7 @@ import type { TopicSuggestionContext } from './ai'
 type Db = SQLJsDatabase<typeof schema>
 
 // Valid enum values for topic fields
-const VALID_STATUSES = ['backlog', 'scheduled', 'in_progress', 'extracted', 'refined']
+const VALID_STATUSES = ['backlog', 'in_progress', 'extracted', 'refined']
 const VALID_PRIORITIES = ['high', 'medium', 'low']
 const VALID_INTENTS = ['articulate', 'explore', 'decide', 'document']
 

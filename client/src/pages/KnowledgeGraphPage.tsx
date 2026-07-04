@@ -145,7 +145,6 @@ const GRAPH_PALETTE: { light: GraphPalette; dark: GraphPalette } = {
     },
     status: {
       backlog: '#C7BEB0',
-      scheduled: '#D89A48', // paused
       in_progress: '#C77B21', // active
       extracted: '#857B69', // completed
       refined: '#857B69', // completed
@@ -204,7 +203,6 @@ const GRAPH_PALETTE: { light: GraphPalette; dark: GraphPalette } = {
     },
     status: {
       backlog: '#4A4234',
-      scheduled: '#E3AE66', // paused
       in_progress: '#E09A3E', // active
       extracted: '#A99E8A', // completed
       refined: '#A99E8A', // completed

@@ -1124,7 +1124,7 @@ export async function createSession(
   }).returning().get()
 
   // Update topic status
-  if (topic.status === 'backlog' || topic.status === 'scheduled') {
+  if (topic.status === 'backlog') {
     ;(db as any).update(topics).set({
       status: 'in_progress',
       updatedAt: new Date().toISOString(),
@@ -1229,39 +1229,6 @@ export async function createMiniSession(
     topic: newTopic,
     messages: [openingMessage],
   }
-}
-
-/**
- * Research a topic before creating a session.
- * Returns research findings for research-driven sessions.
- */
-export async function researchTopicForSession(
-  db: Db,
-  topicId: string,
-): Promise<ResearchServiceResult> {
-  const topic = (db as any).select().from(topics).where(
-    and(eq(topics.id, topicId), eq(topics.userId, LOCAL_USER_ID))
-  ).get()
-
-  if (!topic) {
-    throw new Error('Topic not found')
-  }
-
-  const referenceUrls = parseJsonArray(topic.referenceUrls)
-  const contextItems = parseJsonArray(topic.contextItems)
-
-  const researchResult = await researchTopic(
-    topic.title,
-    topic.description,
-    referenceUrls,
-    contextItems,
-  )
-
-  if (!researchResult) {
-    throw new Error('Research service unavailable. AI API may not be configured.')
-  }
-
-  return researchResult
 }
 
 /**

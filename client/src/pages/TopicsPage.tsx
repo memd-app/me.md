@@ -27,7 +27,6 @@ interface Topic {
 
 const STATUS_LABELS: Record<string, string> = {
   backlog: 'Backlog',
-  scheduled: 'Scheduled',
   in_progress: 'In Progress',
   extracted: 'Extracted',
   refined: 'Refined',
@@ -567,7 +566,7 @@ export default function TopicsPage() {
             active={statusFilter !== 'all'}
             options={[
               { value: 'all', label: `All (${topics.length})` },
-              ...['backlog', 'scheduled', 'in_progress', 'extracted', 'refined'].map((status) => ({
+              ...['backlog', 'in_progress', 'extracted', 'refined'].map((status) => ({
                 value: status,
                 label: `${STATUS_LABELS[status] || status}${statusCounts[status] ? ` (${statusCounts[status]})` : ''}`,
               })),

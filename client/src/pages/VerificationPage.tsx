@@ -57,22 +57,6 @@ interface HistoryState {
   loading: boolean;
 }
 
-const INTERVAL_LABELS: Record<string, string> = {
-  weekly: '1-4 weeks',
-  monthly: '~1 month',
-  quarterly: '~3 months',
-  biannual: '~6 months',
-  annual: '~12 months',
-};
-
-const INTERVAL_OPTIONS = [
-  { value: 'weekly', label: 'Weekly (1-4 weeks)', description: 'Situational insights that change frequently' },
-  { value: 'monthly', label: 'Monthly (~1 month)', description: 'Moderate insights' },
-  { value: 'quarterly', label: 'Quarterly (~3 months)', description: 'Preferences and styles' },
-  { value: 'biannual', label: 'Biannual (~6 months)', description: 'Core traits and values' },
-  { value: 'annual', label: 'Annual (~12 months)', description: 'Deep, stable identity traits' },
-];
-
 export default function VerificationPage() {
   const { user } = useUser();
   const db = useDatabase();
@@ -83,7 +67,6 @@ export default function VerificationPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
-  const [intervalDropdownOpen, setIntervalDropdownOpen] = useState<string | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -125,16 +108,11 @@ export default function VerificationPage() {
     return () => controller.abort();
   }, [fetchData]);
 
-  const handleApprove = async (insightId: string, reVerifyInterval?: string) => {
+  const handleApprove = async (insightId: string) => {
     if (!user) return;
     setActionInProgress(insightId);
     try {
-      const body: Record<string, string> = {};
-      if (reVerifyInterval) {
-        body.reVerifyInterval = reVerifyInterval;
-      }
-
-      verifyInsight(db, insightId, body.reVerifyInterval ? { reVerifyInterval: body.reVerifyInterval } : undefined);
+      verifyInsight(db, insightId);
 
       // Remove from pending list and update stats
       setPendingInsights(prev => prev.filter(i => i.id !== insightId));
@@ -143,7 +121,6 @@ export default function VerificationPage() {
         pending: prev.pending - 1,
         verified: prev.verified + 1,
       }));
-      setIntervalDropdownOpen(null);
       addToast('Insight approved and verified successfully!', 'success');
     } catch (err) {
       console.error('Failed to approve insight:', err);
@@ -179,7 +156,6 @@ export default function VerificationPage() {
 
   const handleStartEdit = (insight: Insight) => {
     setEditState({ insightId: insight.id, editedContent: insight.content, expectedUpdatedAt: insight.updatedAt });
-    setIntervalDropdownOpen(null);
     // Focus textarea after render
     setTimeout(() => {
       editTextareaRef.current?.focus();
@@ -299,7 +275,6 @@ export default function VerificationPage() {
     // Reset edit/history state
     setEditState(null);
     setHistoryState(null);
-    setIntervalDropdownOpen(null);
   };
 
   const exitBatchReview = () => {
@@ -310,21 +285,19 @@ export default function VerificationPage() {
     setBatchTotal(0);
     setEditState(null);
     setHistoryState(null);
-    setIntervalDropdownOpen(null);
   };
 
   const advanceBatch = () => {
     setBatchReviewed(prev => prev + 1);
     setEditState(null);
     setHistoryState(null);
-    setIntervalDropdownOpen(null);
     // Find the next insight that hasn't been acted on yet
     // We check against the current pendingInsights which gets updated as items are approved/rejected
     setBatchIndex(prev => prev + 1);
   };
 
-  const handleBatchApprove = async (insightId: string, reVerifyInterval?: string) => {
-    await handleApprove(insightId, reVerifyInterval);
+  const handleBatchApprove = async (insightId: string) => {
+    await handleApprove(insightId);
     // Remove from batchInsights too
     setBatchInsights(prev => prev.map(i => i.id === insightId ? { ...i, verificationStatus: '_done' } : i));
     advanceBatch();
@@ -423,11 +396,6 @@ export default function VerificationPage() {
   };
 
   const formatDate = (dateStr: string | null) => formatShortDate(dateStr);
-
-  const getIntervalLabel = (interval: string | null) => {
-    if (!interval) return null;
-    return INTERVAL_LABELS[interval] || interval;
-  };
 
   if (isLoading) {
     return (
@@ -536,7 +504,6 @@ export default function VerificationPage() {
           </div>
         ) : currentBatchInsight && (() => {
           const insight = currentBatchInsight;
-          const isReVerification = insight.verificationStatus === 're_verification_pending';
           return (
             <div className="space-y-6">
               {/* Batch progress indicator */}
@@ -572,18 +539,6 @@ export default function VerificationPage() {
 
               {/* Single insight card in focus */}
               <div className="card">
-                {/* Re-verification banner */}
-                {isReVerification && (
-                  <div className="flex flex-wrap items-center gap-2 mb-4 pb-4 border-b border-rule dark:border-dark-border">
-                    <Badge variant="pending" label="Re-check" />
-                    {insight.verifiedAt && (
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        Last verified {formatDate(insight.verifiedAt)}
-                      </span>
-                    )}
-                  </div>
-                )}
-
                 {/* Insight content - view or edit mode */}
                 <div className="mb-5">
                   {editState?.insightId === insight.id ? (
@@ -740,7 +695,6 @@ export default function VerificationPage() {
             <kbd className="px-1.5 py-0.5 rounded-sm border border-rule dark:border-dark-border text-gray-500 dark:text-gray-400 font-mono text-[10px]">Tab</kbd> into card for Edit/History buttons
           </p>
           {pendingInsights.map(insight => {
-            const isReVerification = insight.verificationStatus === 're_verification_pending';
             return (
             <SwipeableCard
               key={insight.id}
@@ -753,23 +707,6 @@ export default function VerificationPage() {
               ariaLabel={`Insight: ${insight.content.substring(0, 80)}${insight.content.length > 80 ? '...' : ''}. Press A to approve, R to reject, or Tab to action buttons.`}
             >
             <div className="card hover:border-gray-300 dark:hover:border-gray-600 transition-colors">
-              {/* Re-verification banner at top of card */}
-              {isReVerification && (
-                <div className="flex flex-wrap items-center gap-2 mb-4 pb-4 border-b border-rule dark:border-dark-border">
-                  <Badge variant="pending" label="Re-check" />
-                  {insight.verifiedAt && (
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      Last verified: {formatDate(insight.verifiedAt)}
-                    </span>
-                  )}
-                  {insight.reVerifyInterval && (
-                    <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto">
-                      Schedule: {getIntervalLabel(insight.reVerifyInterval)}
-                    </span>
-                  )}
-                </div>
-              )}
-
               {/* Insight content - view or edit mode */}
               <div className="mb-4">
                 {editState?.insightId === insight.id ? (
@@ -929,46 +866,6 @@ export default function VerificationPage() {
                   >
                     Edit
                   </Button>
-
-                  {/* Re-verification interval selector */}
-                  <div className="relative">
-                    <button
-                      onClick={() => setIntervalDropdownOpen(intervalDropdownOpen === insight.id ? null : insight.id)}
-                      disabled={actionInProgress === insight.id}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-semibold text-gray-600 dark:text-gray-400 border border-rule dark:border-dark-border rounded-md hover:border-gray-400 dark:hover:border-gray-500 hover:text-gray-800 dark:hover:text-gray-200 transition-colors disabled:opacity-50"
-                      title="Set re-verification interval and approve"
-                      aria-label="Schedule re-verification interval"
-                      aria-expanded={intervalDropdownOpen === insight.id}
-                      aria-haspopup="true"
-                    >
-                      Schedule
-                      <span aria-hidden="true" className="text-[9px]">&#9662;</span>
-                    </button>
-
-                    {/* Dropdown menu */}
-                    {intervalDropdownOpen === insight.id && (
-                      <div className="absolute bottom-full mb-2 left-0 z-10 w-72 bg-white dark:bg-dark-card border border-rule dark:border-dark-border rounded-md shadow-sm" role="menu" aria-label="Re-verification interval options">
-                        <div className="px-3 py-2.5 border-b border-rule dark:border-dark-border">
-                          <p className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400">
-                            Approve with re-verification interval
-                          </p>
-                        </div>
-                        <div className="py-1">
-                          {INTERVAL_OPTIONS.map(option => (
-                            <button
-                              key={option.value}
-                              onClick={() => handleApprove(insight.id, option.value)}
-                              role="menuitem"
-                              className="w-full text-left px-3 py-2 hover:bg-panel dark:hover:bg-dark-surface transition-colors"
-                            >
-                              <p className="text-sm font-semibold text-gray-900 dark:text-white">{option.label}</p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">{option.description}</p>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
 
                   {/* Reject button — ink-on-rule, turns accent on hover (DESIGN.md; no dedicated red outside confirmations) */}
                   <button
