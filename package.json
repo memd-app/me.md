@@ -1,8 +1,29 @@
 {
   "name": "me-md",
-  "version": "0.1.0",
   "private": true,
+  "version": "0.1.0",
   "description": "Personal knowledge system for building verified personal context consumed by AI agents",
+  "author": "me.md",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/memd-app/me.md"
+  },
+  "homepage": "https://github.com/memd-app/me.md#readme",
+  "bugs": {
+    "url": "https://github.com/memd-app/me.md/issues"
+  },
+  "keywords": [
+    "personal-knowledge",
+    "ai-context",
+    "knowledge-graph",
+    "mcp",
+    "claude",
+    "self-discovery",
+    "personality-assessment",
+    "big-five",
+    "local-first"
+  ],
   "scripts": {
     "dev": "cd client && npm run dev",
     "build": "cd client && npm run build",

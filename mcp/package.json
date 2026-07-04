@@ -1,12 +1,20 @@
 {
   "name": "memd-mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "MCP server exposing your verified me.md knowledge to Claude Desktop/Cursor",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "npx tsx mcp-server.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "better-sqlite3": "^12.6.0"
+    "better-sqlite3": "^12.6.0",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.5",
