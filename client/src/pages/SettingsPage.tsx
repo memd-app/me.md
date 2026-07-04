@@ -587,8 +587,8 @@ export default function SettingsPage() {
           <div className="card">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Anthropic API Key</h2>
             <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-              Your API key is stored in localStorage and never sent to any server except Anthropic&apos;s API
-              (via the Vite dev proxy). Get your key from{' '}
+              Your API key is stored in localStorage and sent only to Anthropic&apos;s API,
+              directly from your browser. Get your key from{' '}
               <a
                 href="https://console.anthropic.com/settings/keys"
                 target="_blank"

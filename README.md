@@ -31,6 +31,11 @@ All data lives in your browser's IndexedDB. You can export backups from the Sett
 
 **Warning:** Clearing your browser data will permanently delete your knowledge base. Export regularly.
 
+Data is stored and exported **unencrypted** — backups contain your personal knowledge base in
+plain form, so store and share them carefully. The app makes no network requests with your data
+except calls to Anthropic's API with your own key (the UI also loads the Inter font from Google
+Fonts; self-host it if you want a fully offline posture).
+
 ## MCP Server
 
 Use your knowledge graph as context in Claude Desktop or Cursor:
@@ -58,7 +63,7 @@ Use your knowledge graph as context in Claude Desktop or Cursor:
 - sql.js (SQLite compiled to WASM, runs in browser)
 - Drizzle ORM
 - D3.js
-- Claude API (via Vite dev proxy)
+- Claude API (called directly from the browser with your own key)
 
 ## License
 
