@@ -5,6 +5,7 @@ import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '@/contexts/ToastContext';
 import Modal from '@/components/common/Modal';
 import { getExportStatus, exportAsMarkdown, exportAsJson } from '@/services/profile';
+import { PageHeader, Badge } from '@/components/ui';
 
 type ExportFormat = 'markdown' | 'json' | 'both';
 type ExportAction = 'download' | 'clipboard';
@@ -164,224 +165,211 @@ export default function ExportPage() {
   const handleExport = () => requireVerification('download');
   const handleCopyToClipboard = () => requireVerification('clipboard');
 
-  const formatOptions: { value: ExportFormat; label: string; icon: string; description: string }[] = [
+  const formatOptions: { value: ExportFormat; label: string; description: string }[] = [
     {
       value: 'markdown',
       label: 'Markdown',
-      icon: '\uD83D\uDCDD',
       description: 'Export as a portable me.md file',
     },
     {
       value: 'json',
       label: 'JSON',
-      icon: '\uD83D\uDCE6',
       description: 'Complete data export: insights, topics, notes, and sessions',
     },
     {
       value: 'both',
       label: 'Both',
-      icon: '\uD83D\uDCCB',
       description: 'Download both Markdown and JSON files',
     },
   ];
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Export Profile</h1>
-        <p className="mt-1 text-gray-600 dark:text-gray-300">
-          Export your verified profile as Markdown, JSON, or both formats
-        </p>
-      </div>
+      <PageHeader
+        kicker="Export"
+        title="Export Profile"
+        subtitle="Export your verified profile as Markdown, JSON, or both formats"
+      />
 
-      {/* No verified data warning */}
+      {/* No verified data warning — bg-panel note, typographic not colored */}
       {!loadingExportStatus && exportStatus && !exportStatus.hasVerifiedData && (
-        <div className="mb-6 p-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
-          <div className="flex items-start gap-3">
-            <svg className="w-5 h-5 text-amber-500 dark:text-amber-400 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-            </svg>
-            <div>
-              <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-200">
-                No verified data to export
-              </h3>
-              <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                Your profile export will be empty because you don&apos;t have any verified, exportable insights yet. To build your profile:
-              </p>
-              <ol className="text-sm text-amber-700 dark:text-amber-300 mt-2 ml-4 list-decimal space-y-1">
-                <li>
-                  <Link to="/app/topics" className="underline hover:text-amber-900 dark:hover:text-amber-100">Create topics</Link> and complete interview sessions
-                </li>
-                <li>
-                  <Link to="/app/review" className="underline hover:text-amber-900 dark:hover:text-amber-100">Verify your insights</Link> on the Verification page
-                </li>
-                <li>Ensure verified insights have the &quot;exportable&quot; privacy tier</li>
-              </ol>
-            </div>
-          </div>
+        <div className="mb-8 bg-panel dark:bg-dark-card border border-rule dark:border-dark-border rounded-md px-5 py-4">
+          <p className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-primary-600 dark:text-primary-400 mb-2">
+            No verified data to export
+          </p>
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            Your profile export will be empty because you don&apos;t have any verified, exportable insights yet. To build your profile:
+          </p>
+          <ol className="text-sm text-gray-700 dark:text-gray-300 mt-2 ml-4 list-decimal space-y-1">
+            <li>
+              <Link to="/app/topics" className="underline hover:text-primary-600 dark:hover:text-primary-400">Create topics</Link> and complete interview sessions
+            </li>
+            <li>
+              <Link to="/app/review" className="underline hover:text-primary-600 dark:hover:text-primary-400">Verify your insights</Link> on the Verification page
+            </li>
+            <li>Ensure verified insights have the &quot;exportable&quot; privacy tier</li>
+          </ol>
         </div>
       )}
 
-      {/* Export readiness summary */}
+      {/* Export readiness summary — quiet typographic line, no colored box */}
       {!loadingExportStatus && exportStatus && exportStatus.hasVerifiedData && (
-        <div className="mb-6 p-3 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 flex items-center gap-2">
-          <svg className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+        <p className="mb-8 text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+          <svg className="w-4 h-4 text-primary-600 dark:text-primary-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
-          <p className="text-sm text-green-700 dark:text-green-300">
-            <strong>{exportStatus.verifiedInsightCount} verified insight{exportStatus.verifiedInsightCount !== 1 ? 's' : ''}</strong> across {exportStatus.topicCount} topic{exportStatus.topicCount !== 1 ? 's' : ''} ready to export.
-          </p>
-        </div>
+          <span>
+            <strong className="text-ink dark:text-gray-100">{exportStatus.verifiedInsightCount} verified insight{exportStatus.verifiedInsightCount !== 1 ? 's' : ''}</strong> across {exportStatus.topicCount} topic{exportStatus.topicCount !== 1 ? 's' : ''} ready to export.
+          </span>
+        </p>
       )}
 
       {/* Status message */}
       {status && (
-        <div
-          className={`mb-6 p-4 rounded-lg border ${
+        <p
+          className={`mb-8 text-sm ${
             status.type === 'success'
-              ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'
-              : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+              ? 'text-ink dark:text-gray-100'
+              : 'text-red-600 dark:text-red-400'
           }`}
+          role={status.type === 'error' ? 'alert' : undefined}
         >
-          <p className="text-sm">{status.message}</p>
-        </div>
+          {status.message}
+        </p>
       )}
 
       {/* Verification status banner */}
       {isVerified && (
-        <div className="mb-6 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 flex items-center gap-2">
-          <svg className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-          </svg>
-          <p className="text-sm text-green-700 dark:text-green-300">
-            <strong>Identity verified.</strong> You can export freely during this session.
-          </p>
-        </div>
+        <p className="mb-8 text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+          <Badge variant="verified" label="Identity verified" />
+          <span>You can export freely during this session.</span>
+        </p>
       )}
 
-      {/* Format selection */}
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+      {/* Format selection — quiet selectable cards, amber ring on selection */}
+      <div className="mb-8">
+        <h2 className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-3">
           Select Export Format
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {formatOptions.map((option) => (
-            <button
-              key={option.value}
-              onClick={() => setSelectedFormat(option.value)}
-              className={`p-4 rounded-lg border-2 text-left transition-all ${
-                selectedFormat === option.value
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400 ring-1 ring-blue-500 dark:ring-blue-400'
-                  : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
-              }`}
-            >
-              <div className="flex items-center gap-3 mb-2">
-                <span className="text-2xl">{option.icon}</span>
-                <span className={`font-semibold ${
-                  selectedFormat === option.value
-                    ? 'text-blue-700 dark:text-blue-300'
-                    : 'text-gray-900 dark:text-white'
-                }`}>
-                  {option.label}
-                </span>
-              </div>
-              <p className={`text-sm ${
-                selectedFormat === option.value
-                  ? 'text-blue-600 dark:text-blue-400'
-                  : 'text-gray-500 dark:text-gray-300'
-              }`}>
-                {option.description}
-              </p>
-              {selectedFormat === option.value && (
-                <div className="mt-2 flex items-center gap-1">
-                  <svg className="w-4 h-4 text-blue-500 dark:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  <span className="text-xs font-medium text-blue-600 dark:text-blue-400">Selected</span>
+          {formatOptions.map((option) => {
+            const isSelected = selectedFormat === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setSelectedFormat(option.value)}
+                aria-pressed={isSelected}
+                className={`text-left p-5 rounded-md border bg-transparent transition-colors ${
+                  isSelected
+                    ? 'border-primary-500 dark:border-primary-400 ring-1 ring-primary-500/30'
+                    : 'border-rule dark:border-dark-border hover:border-gray-300 dark:hover:border-gray-600'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3 mb-1.5">
+                  <span className="font-serif text-base text-ink dark:text-gray-100">
+                    {option.label}
+                  </span>
+                  <span
+                    className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                      isSelected
+                        ? 'border-primary-500 bg-primary-500'
+                        : 'border-gray-300 dark:border-gray-600'
+                    }`}
+                    aria-hidden="true"
+                  >
+                    {isSelected && (
+                      <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </span>
                 </div>
-              )}
-            </button>
-          ))}
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {option.description}
+                </p>
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Export button */}
-      <div className="card mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Download{' '}
-              {selectedFormat === 'both'
-                ? 'Both Files'
-                : selectedFormat === 'markdown'
-                ? 'Markdown File'
-                : 'JSON File'}
-            </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-300">
-              {selectedFormat === 'both'
-                ? 'Downloads me.md and profile.json'
-                : selectedFormat === 'markdown'
-                ? 'Downloads your profile as me.md'
-                : 'Downloads structured profile data as JSON'}
-            </p>
-            {!isVerified && (
-              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                </svg>
-                Requires identity verification
-              </p>
-            )}
-          </div>
-          <button
-            onClick={handleExport}
-            disabled={exporting}
-            className="btn-primary"
-          >
-            {exporting
-              ? 'Downloading...'
-              : selectedFormat === 'both'
-              ? 'Download Both'
+      <div className="border-t border-rule dark:border-dark-border py-6 flex items-center justify-between gap-4">
+        <div>
+          <h2 className="font-serif text-lg text-ink dark:text-gray-100">
+            Download{' '}
+            {selectedFormat === 'both'
+              ? 'Both Files'
               : selectedFormat === 'markdown'
-              ? 'Download me.md'
-              : 'Download JSON'}
-          </button>
+              ? 'Markdown File'
+              : 'JSON File'}
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            {selectedFormat === 'both'
+              ? 'Downloads me.md and profile.json'
+              : selectedFormat === 'markdown'
+              ? 'Downloads your profile as me.md'
+              : 'Downloads structured profile data as JSON'}
+          </p>
+          {!isVerified && (
+            <p className="text-[11px] uppercase tracking-[0.08em] font-sans font-medium text-primary-600 dark:text-primary-400 mt-1.5 flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+              </svg>
+              Requires identity verification
+            </p>
+          )}
         </div>
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="btn-primary shrink-0"
+        >
+          {exporting
+            ? 'Downloading...'
+            : selectedFormat === 'both'
+            ? 'Download Both'
+            : selectedFormat === 'markdown'
+            ? 'Download me.md'
+            : 'Download JSON'}
+        </button>
       </div>
 
       {/* Copy to clipboard */}
-      <div className="card mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Copy to Clipboard
-            </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-300">
-              Copy your profile as markdown directly to paste into any AI tool
+      <div className="border-t border-rule dark:border-dark-border py-6 flex items-center justify-between gap-4">
+        <div>
+          <h2 className="font-serif text-lg text-ink dark:text-gray-100">
+            Copy to Clipboard
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            Copy your profile as markdown directly to paste into any AI tool
+          </p>
+          {!isVerified && (
+            <p className="text-[11px] uppercase tracking-[0.08em] font-sans font-medium text-primary-600 dark:text-primary-400 mt-1.5 flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+              </svg>
+              Requires identity verification
             </p>
-            {!isVerified && (
-              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                </svg>
-                Requires identity verification
-              </p>
-            )}
-          </div>
-          <button
-            onClick={handleCopyToClipboard}
-            disabled={copying}
-            className="btn-secondary"
-          >
-            {copying ? 'Copying...' : 'Copy Profile'}
-          </button>
+          )}
         </div>
+        <button
+          onClick={handleCopyToClipboard}
+          disabled={copying}
+          className="btn-secondary shrink-0"
+        >
+          {copying ? 'Copying...' : 'Copy Profile'}
+        </button>
       </div>
 
       {/* Privacy note */}
-      <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-        <p className="text-sm text-amber-800 dark:text-amber-200">
-          <strong>Privacy:</strong> Items marked as &quot;never export&quot; in your privacy settings will be automatically excluded from all exports. Only verified insights with &quot;exportable&quot; privacy tier are included.
+      <div className="mt-2 bg-panel dark:bg-dark-card border border-rule dark:border-dark-border rounded-md px-5 py-4">
+        <p className="text-sm text-gray-700 dark:text-gray-300">
+          <span className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-primary-600 dark:text-primary-400 mb-1">
+            Privacy
+          </span>
+          Items marked as &quot;never export&quot; in your privacy settings will be automatically excluded from all exports. Only verified insights with &quot;exportable&quot; privacy tier are included.
         </p>
       </div>
 
@@ -392,8 +380,8 @@ export default function ExportPage() {
         title="Confirm Export"
         labelledBy="verify-dialog-title"
         icon={
-          <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-            <svg className="w-5 h-5 text-amber-600 dark:text-amber-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+          <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
+            <svg className="w-5 h-5 text-primary-600 dark:text-primary-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
               <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
             </svg>
           </div>
@@ -426,9 +414,9 @@ export default function ExportPage() {
         </p>
 
         {verifyError && (
-          <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm">
+          <p className="mb-4 text-sm text-red-600 dark:text-red-400">
             {verifyError}
-          </div>
+          </p>
         )}
 
       </Modal>

@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { Link, useLocation } from 'react-router-dom';
-import VerifiedBadge from '@/components/VerifiedBadge';
+import ApiErrorAlert from '@/components/ApiErrorAlert';
 import { formatDateTime } from '@/utils/dateFormat';
 import { getProfileSummary, regenerateProfile, exportAsMarkdown } from '@/services/profile';
 import { getLatestAssessment } from '@/services/assessment';
+import { PageHeader, SectionHeading, EmptyState, Button } from '@/components/ui';
 
 interface BigFiveDomainScore {
   domain: string;
@@ -18,12 +19,12 @@ interface AssessmentLatest {
   domainScores: BigFiveDomainScore[];
 }
 
-const DOMAIN_INFO: Record<string, { label: string; color: string; bgColor: string }> = {
-  N: { label: 'Neuroticism', color: 'text-rose-600 dark:text-rose-400', bgColor: 'bg-rose-100 dark:bg-rose-900/30' },
-  E: { label: 'Extraversion', color: 'text-amber-600 dark:text-amber-400', bgColor: 'bg-amber-100 dark:bg-amber-900/30' },
-  O: { label: 'Openness', color: 'text-blue-600 dark:text-blue-400', bgColor: 'bg-blue-100 dark:bg-blue-900/30' },
-  A: { label: 'Agreeableness', color: 'text-emerald-600 dark:text-emerald-400', bgColor: 'bg-emerald-100 dark:bg-emerald-900/30' },
-  C: { label: 'Conscientiousness', color: 'text-purple-600 dark:text-purple-400', bgColor: 'bg-purple-100 dark:bg-purple-900/30' },
+const DOMAIN_LABELS: Record<string, string> = {
+  O: 'Openness',
+  C: 'Conscientiousness',
+  E: 'Extraversion',
+  A: 'Agreeableness',
+  N: 'Neuroticism',
 };
 
 function getScoreLevel(score: number): string {
@@ -57,59 +58,54 @@ interface ProfileSummary {
   };
 }
 
-function SectionCard({
+/**
+ * A profile section: SectionHeading + serif reading text. Insights are
+ * numbered with quiet two-digit editorial markers (DESIGN.md "Numbered
+ * editorial markers") instead of colored checkmark icons.
+ */
+function ProfileSectionBlock({
   section,
-  icon,
   emptyMessage,
 }: {
   section: ProfileSection;
-  icon: string;
   emptyMessage: string;
 }) {
   const hasContent = section.content.length > 0;
 
   return (
-    <div className="card">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-xl">{icon}</span>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-          {section.title}
-        </h2>
-        {hasContent && (
-          <span className="ml-auto flex items-center gap-2">
-            <VerifiedBadge status="verified" size="sm" />
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-300">
-              {section.content.length} insight{section.content.length !== 1 ? 's' : ''}
-            </span>
-          </span>
-        )}
-      </div>
+    <section>
+      <SectionHeading>{section.title}</SectionHeading>
+
+      {hasContent && (
+        <p className="mt-3 text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-primary-600 dark:text-primary-400">
+          {section.content.length} verified insight{section.content.length !== 1 ? 's' : ''}
+        </p>
+      )}
 
       {hasContent ? (
         <>
-          <ul className="space-y-2">
+          <ul className="mt-4 space-y-3">
             {section.content.map((item, idx) => (
-              <li key={idx} className="flex items-start gap-2 text-gray-700 dark:text-gray-300">
-                <svg className="mt-1 w-4 h-4 text-green-500 dark:text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span className="leading-relaxed break-words">{item}</span>
+              <li key={idx} className="flex gap-3">
+                <span className="shrink-0 pt-0.5 font-sans text-xs text-gray-400 dark:text-gray-600 tabular-nums">
+                  {String(idx + 1).padStart(2, '0')}
+                </span>
+                <span className="font-serif text-[15px] leading-relaxed text-gray-800 dark:text-gray-200 break-words">
+                  {item}
+                </span>
               </li>
             ))}
           </ul>
           {section.topicSources.length > 0 && (
-            <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
-              <p className="text-xs text-gray-500 dark:text-gray-300 break-words">
-                <span className="font-medium">Sources:</span>{' '}
-                {section.topicSources.join(', ')}
-              </p>
-            </div>
+            <p className="mt-4 pt-3 border-t border-rule dark:border-dark-border text-xs text-gray-500 dark:text-gray-400 break-words">
+              <span className="font-semibold">Sources:</span> {section.topicSources.join(', ')}
+            </p>
           )}
         </>
       ) : (
-        <p className="text-gray-500 dark:text-gray-300 italic">{emptyMessage}</p>
+        <p className="mt-4 font-serif italic text-gray-500 dark:text-gray-400">{emptyMessage}</p>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -225,15 +221,15 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto">
-        <div className="animate-pulse space-y-6">
-          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/3" />
-          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
-          <div className="space-y-4">
+        <div className="animate-pulse space-y-8" aria-hidden="true">
+          <div className="h-8 bg-gray-100 dark:bg-gray-800 rounded w-1/3" />
+          <div className="h-4 bg-gray-100 dark:bg-gray-800 rounded w-1/2" />
+          <div className="space-y-6">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="card">
-                <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-3" />
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2" />
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3" />
+              <div key={i} className="space-y-3">
+                <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded w-1/4" />
+                <div className="h-4 bg-gray-100 dark:bg-gray-800 rounded w-3/4" />
+                <div className="h-4 bg-gray-100 dark:bg-gray-800 rounded w-2/3" />
               </div>
             ))}
           </div>
@@ -245,220 +241,197 @@ export default function ProfilePage() {
   if (error) {
     return (
       <div className="max-w-4xl mx-auto">
-        <div className="card bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800" role="alert" aria-live="assertive">
-          <p className="text-red-700 dark:text-red-300">{error}</p>
-          <button onClick={() => fetchSummary()} className="btn-primary mt-3">
-            Retry
-          </button>
-        </div>
+        <ApiErrorAlert
+          message={error}
+          onRetry={() => fetchSummary()}
+          onDismiss={() => setError(null)}
+        />
       </div>
     );
   }
 
-  const hasAnyInsights = summary && summary.totalVerifiedInsights > 0;
+  const hasAnyInsights = summary !== null && summary.totalVerifiedInsights > 0;
 
   return (
     <div className="max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Profile Summary
-          </h1>
-          <p className="mt-1 text-gray-600 dark:text-gray-300">
-            Your auto-generated personal profile
-            {summary && summary.totalVerifiedInsights > 0 && (
-              <span className="ml-2 text-sm">
-                ({summary.totalVerifiedInsights} verified insight
-                {summary.totalVerifiedInsights !== 1 ? 's' : ''} across{' '}
-                {summary.topicsExplored} topic{summary.topicsExplored !== 1 ? 's' : ''})
-              </span>
-            )}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={handleRegenerate}
-            disabled={regenerating}
-            className="btn-secondary text-sm"
-          >
-            {regenerating ? (
-              <span className="flex items-center gap-1">
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Regenerating...
-              </span>
-            ) : (
-              'Regenerate'
-            )}
-          </button>
-          <button
-            onClick={handleExportMarkdown}
-            disabled={exporting || !hasAnyInsights}
-            className="btn-primary text-sm"
-            title={!hasAnyInsights ? 'Need verified insights to export' : 'Export as me.md'}
-          >
-            {exporting ? (
-              <span className="flex items-center gap-1">
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Exporting...
-              </span>
-            ) : (
-              'Export as me.md'
-            )}
-          </button>
-          <Link
-            to="/app/export"
-            className="text-sm text-primary-600 dark:text-primary-400 hover:underline whitespace-nowrap"
-          >
-            More export options →
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        title="Profile"
+        subtitle={
+          summary && summary.totalVerifiedInsights > 0 ? (
+            <>
+              Your auto-generated personal profile — {summary.totalVerifiedInsights} verified insight
+              {summary.totalVerifiedInsights !== 1 ? 's' : ''} across {summary.topicsExplored} topic
+              {summary.topicsExplored !== 1 ? 's' : ''}.
+            </>
+          ) : (
+            'Your auto-generated personal profile.'
+          )
+        }
+        actions={
+          <>
+            <Button variant="secondary" onClick={handleRegenerate} loading={regenerating}>
+              {regenerating ? 'Regenerating…' : 'Regenerate'}
+            </Button>
+            <Button
+              onClick={handleExportMarkdown}
+              disabled={!hasAnyInsights}
+              loading={exporting}
+              title={!hasAnyInsights ? 'Need verified insights to export' : 'Export as me.md'}
+            >
+              {exporting ? 'Exporting…' : 'Export as me.md'}
+            </Button>
+            <Link
+              to="/app/export"
+              className="text-sm font-semibold text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors whitespace-nowrap"
+            >
+              More export options &rarr;
+            </Link>
+          </>
+        }
+      />
 
-      {/* Stats bar */}
+      {/* Stat trio — serif-italic numerals over small-caps labels, like the Desk */}
       {summary && (
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="card text-center py-3">
-            <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">
-              {summary.totalVerifiedInsights}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-300">Verified Insights</p>
-          </div>
-          <div className="card text-center py-3">
-            <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">
-              {summary.topicsExplored}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-300">Topics Explored</p>
-          </div>
-          <div className="card text-center py-3">
-            <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">
-              {Object.values(summary.sections).filter(s => s.content.length > 0).length}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-300">Profile Sections</p>
-          </div>
+        <div className="flex flex-wrap gap-y-6 mb-10 pb-8 border-b border-rule dark:border-dark-border">
+          {[
+            { value: summary.totalVerifiedInsights, label: 'Verified insights' },
+            { value: summary.topicsExplored, label: 'Topics explored' },
+            {
+              value: Object.values(summary.sections).filter((s) => s.content.length > 0).length,
+              label: 'Profile sections',
+            },
+          ].map((item, idx) => (
+            <div
+              key={item.label}
+              className={`min-w-[140px] px-6 first:pl-0 ${idx !== 2 ? 'border-r border-rule dark:border-dark-border' : ''}`}
+            >
+              <p className="font-serif italic font-medium text-3xl leading-none text-gray-900 dark:text-white">
+                {item.value}
+              </p>
+              <p className="mt-2 text-[11px] tracking-[0.08em] uppercase font-sans font-semibold text-gray-500 dark:text-gray-400">
+                {item.label}
+              </p>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Personality Summary Card */}
+      {/* Personality snapshot — typographic score levels, no colored pills */}
       {assessmentData ? (
-        <div className="card mb-6 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <span className="text-xl">🧠</span>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Personality Profile
-              </h2>
-            </div>
+        <section className="mb-10 pb-8 border-b border-rule dark:border-dark-border">
+          <div className="flex items-center justify-between gap-4 mb-5">
+            <SectionHeading className="flex-1">Personality</SectionHeading>
             <Link
               to={`/app/personality/${assessmentData.attemptId}/results`}
-              className="text-sm text-primary-600 dark:text-primary-400 hover:underline"
+              className="shrink-0 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
             >
-              View Full Results
+              View full results &rarr;
             </Link>
           </div>
-          <div className="grid grid-cols-5 gap-2">
-            {['O', 'C', 'E', 'A', 'N'].map(domain => {
-              const info = DOMAIN_INFO[domain];
-              const score = assessmentData.domainScores.find(d => d.domain === domain);
+          <div className="flex flex-col gap-4">
+            {(['O', 'C', 'E', 'A', 'N'] as const).map((domain) => {
+              const label = DOMAIN_LABELS[domain];
+              const score = assessmentData.domainScores.find((d) => d.domain === domain);
               const scoreVal = score?.domainScore ?? 0;
               const pct = Math.round((scoreVal / 5) * 100);
               return (
-                <div key={domain} className={`rounded-lg p-3 text-center ${info.bgColor}`}>
-                  <p className={`text-xs font-semibold ${info.color} mb-1`}>{info.label}</p>
-                  <p className={`text-lg font-bold ${info.color}`}>{scoreVal.toFixed(1)}</p>
-                  <div className="w-full h-1.5 bg-white/50 dark:bg-black/20 rounded-full mt-1 overflow-hidden">
+                <div key={domain}>
+                  <div className="flex items-baseline justify-between mb-2">
+                    <span className="text-[12.5px] font-semibold font-sans uppercase tracking-[0.06em] text-gray-700 dark:text-gray-300">
+                      {label}
+                    </span>
+                    <span className="flex items-baseline gap-2">
+                      <span className="font-serif italic text-lg text-gray-900 dark:text-white">
+                        {scoreVal.toFixed(1)}
+                      </span>
+                      <span className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400">
+                        {getScoreLevel(scoreVal)}
+                      </span>
+                    </span>
+                  </div>
+                  <div
+                    className="h-[2px] bg-rule dark:bg-dark-border rounded-full overflow-hidden"
+                    role="progressbar"
+                    aria-valuenow={pct}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={`${label} score`}
+                  >
                     <div
-                      className="h-full rounded-full bg-current opacity-60"
+                      className="h-full bg-primary-500 dark:bg-primary-400 rounded-full transition-all duration-500"
                       style={{ width: `${pct}%` }}
                     />
                   </div>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">{getScoreLevel(scoreVal)}</p>
                 </div>
               );
             })}
           </div>
           {assessmentData.completedAt && (
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-3 text-center">
+            <p className="text-xs text-gray-400 dark:text-gray-600 mt-4">
               Last assessed {formatDateTime(assessmentData.completedAt)}
             </p>
           )}
-        </div>
+        </section>
       ) : !loading && (
-        <div className="card mb-6 p-5">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">🧠</span>
-            <div className="flex-1">
-              <h3 className="font-semibold text-gray-900 dark:text-white">Personality Assessment</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-300">
-                Take the Big Five test to add personality insights to your profile
+        <section className="mb-10 pb-8 border-b border-rule dark:border-dark-border">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <SectionHeading className="mb-2">Personality</SectionHeading>
+              <p className="font-serif italic text-gray-600 dark:text-gray-300 mt-3 max-w-md">
+                Take the Big Five test to add personality insights to your profile.
               </p>
             </div>
-            <Link to="/app/personality" className="btn-primary text-sm whitespace-nowrap">
-              Take Test
+            <Link to="/app/personality" className="btn-primary text-sm whitespace-nowrap shrink-0 text-center">
+              Take the test
             </Link>
           </div>
-        </div>
+        </section>
       )}
 
       {/* Empty state when no verified insights */}
       {!hasAnyInsights && (
-        <div className="card text-center py-8 mb-6">
-          <div className="text-4xl mb-3">🧠</div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            No Verified Insights Yet
-          </h2>
-          <p className="text-gray-600 dark:text-gray-300 max-w-md mx-auto">
-            Complete interview sessions and verify the extracted insights to build your
-            personal profile. Each verified insight adds to your profile summary.
-          </p>
-          <div className="mt-4 flex justify-center gap-3">
-            <a href="/app/topics" className="btn-primary">
-              Browse Topics
-            </a>
-            <a href="/app/review" className="btn-secondary">
-              Verify Insights
-            </a>
-          </div>
-        </div>
+        <EmptyState
+          kicker="No insights yet"
+          message="Complete interview sessions and verify the extracted insights to build your personal profile. Each verified insight adds to your profile summary."
+          action={
+            <div className="flex justify-center gap-3">
+              <Link to="/app/topics" className="btn-primary">
+                Browse topics
+              </Link>
+              <Link to="/app/review" className="btn-secondary">
+                Verify insights
+              </Link>
+            </div>
+          }
+          className="mb-10"
+        />
       )}
 
       {/* Profile sections */}
       {summary && (
-        <div className="space-y-6">
-          <SectionCard
+        <div className="space-y-10">
+          <ProfileSectionBlock
             section={summary.sections.personalPortrait}
-            icon="🎭"
             emptyMessage="Complete more interview sessions to generate your personal portrait including values, beliefs, and core traits."
           />
-          <SectionCard
+          <ProfileSectionBlock
             section={summary.sections.communicationStyle}
-            icon="💬"
             emptyMessage="Your communication patterns and preferences will appear here after verification."
           />
-          <SectionCard
+          <ProfileSectionBlock
             section={summary.sections.decisionMakingPatterns}
-            icon="⚖️"
             emptyMessage="Your decision frameworks and patterns will be summarized here."
           />
-          <SectionCard
+          <ProfileSectionBlock
             section={summary.sections.strengthsAndExpertise}
-            icon="💪"
             emptyMessage="An overview of your strengths and areas of expertise will appear after insights are verified."
           />
-          <SectionCard
+          <ProfileSectionBlock
             section={summary.sections.toneOfVoice}
-            icon="🎤"
             emptyMessage="Your tone of voice analysis with examples will appear here."
           />
-          <SectionCard
+          <ProfileSectionBlock
             section={summary.sections.keyThemes}
-            icon="🔗"
             emptyMessage="Key themes and connections across your topics will be visualized here."
           />
         </div>
@@ -466,7 +439,7 @@ export default function ProfilePage() {
 
       {/* Generated at timestamp */}
       {summary && summary.generatedAt && (
-        <p className="mt-6 text-xs text-gray-500 dark:text-gray-300 text-center">
+        <p className="mt-10 pt-6 border-t border-rule dark:border-dark-border text-xs text-gray-500 dark:text-gray-400 text-center">
           Profile auto-generated from verified insights &middot; Last updated{' '}
           {formatDateTime(summary.generatedAt)}
           <span className="block mt-1 text-gray-400 dark:text-gray-600">

@@ -6,6 +6,7 @@ import { useToast } from '@/contexts/ToastContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 import { checkTopicTitle, createTopic } from '@/services/topics';
+import { PageHeader, Button } from '@/components/ui';
 
 const INTENT_OPTIONS = [
   { value: 'articulate', label: 'Articulate', description: 'Express something you already know' },
@@ -221,276 +222,259 @@ export default function CreateTopicPage() {
     }
   };
 
+  const handleReset = () => {
+    setTitle('');
+    setDescription('');
+    setTagInput('');
+    setTags([]);
+    setIntent('');
+    setTrigger('');
+    setError(null);
+    setIsNetworkError(false);
+    setTitleTouched(false);
+    setTitleError(null);
+    setTagDuplicateHint(null);
+  };
+
   return (
     <div className="max-w-2xl mx-auto">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-300 mb-6">
-        <Link to="/app/topics" className="hover:text-primary-600 dark:hover:text-primary-400">
+      <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs tracking-wide text-gray-400 dark:text-gray-600 mb-6">
+        <Link to="/app/topics" className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
           Topics
         </Link>
-        <span>/</span>
-        <span className="text-gray-900 dark:text-white">New Topic</span>
+        <span aria-hidden="true">/</span>
+        <span className="text-gray-600 dark:text-gray-400">New Topic</span>
       </nav>
 
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Create New Topic</h1>
-        <p className="mt-1 text-gray-600 dark:text-gray-300">
-          Define a knowledge area you want to explore through interviews.
-        </p>
-      </div>
+      <PageHeader
+        title="Create New Topic"
+        subtitle="Define a knowledge area you want to explore through interviews."
+      />
 
-      <div className="card">
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {error && (
-            <ApiErrorAlert
-              message={error}
-              onRetry={isNetworkError ? () => { setError(null); setIsNetworkError(false); } : undefined}
-              onDismiss={() => { setError(null); setIsNetworkError(false); }}
-            />
-          )}
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {error && (
+          <ApiErrorAlert
+            message={error}
+            onRetry={isNetworkError ? () => { setError(null); setIsNetworkError(false); } : undefined}
+            onDismiss={() => { setError(null); setIsNetworkError(false); }}
+          />
+        )}
 
-          {/* Title */}
-          <div>
-            <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Title <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="title"
-              type="text"
-              required
-              value={title}
-              onChange={(e) => handleTitleChange(e.target.value)}
-              onBlur={handleTitleBlur}
-              className={`input-field ${titleTouched && titleError ? 'border-red-500 dark:border-red-400 focus:ring-red-500 focus:border-red-500' : ''}`}
-              placeholder="e.g., My Leadership Style"
-              maxLength={500}
-              aria-invalid={titleTouched && !!titleError}
-              aria-describedby={titleTouched && titleError ? 'title-error' : 'title-hint'}
-            />
-            <div className="flex justify-between items-start mt-1">
-              {titleTouched && titleError ? (
-                <p id="title-error" className="text-xs text-red-600 dark:text-red-400" role="alert">
-                  {titleError}
-                </p>
-              ) : (
-                <p id="title-hint" className="text-xs text-gray-500 dark:text-gray-300">
-                  A short, descriptive name for your topic
-                </p>
-              )}
-              <span
-                className={`text-xs whitespace-nowrap ml-2 ${
-                  title.trim().length > TITLE_MAX_LENGTH
-                    ? 'text-red-600 dark:text-red-400 font-medium'
-                    : title.trim().length > TITLE_MAX_LENGTH * 0.8
-                    ? 'text-amber-600 dark:text-amber-400'
-                    : 'text-gray-400 dark:text-gray-500'
-                }`}
-              >
-                {title.trim().length}/{TITLE_MAX_LENGTH}
-              </span>
-            </div>
-            {/* Duplicate title warning */}
-            {duplicateTitleWarning && (
-              <div className="mt-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800" role="alert">
-                <div className="flex items-start gap-2">
-                  <svg className="w-4 h-4 text-amber-500 dark:text-amber-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                  <div>
-                    <p className="text-xs text-amber-700 dark:text-amber-300">
-                      {duplicateTitleWarning}
-                    </p>
-                    {duplicateExistingTopics.length > 0 && (
-                      <ul className="mt-1.5 space-y-1">
-                        {duplicateExistingTopics.map(t => (
-                          <li key={t.id} className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 dark:bg-amber-500" />
-                            <span>&ldquo;{t.title}&rdquo;</span>
-                            <span className="text-amber-500 dark:text-amber-500">—</span>
-                            <span className="capitalize">{t.status?.replace('_', ' ')}</span>
-                            <span className="text-amber-500 dark:text-amber-500">·</span>
-                            <span>Created {new Date(t.createdAt).toLocaleDateString()}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Description */}
-          <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Description <span className="text-gray-400 dark:text-gray-500 font-normal">(optional)</span>
-            </label>
-            <textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="input-field min-h-[100px] resize-y"
-              placeholder="What do you want to explore about this topic?"
-              rows={3}
-            />
-          </div>
-
-          {/* Tags */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label htmlFor="tags" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Tags <span className="text-gray-400 dark:text-gray-500 font-normal">(optional)</span>
-              </label>
-              {tags.length > 0 && (
-                <span className={`text-xs ${tags.length >= MAX_TAGS ? 'text-red-600 dark:text-red-400 font-medium' : tags.length >= MAX_TAGS * 0.8 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                  {tags.length}/{MAX_TAGS}
-                </span>
-              )}
-            </div>
-            {tags.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-2">
-                {tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 max-w-full"
-                  >
-                    <span className="truncate">{tag}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeTag(tag)}
-                      className="ml-0.5 text-primary-500 hover:text-primary-700 dark:hover:text-primary-200 flex-shrink-0"
-                      aria-label={`Remove tag ${tag}`}
-                    >
-                      &times;
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-            <div className="flex gap-2">
-              <input
-                id="tags"
-                type="text"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={handleTagKeyDown}
-                className="input-field flex-1"
-                placeholder={tags.length >= MAX_TAGS ? `Maximum of ${MAX_TAGS} tags reached` : 'Type a tag and press Enter'}
-                disabled={tags.length >= MAX_TAGS}
-                maxLength={TAG_MAX_LENGTH * 2}
-              />
-              <button
-                type="button"
-                onClick={handleAddTag}
-                className="btn-secondary"
-                disabled={!tagInput.trim() || tags.length >= MAX_TAGS}
-              >
-                Add
-              </button>
-            </div>
-            {tagDuplicateHint ? (
-              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400" role="status">
-                {tagDuplicateHint}
+        {/* Title */}
+        <div>
+          <label htmlFor="title" className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+            Title <span className="text-red-500 dark:text-red-400">*</span>
+          </label>
+          <input
+            id="title"
+            type="text"
+            required
+            value={title}
+            onChange={(e) => handleTitleChange(e.target.value)}
+            onBlur={handleTitleBlur}
+            className={`input-field font-serif text-lg ${titleTouched && titleError ? 'border-red-500 dark:border-red-400 focus:ring-red-500 focus:border-red-500' : ''}`}
+            placeholder="e.g., My Leadership Style"
+            maxLength={500}
+            aria-invalid={titleTouched && !!titleError}
+            aria-describedby={titleTouched && titleError ? 'title-error' : 'title-hint'}
+          />
+          <div className="flex justify-between items-start mt-1.5">
+            {titleTouched && titleError ? (
+              <p id="title-error" className="text-xs text-red-600 dark:text-red-400" role="alert">
+                {titleError}
               </p>
             ) : (
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-300">
-                Press Enter or comma to add a tag. Max {TAG_MAX_LENGTH} chars per tag, up to {MAX_TAGS} tags.
+              <p id="title-hint" className="text-xs text-gray-500 dark:text-gray-400">
+                A short, descriptive name for your topic
               </p>
             )}
+            <span
+              className={`text-xs whitespace-nowrap ml-2 ${
+                title.trim().length > TITLE_MAX_LENGTH
+                  ? 'text-red-600 dark:text-red-400 font-medium'
+                  : title.trim().length > TITLE_MAX_LENGTH * 0.8
+                  ? 'text-primary-600 dark:text-primary-400'
+                  : 'text-gray-400 dark:text-gray-500'
+              }`}
+            >
+              {title.trim().length}/{TITLE_MAX_LENGTH}
+            </span>
           </div>
+          {/* Duplicate title warning — quiet panel with amber rule, not a colored box */}
+          {duplicateTitleWarning && (
+            <div className="mt-3 pl-3 border-l-2 border-primary-500 dark:border-primary-400" role="alert">
+              <p className="text-xs text-gray-600 dark:text-gray-300">
+                {duplicateTitleWarning}
+              </p>
+              {duplicateExistingTopics.length > 0 && (
+                <ul className="mt-1.5 space-y-1">
+                  {duplicateExistingTopics.map(t => (
+                    <li key={t.id} className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+                      <span className="inline-block w-1 h-1 rounded-full bg-primary-500 dark:bg-primary-400" aria-hidden="true" />
+                      <span>&ldquo;{t.title}&rdquo;</span>
+                      <span aria-hidden="true">&mdash;</span>
+                      <span className="capitalize">{t.status?.replace('_', ' ')}</span>
+                      <span aria-hidden="true">&middot;</span>
+                      <span>Created {new Date(t.createdAt).toLocaleDateString()}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
 
-          {/* Intent */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Intent <span className="text-gray-400 dark:text-gray-500 font-normal">(optional)</span>
+        {/* Description */}
+        <div>
+          <label htmlFor="description" className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+            Description <span className="text-gray-400 dark:text-gray-500 normal-case font-normal tracking-normal">(optional)</span>
+          </label>
+          <textarea
+            id="description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="input-field font-serif min-h-[100px] resize-y"
+            placeholder="What do you want to explore about this topic?"
+            rows={3}
+          />
+        </div>
+
+        {/* Tags */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label htmlFor="tags" className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400">
+              Tags <span className="text-gray-400 dark:text-gray-500 normal-case font-normal tracking-normal">(optional)</span>
             </label>
-            <p className="text-xs text-gray-500 dark:text-gray-300 mb-2">
-              Select what you want to achieve with this topic (optional)
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              {INTENT_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setIntent(intent === option.value ? '' : option.value)}
-                  className={`p-3 rounded-lg border text-left transition-colors ${
-                    intent === option.value
-                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 dark:border-primary-400'
-                      : 'border-gray-200 dark:border-dark-border hover:border-gray-300 dark:hover:border-gray-600'
-                  }`}
+            {tags.length > 0 && (
+              <span className={`text-xs ${tags.length >= MAX_TAGS ? 'text-red-600 dark:text-red-400 font-medium' : tags.length >= MAX_TAGS * 0.8 ? 'text-primary-600 dark:text-primary-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                {tags.length}/{MAX_TAGS}
+              </span>
+            )}
+          </div>
+          {tags.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-2.5">
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold lowercase tracking-wide text-gray-600 dark:text-gray-400 border border-rule dark:border-dark-border rounded-sm px-2.5 py-1 max-w-full"
                 >
-                  <div className={`text-sm font-medium ${
-                    intent === option.value
-                      ? 'text-primary-700 dark:text-primary-300'
-                      : 'text-gray-900 dark:text-white'
-                  }`}>
-                    {option.label}
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-300 mt-0.5">
-                    {option.description}
-                  </div>
-                </button>
+                  <span className="truncate">{tag}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeTag(tag)}
+                    className="text-gray-400 hover:text-primary-600 dark:text-gray-600 dark:hover:text-primary-400 shrink-0"
+                    aria-label={`Remove tag ${tag}`}
+                  >
+                    &times;
+                  </button>
+                </span>
               ))}
             </div>
-          </div>
-
-          {/* Trigger */}
-          <div>
-            <label htmlFor="trigger" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Trigger <span className="text-gray-400 dark:text-gray-500 font-normal">(optional)</span>
-            </label>
-            <textarea
-              id="trigger"
-              value={trigger}
-              onChange={(e) => setTrigger(e.target.value)}
-              className="input-field min-h-[80px] resize-y"
-              placeholder="What prompted you to explore this topic? (optional)"
-              rows={2}
+          )}
+          <div className="flex gap-2">
+            <input
+              id="tags"
+              type="text"
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={handleTagKeyDown}
+              className="input-field flex-1"
+              placeholder={tags.length >= MAX_TAGS ? `Maximum of ${MAX_TAGS} tags reached` : 'Type a tag and press Enter'}
+              disabled={tags.length >= MAX_TAGS}
+              maxLength={TAG_MAX_LENGTH * 2}
             />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-300">
-              What made you think about exploring this area?
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleAddTag}
+              disabled={!tagInput.trim() || tags.length >= MAX_TAGS}
+            >
+              Add
+            </Button>
+          </div>
+          {tagDuplicateHint ? (
+            <p className="mt-1.5 text-xs text-primary-600 dark:text-primary-400" role="status">
+              {tagDuplicateHint}
             </p>
-          </div>
+          ) : (
+            <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+              Press Enter or comma to add a tag. Max {TAG_MAX_LENGTH} chars per tag, up to {MAX_TAGS} tags.
+            </p>
+          )}
+        </div>
 
-          {/* Buttons */}
-          <div className="flex gap-3 pt-2">
-            <button
-              type="submit"
-              disabled={isSubmitting || hasSubmitted || !title.trim()}
-              className="btn-primary flex-1"
-            >
-              {hasSubmitted ? 'Topic Created!' : isSubmitting ? 'Creating...' : 'Create Topic'}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setTitle('');
-                setDescription('');
-                setTagInput('');
-                setTags([]);
-                setIntent('');
-                setTrigger('');
-                setError(null);
-                setIsNetworkError(false);
-                setTitleTouched(false);
-                setTitleError(null);
-                setTagDuplicateHint(null);
-              }}
-              className="btn-secondary"
-              disabled={isSubmitting}
-            >
-              Reset
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/app/topics')}
-              className="btn-secondary"
-            >
-              Cancel
-            </button>
+        {/* Intent */}
+        <div>
+          <span className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+            Intent <span className="text-gray-400 dark:text-gray-500 normal-case font-normal tracking-normal">(optional)</span>
+          </span>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2.5">
+            Select what you want to achieve with this topic
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {INTENT_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setIntent(intent === option.value ? '' : option.value)}
+                className={`p-3 rounded-sm border text-left transition-colors ${
+                  intent === option.value
+                    ? 'border-primary-500 dark:border-primary-400'
+                    : 'border-rule dark:border-dark-border hover:border-gray-400 dark:hover:border-gray-600'
+                }`}
+              >
+                <div className={`text-xs font-semibold uppercase tracking-wide ${
+                  intent === option.value
+                    ? 'text-primary-600 dark:text-primary-400'
+                    : 'text-gray-900 dark:text-white'
+                }`}>
+                  {option.label}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {option.description}
+                </div>
+              </button>
+            ))}
           </div>
-        </form>
-      </div>
+        </div>
+
+        {/* Trigger */}
+        <div>
+          <label htmlFor="trigger" className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+            Trigger <span className="text-gray-400 dark:text-gray-500 normal-case font-normal tracking-normal">(optional)</span>
+          </label>
+          <textarea
+            id="trigger"
+            value={trigger}
+            onChange={(e) => setTrigger(e.target.value)}
+            className="input-field font-serif min-h-[80px] resize-y"
+            placeholder="What prompted you to explore this topic? (optional)"
+            rows={2}
+          />
+          <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+            What made you think about exploring this area?
+          </p>
+        </div>
+
+        {/* Actions — primary ink action, quiet ghost actions */}
+        <div className="flex gap-3 pt-2">
+          <Button
+            type="submit"
+            disabled={isSubmitting || hasSubmitted || !title.trim()}
+            loading={isSubmitting}
+            className="flex-1"
+          >
+            {hasSubmitted ? 'Topic created!' : isSubmitting ? 'Creating…' : 'Create topic'}
+          </Button>
+          <Button type="button" variant="secondary" onClick={handleReset} disabled={isSubmitting}>
+            Reset
+          </Button>
+          <Button type="button" variant="ghost" onClick={() => navigate('/app/topics')}>
+            Cancel
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }

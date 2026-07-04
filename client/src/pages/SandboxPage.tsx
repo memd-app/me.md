@@ -4,6 +4,7 @@ import { useDatabase } from '@/contexts/DatabaseContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import { formatTime } from '@/utils/dateFormat';
 import { getContextStatus, compareSandboxStream } from '@/services/sandbox';
+import { PageHeader } from '@/components/ui';
 
 interface ComparisonResult {
   prompt: string;
@@ -42,6 +43,15 @@ const EXAMPLE_PROMPTS = [
   'Explain a complex technical concept to a non-technical audience',
   'Create a strategy for improving team productivity',
 ];
+
+function Spinner({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={`animate-spin ${className}`} viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+    </svg>
+  );
+}
 
 export default function SandboxPage() {
   const { user } = useUser();
@@ -172,44 +182,60 @@ export default function SandboxPage() {
   const isWaitingForGeneric = isLoading && !genericDone && genericStreaming.length === 0;
   const isWaitingForPersonalized = isLoading && genericDone && !personalizedDone && personalizedStreaming.length === 0;
 
+  // Typographic "context used" summary — quiet dot-separated list, no colored pills
+  const contextSummaryItems: string[] =
+    result?.contextSummary && result.hasContext
+      ? ([
+          result.contextSummary.communicationInsights > 0 && `Communication (${result.contextSummary.communicationInsights})`,
+          result.contextSummary.toneInsights > 0 && `Tone (${result.contextSummary.toneInsights})`,
+          result.contextSummary.personalTraits > 0 && `Traits (${result.contextSummary.personalTraits})`,
+          result.contextSummary.strengths > 0 && `Strengths (${result.contextSummary.strengths})`,
+          result.contextSummary.decisionPatterns > 0 && `Decisions (${result.contextSummary.decisionPatterns})`,
+        ].filter(Boolean) as string[])
+      : [];
+
   return (
     <div className="max-w-6xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Context Sandbox</h1>
-        <p className="mt-1 text-gray-600 dark:text-gray-300">
-          Test how your personal context improves AI outputs. Enter a prompt and see the difference side by side.
-        </p>
-      </div>
+      <PageHeader
+        kicker="Sandbox"
+        title="Context Sandbox"
+        subtitle="Test how your personal context improves AI outputs. Enter a prompt and see the difference side by side."
+      />
 
-      {/* Context status banner */}
+      {/* Context status — typographic note, not a colored box */}
       {contextStatus && (
-        <div className={`mb-4 p-3 rounded-lg text-sm ${
-          contextStatus.hasContext
-            ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800'
-            : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
-        }`}>
-          {contextStatus.hasContext ? (
-            <span>
-              <span className="font-medium">Context active:</span>{' '}
-              {contextStatus.totalCategorizedInsights} verified insight{contextStatus.totalCategorizedInsights !== 1 ? 's' : ''} found across{' '}
-              {contextStatus.categories ? Object.values(contextStatus.categories).filter(v => v > 0).length : 0} categories.
-              {contextStatus.aiAvailable
-                ? ' AI-powered comparison is enabled.'
-                : ' Responses use template-based comparison (no API key configured).'}
-            </span>
-          ) : (
-            <span>
-              <span className="font-medium">No verified insights yet.</span>{' '}
-              Complete interview sessions and verify insights to see personalized outputs.
-              The comparison will still work, showing what personalization would look like.
-            </span>
-          )}
+        <div className="mb-6 bg-panel dark:bg-dark-card border border-rule dark:border-dark-border rounded-md px-4 py-3">
+          <p
+            className={`text-[11px] uppercase tracking-[0.08em] font-sans font-semibold mb-1 ${
+              contextStatus.hasContext
+                ? 'text-primary-600 dark:text-primary-400'
+                : 'text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            {contextStatus.hasContext ? 'Context active' : 'No verified insights yet'}
+          </p>
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            {contextStatus.hasContext ? (
+              <>
+                {contextStatus.totalCategorizedInsights} verified insight{contextStatus.totalCategorizedInsights !== 1 ? 's' : ''} found across{' '}
+                {contextStatus.categories ? Object.values(contextStatus.categories).filter(v => v > 0).length : 0} categories.
+                {contextStatus.aiAvailable
+                  ? ' AI-powered comparison is enabled.'
+                  : ' Responses use template-based comparison (no API key configured).'}
+              </>
+            ) : (
+              <>
+                Complete interview sessions and verify insights to see personalized outputs.
+                The comparison will still work, showing what personalization would look like.
+              </>
+            )}
+          </p>
         </div>
       )}
 
       {/* Prompt input */}
-      <div className="card mb-6">
-        <label htmlFor="sandbox-prompt" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+      <div className="card mb-8">
+        <label htmlFor="sandbox-prompt" className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-2">
           Enter a prompt to test
         </label>
         <textarea
@@ -223,14 +249,14 @@ export default function SandboxPage() {
           disabled={isLoading}
         />
 
-        {/* Example prompts */}
+        {/* Example prompts — hairline chips */}
         <div className="mt-3 flex flex-wrap gap-2">
-          <span className="text-xs text-gray-500 dark:text-gray-300 self-center">Try:</span>
+          <span className="text-[11px] uppercase tracking-[0.08em] font-sans font-medium text-gray-400 dark:text-gray-600 self-center">Try:</span>
           {EXAMPLE_PROMPTS.map((example, i) => (
             <button
               key={i}
               onClick={() => handleExampleClick(example)}
-              className="text-xs px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              className="text-xs px-2.5 py-1 rounded-full border border-rule dark:border-dark-border text-gray-600 dark:text-gray-300 hover:border-primary-400 dark:hover:border-primary-500 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
               disabled={isLoading}
             >
               {example}
@@ -245,10 +271,7 @@ export default function SandboxPage() {
         >
           {isLoading ? (
             <span className="flex items-center gap-2">
-              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
+              <Spinner />
               Generating comparison...
             </span>
           ) : (
@@ -266,114 +289,77 @@ export default function SandboxPage() {
         />
       )}
 
-      {/* Comparison results */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Generic output */}
-        <div className="card">
-          <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-wide mb-3 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 inline-block"></span>
-            Without your context
+      {/* Comparison results — two hairline columns, serif output */}
+      <div className="grid grid-cols-1 md:grid-cols-2 md:divide-x md:divide-rule dark:md:divide-dark-border border-t border-rule dark:border-dark-border">
+        {/* Without context */}
+        <div className="pt-6 pb-2 md:pr-8">
+          <h2 className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-4">
+            Without
           </h2>
           {genericContent ? (
-            <div className="prose dark:prose-invert prose-sm max-w-none">
-              <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 leading-relaxed">
-                {genericContent}
-                {isGenericStreaming && <span className="inline-block w-1.5 h-4 bg-gray-400 dark:bg-gray-500 animate-pulse ml-0.5 align-text-bottom" />}
-              </pre>
-            </div>
+            <p className="font-serif text-[15px] leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+              {genericContent}
+              {isGenericStreaming && <span className="inline-block w-1.5 h-4 bg-gray-400 dark:bg-gray-500 animate-pulse ml-0.5 align-text-bottom" />}
+            </p>
           ) : isWaitingForGeneric ? (
-            <div className="text-gray-500 dark:text-gray-300 text-center py-8 flex items-center justify-center gap-2">
-              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
+            <div className="text-gray-500 dark:text-gray-400 text-sm py-8 flex items-center gap-2">
+              <Spinner />
               Generating generic response...
             </div>
           ) : (
-            <div className="text-gray-500 dark:text-gray-300 text-center py-8">
+            <p className="font-serif italic text-gray-500 dark:text-gray-400 py-8">
               Run a comparison to see results
-            </div>
+            </p>
           )}
         </div>
 
-        {/* Personalized output */}
-        <div className="card border-primary-200 dark:border-primary-800">
-          <h2 className="text-sm font-semibold text-primary-600 dark:text-primary-400 uppercase tracking-wide mb-3 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-primary-500 dark:bg-primary-400 inline-block"></span>
-            With your me.md context
+        {/* With context */}
+        <div className="pt-6 pb-2 md:pl-8">
+          <h2 className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-primary-600 dark:text-primary-400 mb-4">
+            With Your Context
           </h2>
           {personalizedContent ? (
             <div>
-              <div className="prose dark:prose-invert prose-sm max-w-none">
-                <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 dark:text-gray-300 bg-primary-50 dark:bg-primary-900/20 p-4 rounded-lg border border-primary-200 dark:border-primary-800 leading-relaxed">
-                  {personalizedContent}
-                  {isPersonalizedStreaming && <span className="inline-block w-1.5 h-4 bg-primary-400 dark:bg-primary-500 animate-pulse ml-0.5 align-text-bottom" />}
-                </pre>
-              </div>
-              {result?.contextSummary && result.hasContext && (
-                <div className="mt-3 text-xs text-gray-500 dark:text-gray-300 flex flex-wrap gap-2">
-                  <span className="font-medium">Context used:</span>
-                  {result.contextSummary.communicationInsights > 0 && (
-                    <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
-                      Communication ({result.contextSummary.communicationInsights})
-                    </span>
-                  )}
-                  {result.contextSummary.toneInsights > 0 && (
-                    <span className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full">
-                      Tone ({result.contextSummary.toneInsights})
-                    </span>
-                  )}
-                  {result.contextSummary.personalTraits > 0 && (
-                    <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full">
-                      Traits ({result.contextSummary.personalTraits})
-                    </span>
-                  )}
-                  {result.contextSummary.strengths > 0 && (
-                    <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-full">
-                      Strengths ({result.contextSummary.strengths})
-                    </span>
-                  )}
-                  {result.contextSummary.decisionPatterns > 0 && (
-                    <span className="px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full">
-                      Decisions ({result.contextSummary.decisionPatterns})
-                    </span>
-                  )}
-                </div>
+              <p className="font-serif text-[15px] leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                {personalizedContent}
+                {isPersonalizedStreaming && <span className="inline-block w-1.5 h-4 bg-primary-500 dark:bg-primary-400 animate-pulse ml-0.5 align-text-bottom" />}
+              </p>
+              {contextSummaryItems.length > 0 && (
+                <p className="mt-4 text-[10.5px] uppercase tracking-[0.08em] font-sans font-medium text-gray-500 dark:text-gray-400">
+                  <span className="text-gray-400 dark:text-gray-600 normal-case font-normal mr-1.5">Context used:</span>
+                  {contextSummaryItems.join(' · ')}
+                </p>
               )}
             </div>
           ) : isWaitingForPersonalized ? (
-            <div className="text-gray-500 dark:text-gray-300 text-center py-8 flex items-center justify-center gap-2">
-              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
+            <div className="text-gray-500 dark:text-gray-400 text-sm py-8 flex items-center gap-2">
+              <Spinner />
               Generating personalized response...
             </div>
           ) : isLoading ? (
-            <div className="text-gray-500 dark:text-gray-300 text-center py-8">
+            <p className="text-gray-500 dark:text-gray-400 text-sm py-8">
               Waiting for generic response to finish...
-            </div>
+            </p>
           ) : (
-            <div className="text-gray-500 dark:text-gray-300 text-center py-8">
+            <p className="font-serif italic text-gray-500 dark:text-gray-400 py-8">
               Run a comparison to see results
-            </div>
+            </p>
           )}
         </div>
       </div>
 
       {/* Timestamp and AI indicator */}
       {result && (
-        <div className="mt-4 text-xs text-gray-500 dark:text-gray-300 text-center space-y-1">
+        <div className="mt-6 pt-4 border-t border-rule dark:border-dark-border text-[11px] uppercase tracking-[0.08em] font-sans font-medium text-gray-400 dark:text-gray-600 text-center space-y-1">
           <div>Generated at {formatTime(result.generatedAt)}</div>
-          {result.usedAI && (
-            <div className="flex items-center justify-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>
+          {result.usedAI ? (
+            <div className="flex items-center justify-center gap-1.5 text-primary-600 dark:text-primary-400">
+              <span className="w-1 h-1 rounded-full bg-primary-500 inline-block" />
               <span>Powered by Claude AI</span>
             </div>
-          )}
-          {!result.usedAI && (
+          ) : (
             <div className="flex items-center justify-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-gray-400 inline-block"></span>
+              <span className="w-1 h-1 rounded-full bg-gray-400 dark:bg-gray-600 inline-block" />
               <span>Template-based (no API key configured)</span>
             </div>
           )}

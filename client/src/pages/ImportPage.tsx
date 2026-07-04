@@ -4,6 +4,7 @@ import { useDatabase } from '@/contexts/DatabaseContext';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 import { Link } from 'react-router-dom';
 import { importUrls, importText, importFile, importChatGPT, processImport } from '@/services/import';
+import { PageHeader, SectionHeading, Badge } from '@/components/ui';
 
 type ImportMethod = 'chatgpt' | 'url' | 'text' | 'file';
 
@@ -54,6 +55,28 @@ const CHATGPT_EXTRACTION_PROMPT = `I'd like you to help me extract a comprehensi
 **Personality Traits:** Observable personality characteristics, temperament, social tendencies
 
 Please be thorough and specific. Include concrete examples where possible. If you don't have information for a section, note that it's unknown rather than making assumptions.`;
+
+/** Quiet numbered editorial marker — DESIGN.md "numbered editorial markers". */
+function StepMarker({ step }: { step: number }) {
+  return (
+    <span className="font-sans text-[11px] tracking-[0.08em] text-ink/40 dark:text-[#7A7264] tabular-nums pt-1 shrink-0">
+      {String(step).padStart(2, '0')}
+    </span>
+  );
+}
+
+function Spinner({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={`animate-spin ${className}`} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+      />
+    </svg>
+  );
+}
 
 export default function ImportPage() {
   const { user } = useUser();
@@ -353,93 +376,95 @@ export default function ImportPage() {
     }
   };
 
-  const methods: { key: ImportMethod; label: string; icon: string; description: string }[] = [
-    { key: 'chatgpt', label: 'ChatGPT Memory', icon: '🤖', description: 'Extract memories from ChatGPT' },
-    { key: 'url', label: 'URL', icon: '🔗', description: 'Import from a web page' },
-    { key: 'text', label: 'Paste Text', icon: '📝', description: 'Paste text content' },
-    { key: 'file', label: 'Upload File', icon: '📁', description: 'Upload a document' },
+  const methods: { key: ImportMethod; label: string; description: string }[] = [
+    { key: 'chatgpt', label: 'ChatGPT Memory', description: 'Extract memories from ChatGPT' },
+    { key: 'url', label: 'URL', description: 'Import from a web page' },
+    { key: 'text', label: 'Paste Text', description: 'Paste text content' },
+    { key: 'file', label: 'Upload File', description: 'Upload a document' },
   ];
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Import Context</h1>
-        <p className="mt-1 text-gray-600 dark:text-gray-300">
-          Import existing personal context to accelerate your knowledge building
-        </p>
-      </div>
+      <PageHeader
+        kicker="Context"
+        title="Import Context"
+        subtitle="Import existing personal context to accelerate your knowledge building"
+      />
 
-      {/* Method Selection */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      {/* Method tabs — small-caps amber-underline row */}
+      <div
+        className="flex flex-wrap gap-x-8 gap-y-2 border-b border-rule dark:border-dark-border mb-8"
+        role="tablist"
+        aria-label="Import method"
+      >
         {methods.map((method) => (
           <button
             key={method.key}
+            type="button"
+            role="tab"
+            aria-selected={activeMethod === method.key}
+            aria-controls={`import-panel-${method.key}`}
+            id={`import-tab-${method.key}`}
             onClick={() => setActiveMethod(method.key)}
-            className={`p-3 rounded-xl border-2 text-left transition-all ${
+            className={`pb-3 pt-1 text-[11px] uppercase tracking-[0.08em] font-sans font-semibold border-b-2 transition-colors ${
               activeMethod === method.key
-                ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 shadow-sm'
-                : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
+                ? 'border-primary-500 text-ink dark:text-gray-100'
+                : 'border-transparent text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400'
             }`}
+            title={method.description}
           >
-            <span className="text-2xl block mb-1">{method.icon}</span>
-            <span className={`text-sm font-semibold block ${
-              activeMethod === method.key
-                ? 'text-primary-700 dark:text-primary-300'
-                : 'text-gray-900 dark:text-white'
-            }`}>
-              {method.label}
-            </span>
-            <span className={`text-xs block mt-0.5 ${
-              activeMethod === method.key
-                ? 'text-primary-600 dark:text-primary-400'
-                : 'text-gray-500 dark:text-gray-400'
-            }`}>
-              {method.description}
-            </span>
+            {method.label}
           </button>
         ))}
       </div>
 
       {/* ChatGPT Memory Extraction */}
       {activeMethod === 'chatgpt' && (
-        <div className="space-y-6">
+        <div id="import-panel-chatgpt" role="tabpanel" aria-labelledby="import-tab-chatgpt" className="space-y-10">
           {/* Step 1: Copy prompt */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="flex items-start gap-3 mb-4">
-              <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-                <span className="text-sm font-bold text-blue-700 dark:text-blue-300">1</span>
-              </div>
+          <div>
+            <div className="flex items-start gap-4 mb-4">
+              <StepMarker step={1} />
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-white">Copy this prompt to ChatGPT</h3>
+                <h3 className="font-serif text-lg text-ink dark:text-gray-100">Copy this prompt to ChatGPT</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                  Open <a href="https://chat.openai.com" target="_blank" rel="noopener noreferrer" className="text-primary-600 dark:text-primary-400 hover:underline">chat.openai.com</a> and paste this prompt into your conversation. ChatGPT will summarize what it knows about you.
+                  Open{' '}
+                  <a
+                    href="https://chat.openai.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary-600 dark:text-primary-400 hover:underline"
+                  >
+                    chat.openai.com
+                  </a>{' '}
+                  and paste this prompt into your conversation. ChatGPT will summarize what it knows about you.
                 </p>
               </div>
             </div>
 
-            <div className="relative">
-              <pre className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700">
+            <div className="relative ml-8">
+              <pre className="bg-panel dark:bg-dark-card rounded-md p-4 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono max-h-48 overflow-y-auto border border-rule dark:border-dark-border">
                 {CHATGPT_EXTRACTION_PROMPT}
               </pre>
               <button
                 onClick={handleCopyPrompt}
-                className={`absolute top-2 right-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                className={`absolute top-2 right-2 px-3 py-1.5 rounded-md text-[11px] uppercase tracking-[0.08em] font-sans font-semibold transition-colors bg-white dark:bg-dark-card border ${
                   promptCopied
-                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-700'
-                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm'
+                    ? 'border-primary-500 dark:border-primary-400 text-primary-600 dark:text-primary-400'
+                    : 'border-rule dark:border-dark-border text-gray-600 dark:text-gray-300 hover:border-primary-400 dark:hover:border-primary-500 hover:text-primary-600 dark:hover:text-primary-400'
                 }`}
                 aria-label={promptCopied ? 'Prompt copied to clipboard' : 'Copy prompt to clipboard'}
               >
                 {promptCopied ? (
                   <span className="flex items-center gap-1.5">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
-                    Copied!
+                    Copied
                   </span>
                 ) : (
                   <span className="flex items-center gap-1.5">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                     </svg>
                     Copy
@@ -450,22 +475,20 @@ export default function ImportPage() {
           </div>
 
           {/* Step 2: Paste response */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="flex items-start gap-3 mb-4">
-              <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-                <span className="text-sm font-bold text-blue-700 dark:text-blue-300">2</span>
-              </div>
+          <div>
+            <div className="flex items-start gap-4 mb-4">
+              <StepMarker step={2} />
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-white">Paste ChatGPT&apos;s response</h3>
+                <h3 className="font-serif text-lg text-ink dark:text-gray-100">Paste ChatGPT&apos;s response</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
                   After ChatGPT generates its summary, copy the entire response and paste it below.
                 </p>
               </div>
             </div>
 
-            <form onSubmit={handleChatgptSubmit} className="space-y-4">
+            <form onSubmit={handleChatgptSubmit} className="space-y-4 ml-8">
               <div>
-                <label htmlFor="chatgpt-title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label htmlFor="chatgpt-title" className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
                   Title (optional)
                 </label>
                 <input
@@ -480,7 +503,7 @@ export default function ImportPage() {
               </div>
 
               <div>
-                <label htmlFor="chatgpt-output" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label htmlFor="chatgpt-output" className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
                   ChatGPT Response
                 </label>
                 <textarea
@@ -496,16 +519,14 @@ export default function ImportPage() {
                   rows={10}
                 />
                 {chatgptOutput.trim().length > 0 && (
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                     {chatgptOutput.trim().length} characters
                   </p>
                 )}
               </div>
 
               {chatgptError && (
-                <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm" role="alert">
-                  {chatgptError}
-                </div>
+                <p className="text-sm text-red-600 dark:text-red-400" role="alert">{chatgptError}</p>
               )}
 
               <button
@@ -515,11 +536,8 @@ export default function ImportPage() {
               >
                 {isProcessingChatgpt ? (
                   <span className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Processing...
+                    <Spinner />
+                    Processing&hellip;
                   </span>
                 ) : (
                   'Import ChatGPT Context'
@@ -528,10 +546,13 @@ export default function ImportPage() {
             </form>
           </div>
 
-          {/* Info card */}
-          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-            <p className="text-sm text-blue-800 dark:text-blue-200">
-              <strong>How it works:</strong> The prompt asks ChatGPT to extract structured information about you from your conversation history. This provides a rich starting point for your me.md profile, covering personality, preferences, goals, and more.
+          {/* Info note */}
+          <div className="bg-panel dark:bg-dark-card border border-rule dark:border-dark-border rounded-md px-4 py-3.5">
+            <p className="text-sm text-gray-700 dark:text-gray-300">
+              <span className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-primary-600 dark:text-primary-400 mb-1">
+                How it works
+              </span>
+              The prompt asks ChatGPT to extract structured information about you from your conversation history. This provides a rich starting point for your me.md profile, covering personality, preferences, goals, and more.
             </p>
           </div>
         </div>
@@ -539,8 +560,8 @@ export default function ImportPage() {
 
       {/* URL Import */}
       {activeMethod === 'url' && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-          <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Import from URL</h3>
+        <div id="import-panel-url" role="tabpanel" aria-labelledby="import-tab-url" className="card">
+          <h3 className="font-serif text-lg text-ink dark:text-gray-100 mb-2">Import from URL</h3>
           <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
             Add links to your blog, portfolio, LinkedIn, or any page about you
           </p>
@@ -564,11 +585,8 @@ export default function ImportPage() {
             >
               {isProcessingUrl ? (
                 <span className="flex items-center gap-2">
-                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Processing...
+                  <Spinner />
+                  Processing&hellip;
                 </span>
               ) : (
                 'Add URL'
@@ -577,15 +595,15 @@ export default function ImportPage() {
           </form>
 
           {urlError && (
-            <p className="mt-2 text-sm text-red-500" role="alert">{urlError}</p>
+            <p className="mt-2 text-sm text-red-600 dark:text-red-400" role="alert">{urlError}</p>
           )}
         </div>
       )}
 
       {/* Text Import */}
       {activeMethod === 'text' && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-          <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Paste Text</h3>
+        <div id="import-panel-text" role="tabpanel" aria-labelledby="import-tab-text" className="card">
+          <h3 className="font-serif text-lg text-ink dark:text-gray-100 mb-2">Paste Text</h3>
           <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
             Paste text about yourself - a bio, interests, resume excerpt, or anything that describes you
           </p>
@@ -622,11 +640,8 @@ export default function ImportPage() {
             >
               {isProcessingText ? (
                 <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Processing...
+                  <Spinner />
+                  Processing&hellip;
                 </span>
               ) : (
                 'Import Text'
@@ -635,15 +650,15 @@ export default function ImportPage() {
           </form>
 
           {pasteError && (
-            <p className="mt-2 text-sm text-red-500" role="alert">{pasteError}</p>
+            <p className="mt-2 text-sm text-red-600 dark:text-red-400" role="alert">{pasteError}</p>
           )}
         </div>
       )}
 
       {/* File Upload */}
       {activeMethod === 'file' && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-          <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Upload File</h3>
+        <div id="import-panel-file" role="tabpanel" aria-labelledby="import-tab-file" className="card">
+          <h3 className="font-serif text-lg text-ink dark:text-gray-100 mb-2">Upload File</h3>
           <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
             Upload a text file, markdown, CSV, JSON, or PDF (max 5MB)
           </p>
@@ -659,30 +674,27 @@ export default function ImportPage() {
             />
             <label
               htmlFor="import-file-upload"
-              className={`flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
+              className={`flex flex-col items-center justify-center w-full h-40 border border-dashed rounded-md cursor-pointer transition-colors ${
                 isUploadingFile
-                  ? 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 cursor-wait'
-                  : 'border-gray-300 dark:border-gray-600 hover:border-primary-400 dark:hover:border-primary-500 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                  ? 'border-rule dark:border-dark-border cursor-wait'
+                  : 'border-rule dark:border-dark-border hover:border-primary-400 dark:hover:border-primary-500 hover:bg-panel/60 dark:hover:bg-dark-card/60'
               }`}
             >
               {isUploadingFile ? (
                 <div className="flex flex-col items-center gap-2">
-                  <svg className="animate-spin w-8 h-8 text-primary-600" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
+                  <Spinner className="w-6 h-6 text-primary-500" />
                   <span className="text-sm text-gray-600 dark:text-gray-300">Uploading and processing...</span>
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-2">
-                  <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  <svg className="w-6 h-6 text-gray-400 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                   </svg>
                   <span className="text-sm text-gray-600 dark:text-gray-300">
                     Click to select a file
                   </span>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    .txt, .md, .csv, .json, .pdf
+                  <span className="text-[11px] uppercase tracking-[0.08em] font-sans text-gray-400 dark:text-gray-600">
+                    .txt · .md · .csv · .json · .pdf
                   </span>
                 </div>
               )}
@@ -690,54 +702,36 @@ export default function ImportPage() {
           </div>
 
           {fileError && (
-            <p className="mt-2 text-sm text-red-500" role="alert">{fileError}</p>
+            <p className="mt-2 text-sm text-red-600 dark:text-red-400" role="alert">{fileError}</p>
           )}
         </div>
       )}
 
-      {/* Import Results */}
+      {/* Import Results — hairline rows, typographic status */}
       {importResults.length > 0 && (
-        <div className="mt-6 space-y-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Imported Content ({importResults.length})
-          </h3>
-          {importResults.map((result, idx) => (
-            <div
-              key={result.id || idx}
-              className={`rounded-xl border ${
-                result.status === 'success'
-                  ? result.isProcessed
-                    ? 'bg-purple-50 dark:bg-purple-900/10 border-purple-200 dark:border-purple-800'
-                    : 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800'
-                  : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800'
-              }`}
-            >
-              <div className="p-4">
+        <div className="mt-10">
+          <SectionHeading className="mb-2">Imported ({importResults.length})</SectionHeading>
+          <div className="divide-y divide-rule dark:divide-dark-border">
+            {importResults.map((result, idx) => (
+              <div key={result.id || idx} className="py-5">
                 {result.status === 'success' ? (
                   <>
-                    <div className="flex items-center gap-2 mb-1">
-                      <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span className="font-medium text-sm text-gray-900 dark:text-white">
-                        {result.title || 'Untitled'}
-                      </span>
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300">
+                    <div className="flex items-center justify-between gap-3 mb-1.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Badge variant="verified" label="Imported" />
+                        <span className="font-serif text-ink dark:text-gray-100 truncate">
+                          {result.title || 'Untitled'}
+                        </span>
+                      </div>
+                      <span className="text-[11px] uppercase tracking-[0.08em] font-sans font-medium text-gray-400 dark:text-gray-600 shrink-0 whitespace-nowrap">
                         {result.source === 'chatgpt' ? 'ChatGPT' : result.source === 'url' ? 'URL' : result.source === 'text' ? 'Text' : 'File'}
+                        {result.sectionCount != null && result.sectionCount > 0 && ` · ${result.sectionCount} sections`}
+                        {result.isProcessed && ` · ${result.extractedInsights?.length || 0} insights`}
                       </span>
-                      {result.sectionCount != null && result.sectionCount > 0 && (
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300">
-                          {result.sectionCount} sections
-                        </span>
-                      )}
-                      {result.isProcessed && (
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300">
-                          {result.extractedInsights?.length || 0} insights extracted
-                        </span>
-                      )}
                     </div>
+
                     {result.summary && !result.isProcessed && (
-                      <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-3 mt-1">
+                      <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-3 max-w-2xl">
                         {result.summary}
                       </p>
                     )}
@@ -746,9 +740,9 @@ export default function ImportPage() {
                     {!result.isProcessed && !result.isProcessing && (
                       <button
                         onClick={() => handleProcessImport(idx)}
-                        className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-primary-600 text-white hover:bg-primary-700 transition-colors"
+                        className="mt-3 inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-primary-600 dark:text-primary-400 hover:text-ink dark:hover:text-gray-100 transition-colors"
                       >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
                         Extract Insights for Verification
@@ -758,114 +752,98 @@ export default function ImportPage() {
                     {/* Processing spinner */}
                     {result.isProcessing && (
                       <div className="mt-3 flex items-center gap-2 text-sm text-primary-600 dark:text-primary-400">
-                        <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                        </svg>
-                        Extracting personal insights...
+                        <Spinner />
+                        Extracting personal insights&hellip;
                       </div>
                     )}
 
                     {/* Process error */}
                     {result.processError && (
-                      <p className="mt-2 text-sm text-red-500">{result.processError}</p>
+                      <p className="mt-2 text-sm text-red-600 dark:text-red-400">{result.processError}</p>
                     )}
                   </>
                 ) : (
-                  <div className="flex items-center gap-2">
-                    <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    <div>
-                      <span className="text-sm text-red-700 dark:text-red-400">
-                        Failed: {result.title || 'Unknown'}
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-red-600 dark:text-red-400">
+                        Failed
                       </span>
-                      {result.error && (
-                        <p className="text-xs text-red-500 mt-0.5">{result.error}</p>
-                      )}
+                      <span className="text-sm text-gray-600 dark:text-gray-300 truncate">
+                        {result.title || 'Unknown'}
+                      </span>
                     </div>
+                    {result.error && (
+                      <p className="text-xs text-red-600 dark:text-red-400">{result.error}</p>
+                    )}
                   </div>
                 )}
-              </div>
 
-              {/* Extracted Insights Panel */}
-              {result.isProcessed && result.extractedInsights && result.extractedInsights.length > 0 && (
-                <div className="border-t border-purple-200 dark:border-purple-800 p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
-                      Extracted Insights ({result.extractedInsights.length})
-                    </h4>
-                    <div className="flex gap-2">
-                      {result.topicCreated && (
+                {/* Extracted Insights Panel */}
+                {result.isProcessed && result.extractedInsights && result.extractedInsights.length > 0 && (
+                  <div className="mt-4 pl-4 border-l-2 border-rule dark:border-dark-border">
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                      <p className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400">
+                        Extracted insights ({result.extractedInsights.length})
+                      </p>
+                      <div className="flex items-center gap-4">
+                        {result.topicCreated && (
+                          <Link
+                            to="/app/topics"
+                            className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-primary-600 dark:text-primary-400 hover:text-ink dark:hover:text-gray-100 transition-colors"
+                          >
+                            View Topic
+                          </Link>
+                        )}
                         <Link
-                          to={`/app/topics`}
-                          className="text-xs px-2 py-1 rounded bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 hover:bg-primary-200 dark:hover:bg-primary-900/50 transition-colors"
+                          to="/app/review"
+                          className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-primary-600 dark:text-primary-400 hover:text-ink dark:hover:text-gray-100 transition-colors"
                         >
-                          View Topic
+                          Go to Verification Queue
                         </Link>
-                      )}
-                      <Link
-                        to="/app/review"
-                        className="text-xs px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors"
-                      >
-                        Go to Verification Queue
-                      </Link>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-2 max-h-80 overflow-y-auto">
-                    {result.extractedInsights.map((insight, iIdx) => (
-                      <div
-                        key={insight.id || iIdx}
-                        className="flex items-start gap-2 p-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
-                      >
-                        <div className="flex-shrink-0 mt-0.5">
-                          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-[10px] font-bold">
-                            ?
-                          </span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-800 dark:text-gray-200 leading-snug">
+                    <div className="space-y-3 max-h-80 overflow-y-auto">
+                      {result.extractedInsights.map((insight, iIdx) => (
+                        <div key={insight.id || iIdx} className="pb-3 border-b border-rule dark:border-dark-border last:border-b-0 last:pb-0">
+                          <p className="text-sm text-gray-800 dark:text-gray-200 leading-snug mb-1.5">
                             {insight.content}
                           </p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[10px] px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-                              Confidence: {insight.confidenceScore}%
-                            </span>
-                            <span className="text-[10px] px-1 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400">
-                              Pending verification
-                            </span>
-                            <span className="text-[10px] px-1 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 capitalize">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <Badge variant="pending" confidence={insight.confidenceScore} />
+                            <span className="text-gray-300 dark:text-gray-700" aria-hidden="true">&middot;</span>
+                            <span className="text-[10.5px] uppercase tracking-[0.08em] font-sans font-medium text-gray-500 dark:text-gray-400">
                               {insight.suggestedCategory}
                             </span>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
 
-                  <div className="mt-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-                    <p className="text-xs text-amber-800 dark:text-amber-200">
-                      <strong>Next step:</strong> These insights are now in your{' '}
-                      <Link to="/app/review" className="underline hover:text-amber-900 dark:hover:text-amber-100">
-                        verification queue
-                      </Link>
-                      . Review each one to confirm, edit, or reject it. Only verified insights will appear in your profile export.
-                    </p>
+                    <div className="mt-3 bg-panel dark:bg-dark-card border border-rule dark:border-dark-border rounded-md px-3 py-2.5">
+                      <p className="text-xs text-gray-700 dark:text-gray-300">
+                        <span className="font-sans font-semibold text-[10.5px] uppercase tracking-[0.08em] text-primary-600 dark:text-primary-400 mr-1">
+                          Next step
+                        </span>
+                        These insights are now in your{' '}
+                        <Link to="/app/review" className="underline hover:text-primary-600 dark:hover:text-primary-400">
+                          verification queue
+                        </Link>
+                        . Review each one to confirm, edit, or reject it. Only verified insights will appear in your profile export.
+                      </p>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* No insights extracted message */}
-              {result.isProcessed && (!result.extractedInsights || result.extractedInsights.length === 0) && (
-                <div className="border-t border-gray-200 dark:border-gray-700 p-4">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                {/* No insights extracted message */}
+                {result.isProcessed && (!result.extractedInsights || result.extractedInsights.length === 0) && (
+                  <p className="mt-3 text-sm text-gray-600 dark:text-gray-400 pl-4 border-l-2 border-rule dark:border-dark-border">
                     No personal insights could be extracted from this content. Try importing content that contains personal statements, beliefs, preferences, or experiences.
                   </p>
-                </div>
-              )}
-            </div>
-          ))}
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

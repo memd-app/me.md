@@ -5,6 +5,7 @@ import { useDatabase } from '@/contexts/DatabaseContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { getTemplates, createTopicFromTemplate } from '@/services/templates';
+import { PageHeader, SectionHeading, EmptyState, Button } from '@/components/ui';
 
 interface Template {
   id: string;
@@ -24,17 +25,6 @@ const TAG_LABELS: Record<string, string> = {
   problem_solving: 'Problem Solving',
   creative_process: 'Creative Process',
   work_priorities: 'Work Priorities',
-};
-
-const TAG_COLORS: Record<string, string> = {
-  email_writing: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  management_style: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-  feedback_style: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-  decision_making: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-  communication_preferences: 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300',
-  problem_solving: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
-  creative_process: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300',
-  work_priorities: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',
 };
 
 export default function TemplatesPage() {
@@ -112,33 +102,28 @@ export default function TemplatesPage() {
 
   if (isLoading) {
     return (
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <LoadingSpinner card message="Loading templates..." />
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-5xl mx-auto">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-300 mb-6">
-        <Link to="/app/topics" className="hover:text-primary-600 dark:hover:text-primary-400">
+      <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs tracking-wide text-gray-400 dark:text-gray-600 mb-6 min-w-0">
+        <Link to="/app/topics" className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors shrink-0">
           Topics
         </Link>
-        <span>/</span>
-        <span className="text-gray-900 dark:text-white">Use Case Templates</span>
+        <span aria-hidden="true" className="shrink-0">/</span>
+        <span className="text-gray-600 dark:text-gray-400 truncate">Use Case Templates</span>
       </nav>
 
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-          Use Case Templates
-        </h1>
-        <p className="text-gray-600 dark:text-gray-300 max-w-2xl">
-          Goal-oriented interview templates for specific AI use cases. Each template includes
-          pre-configured prompts designed to extract knowledge that maps to common AI tasks.
-        </p>
-      </div>
+      <PageHeader
+        kicker="Templates"
+        title="Use Case Templates"
+        subtitle="Goal-oriented interview templates for specific AI use cases. Each template includes pre-configured prompts designed to extract knowledge that maps to common AI tasks."
+      />
 
       {/* Error banner */}
       {error && (
@@ -149,136 +134,108 @@ export default function TemplatesPage() {
         />
       )}
 
-      {/* Success banner */}
+      {/* Success message — quiet typographic confirmation, no colored box */}
       {createSuccess && (
-        <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 mb-6 flex items-center gap-2">
-          <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-          Topic created! Redirecting to topic detail...
-        </div>
+        <p role="status" className="mb-6 text-sm font-semibold text-primary-600 dark:text-primary-400">
+          Topic created. Redirecting to topic detail&hellip;
+        </p>
       )}
 
-      {/* Templates grid */}
+      {/* Templates gallery */}
       {templates.length === 0 ? (
-        <div className="card text-center py-12">
-          <span className="text-4xl block mb-3">📝</span>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            No templates available
-          </h2>
-          <p className="text-gray-600 dark:text-gray-300">
-            Use case templates will appear here once they are created.
-          </p>
-        </div>
+        <EmptyState
+          kicker="No templates yet"
+          message="Use case templates will appear here once they are created."
+        />
       ) : (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {templates.map((template) => {
             const prompts = parsePrompts(template.interviewPrompts);
             const isSelected = selectedTemplate?.id === template.id;
             const tag = template.aiUseCaseTag || '';
             const tagLabel = TAG_LABELS[tag] || tag.replace(/_/g, ' ');
-            const tagColor = TAG_COLORS[tag] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
 
             return (
               <div
                 key={template.id}
-                className={`card cursor-pointer transition-all duration-200 ${
+                className={`border rounded-lg p-5 cursor-pointer transition-colors ${
                   isSelected
-                    ? 'ring-2 ring-primary-500 dark:ring-primary-400 border-primary-200 dark:border-primary-700'
-                    : 'hover:border-gray-300 dark:hover:border-gray-600'
+                    ? 'border-primary-500 dark:border-primary-400'
+                    : 'border-rule dark:border-dark-border hover:border-gray-400 dark:hover:border-gray-600'
                 }`}
                 onClick={() => handleSelectTemplate(template)}
+                role="button"
+                tabIndex={0}
+                aria-expanded={isSelected}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleSelectTemplate(template);
+                  }
+                }}
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-2 min-w-0">
-                      <h2 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
-                        {template.title}
-                      </h2>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${tagColor}`}>
-                        {tagLabel}
-                      </span>
-                    </div>
-                    <p className="text-gray-600 dark:text-gray-300 text-sm mb-3 line-clamp-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-primary-600 dark:text-primary-400 mb-1.5">
+                      {tagLabel}
+                    </p>
+                    <h2 className="font-serif text-xl text-gray-900 dark:text-white mb-2 truncate">
+                      {template.title}
+                    </h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
                       {template.description}
                     </p>
-
-                    {/* Interview prompts preview - show when selected */}
-                    {isSelected && prompts.length > 0 && (
-                      <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
-                        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
-                          <svg className="w-4 h-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          Interview Prompts ({prompts.length})
-                        </h3>
-                        <ul className="space-y-2">
-                          {prompts.map((prompt, idx) => (
-                            <li
-                              key={idx}
-                              className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-300"
-                            >
-                              <span className="w-5 h-5 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 text-xs flex items-center justify-center shrink-0 mt-0.5 font-medium">
-                                {idx + 1}
-                              </span>
-                              <span>{prompt}</span>
-                            </li>
-                          ))}
-                        </ul>
-
-                        {/* Create topic button */}
-                        <div className="mt-5 flex items-center gap-3">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCreateTopic(template);
-                            }}
-                            disabled={isCreating || !!createSuccess}
-                            className="btn-primary flex items-center gap-2"
-                          >
-                            {isCreating ? (
-                              <>
-                                <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
-                                Creating Topic...
-                              </>
-                            ) : createSuccess ? (
-                              <>
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                                Topic Created!
-                              </>
-                            ) : (
-                              <>
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                </svg>
-                                Create Topic from Template
-                              </>
-                            )}
-                          </button>
-                          <span className="text-xs text-gray-500 dark:text-gray-300">
-                            Creates a new topic with template configuration
-                          </span>
-                        </div>
-                      </div>
-                    )}
                   </div>
-
-                  {/* Expand indicator */}
-                  <div className="shrink-0 mt-1">
-                    <svg
-                      className={`w-5 h-5 text-gray-500 dark:text-gray-300 transition-transform duration-200 ${
-                        isSelected ? 'rotate-180' : ''
-                      }`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
+                  <svg
+                    className={`w-4 h-4 shrink-0 mt-1 text-gray-400 dark:text-gray-600 transition-transform duration-200 ${
+                      isSelected ? 'rotate-180' : ''
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
                 </div>
+
+                {/* Interview prompts preview — numbered editorial markers */}
+                {isSelected && prompts.length > 0 && (
+                  <div className="mt-5 pt-5 border-t border-rule dark:border-dark-border">
+                    <p className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-3">
+                      Interview prompts ({prompts.length})
+                    </p>
+                    <ul className="space-y-2.5">
+                      {prompts.map((prompt, idx) => (
+                        <li key={idx} className="grid grid-cols-[1.5rem_1fr] gap-2 text-sm text-gray-700 dark:text-gray-300">
+                          <span className="text-xs font-semibold text-gray-300 dark:text-gray-700 pt-0.5">
+                            {String(idx + 1).padStart(2, '0')}
+                          </span>
+                          <span>{prompt}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    {/* Use template — hairline ghost action */}
+                    <div className="mt-5 flex flex-wrap items-center gap-3">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCreateTopic(template);
+                        }}
+                        loading={isCreating}
+                        disabled={isCreating || !!createSuccess}
+                      >
+                        {createSuccess ? 'Topic created' : isCreating ? 'Creating topic…' : 'Use this template'}
+                      </Button>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        Creates a new topic with template configuration
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -286,18 +243,13 @@ export default function TemplatesPage() {
       )}
 
       {/* Info section */}
-      <div className="mt-8 p-6 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-          <svg className="w-4 h-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          How Templates Work
-        </h3>
-        <p className="text-sm text-gray-600 dark:text-gray-300">
-          Each template is designed around a specific AI use case. When you create a topic from a template,
-          the interview session will use specialized prompts to extract exactly the knowledge that AI needs
-          to replicate your style for that use case. The resulting insights are tagged with the AI use case
-          for targeted context delivery.
+      <div className="mt-12">
+        <SectionHeading className="mb-3">How templates work</SectionHeading>
+        <p className="font-serif text-[15px] leading-relaxed text-gray-600 dark:text-gray-300 max-w-2xl">
+          Each template is designed around a specific AI use case. When you create a topic from a
+          template, the interview session will use specialized prompts to extract exactly the
+          knowledge that AI needs to replicate your style for that use case. The resulting insights
+          are tagged with the AI use case for targeted context delivery.
         </p>
       </div>
     </div>

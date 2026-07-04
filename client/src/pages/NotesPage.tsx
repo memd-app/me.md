@@ -5,7 +5,7 @@ import { useDatabase } from '@/contexts/DatabaseContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import PageTabs from '@/components/ui/PageTabs';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
-import VerifiedBadge from '@/components/VerifiedBadge';
+import { Badge, EmptyState, PageHeader } from '@/components/ui';
 import { formatRelativeTime, formatDateTime } from '@/utils/dateFormat';
 import { getNotes, getNote } from '@/services/notes';
 
@@ -41,19 +41,7 @@ const FORMAT_LABELS: Record<NoteFormat, string> = {
   json: 'JSON',
 };
 
-const FORMAT_ICONS: Record<NoteFormat, string> = {
-  full_analysis: '📝',
-  brief_summary: '📋',
-  decision_framework: '🎯',
-  json: '{}',
-};
-
-const FORMAT_COLORS: Record<NoteFormat, string> = {
-  full_analysis: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-  brief_summary: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  decision_framework: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
-  json: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
-};
+const FORMAT_OPTIONS: NoteFormat[] = ['full_analysis', 'brief_summary', 'decision_framework', 'json'];
 
 // Date formatting now uses shared utils from @/utils/dateFormat
 // formatRelativeTime replaces the old formatDate function
@@ -107,39 +95,57 @@ function renderInlineMarkdown(text: string): React.ReactNode {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={i}>{part.slice(2, -2)}</strong>;
+      return <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>;
     }
     return <Fragment key={i}>{part}</Fragment>;
   });
 }
 
+// Manuscript reading surface for note content — Newsreader serif prose,
+// hairline-underlined headings, and an amber-rule pull-quote treatment for
+// blockquotes (DESIGN.md "Prose/reading" + signature pull-quote move).
 function SimpleMarkdown({ content }: { content: string }) {
   const lines = content.split('\n');
 
   return (
-    <div className="prose dark:prose-invert max-w-none text-sm">
+    <div className="font-serif text-[17px] leading-[1.7] text-gray-700 dark:text-gray-300 max-w-[65ch]">
       {lines.map((line, i) => {
         const trimmed = line.trimStart();
-        if (trimmed.startsWith('# ')) {
-          return <h1 key={i} className="text-xl font-bold mt-4 mb-2 text-gray-900 dark:text-gray-100">{trimmed.slice(2)}</h1>;
+        if (trimmed.startsWith('### ')) {
+          return (
+            <h3 key={i} className="font-serif text-lg text-gray-900 dark:text-white mt-6 mb-2 first:mt-0">
+              {trimmed.slice(4)}
+            </h3>
+          );
         }
         if (trimmed.startsWith('## ')) {
-          return <h2 key={i} className="text-lg font-semibold mt-3 mb-1.5 text-gray-800 dark:text-gray-200">{trimmed.slice(3)}</h2>;
+          return (
+            <h2 key={i} className="font-serif text-xl text-gray-900 dark:text-white mt-7 mb-3 pb-2 border-b border-rule dark:border-dark-border first:mt-0">
+              {trimmed.slice(3)}
+            </h2>
+          );
         }
-        if (trimmed.startsWith('### ')) {
-          return <h3 key={i} className="text-base font-semibold mt-2 mb-1 text-gray-800 dark:text-gray-200">{trimmed.slice(4)}</h3>;
+        if (trimmed.startsWith('# ')) {
+          return (
+            <h1 key={i} className="font-serif italic text-2xl text-gray-900 dark:text-white mt-7 mb-3 first:mt-0">
+              {trimmed.slice(2)}
+            </h1>
+          );
         }
         if (trimmed.startsWith('> ')) {
           return (
-            <blockquote key={i} className="border-l-4 border-primary-300 dark:border-primary-600 pl-3 py-1 my-1 italic text-gray-600 dark:text-gray-300">
+            <blockquote
+              key={i}
+              className="border-l-2 border-primary-400 dark:border-primary-500 pl-4 py-0.5 my-4 font-serif italic text-gray-600 dark:text-gray-300"
+            >
               {renderInlineMarkdown(trimmed.slice(2))}
             </blockquote>
           );
         }
         if (trimmed.startsWith('- ')) {
           return (
-            <div key={i} className="flex gap-2 ml-4 my-0.5">
-              <span className="text-gray-400 shrink-0">&#8226;</span>
+            <div key={i} className="flex gap-2.5 ml-1 my-1.5">
+              <span className="text-primary-500 dark:text-primary-400 shrink-0" aria-hidden="true">&middot;</span>
               <span>{renderInlineMarkdown(trimmed.slice(2))}</span>
             </div>
           );
@@ -148,17 +154,19 @@ function SimpleMarkdown({ content }: { content: string }) {
           const match = trimmed.match(/^(\d+)\.\s(.*)$/);
           if (match) {
             return (
-              <div key={i} className="flex gap-2 ml-4 my-0.5">
-                <span className="text-gray-500 font-medium shrink-0">{match[1]}.</span>
+              <div key={i} className="flex gap-3 ml-1 my-1.5">
+                <span className="font-sans text-[12px] text-gray-400 dark:text-gray-600 shrink-0 pt-1 tabular-nums">
+                  {match[1].padStart(2, '0')}
+                </span>
                 <span>{renderInlineMarkdown(match[2])}</span>
               </div>
             );
           }
         }
         if (trimmed === '') {
-          return <div key={i} className="h-2" />;
+          return <div key={i} className="h-3" />;
         }
-        return <p key={i} className="my-0.5 text-gray-700 dark:text-gray-300">{renderInlineMarkdown(trimmed)}</p>;
+        return <p key={i} className="my-1.5 break-words">{renderInlineMarkdown(trimmed)}</p>;
       })}
     </div>
   );
@@ -255,6 +263,11 @@ export default function NotesPage() {
     return result;
   }, [notes, filterFormat, searchQuery]);
 
+  const clearFilters = () => {
+    setFilterFormat('all');
+    setSearchQuery('');
+  };
+
   // =====================
   // DETAIL VIEW
   // =====================
@@ -263,42 +276,40 @@ export default function NotesPage() {
     return (
       <div className="max-w-4xl mx-auto">
         {/* Breadcrumb */}
-        <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-300 mb-4">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs tracking-wide text-gray-400 dark:text-gray-600 mb-6 min-w-0">
           <button
             onClick={handleBackToList}
-            className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+            className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors shrink-0"
           >
             Notes
           </button>
-          <span>/</span>
-          <span className="text-gray-900 dark:text-gray-100 truncate">{selectedNote.title || 'Untitled Note'}</span>
+          <span aria-hidden="true" className="shrink-0">/</span>
+          <span className="text-gray-600 dark:text-gray-400 truncate">{selectedNote.title || 'Untitled Note'}</span>
         </nav>
 
-        {/* Note header */}
-        <div className="bg-white dark:bg-dark-surface rounded-xl border border-gray-200 dark:border-dark-border p-6 mb-4">
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-1 break-words">
+        {/* ===== MASTHEAD ===== */}
+        <div className="mb-8">
+          <div className="flex flex-wrap items-start justify-between gap-6 pb-6">
+            <div className="min-w-0 max-w-2xl">
+              <h1 className="font-serif italic font-medium text-3xl sm:text-4xl leading-[1.08] tracking-tight text-gray-900 dark:text-white mb-3 break-words">
                 {selectedNote.title || 'Untitled Note'}
               </h1>
-              <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-gray-300">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] tracking-[0.1em] uppercase font-sans font-semibold text-gray-500 dark:text-gray-400">
                 <Link
                   to={`/app/topics/${selectedNote.topicId}`}
-                  className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors flex items-center gap-1"
+                  className="hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                  </svg>
                   {selectedNote.topicTitle || 'Unknown Topic'}
                 </Link>
-                <span className="text-gray-300 dark:text-gray-600">|</span>
-                <span>{formatDateTime(selectedNote.createdAt)}</span>
+                <span aria-hidden="true" className="font-normal normal-case text-gray-300 dark:text-gray-700">&middot;</span>
+                <span className="font-normal normal-case tracking-normal">{formatDateTime(selectedNote.createdAt)}</span>
               </div>
             </div>
             <button
               onClick={handleBackToList}
-              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ml-3"
+              className="shrink-0 p-1.5 rounded-sm text-gray-400 hover:text-primary-600 dark:text-gray-600 dark:hover:text-primary-400 transition-colors"
               title="Back to notes list"
+              aria-label="Back to notes list"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -306,33 +317,32 @@ export default function NotesPage() {
             </button>
           </div>
 
-          {/* Format tabs */}
-          <div className="flex flex-wrap gap-2">
-            {(['full_analysis', 'brief_summary', 'decision_framework', 'json'] as NoteFormat[]).map(fmt => (
+          {/* Format tabs — small-caps, amber underline on the active format */}
+          <nav className="flex items-center gap-6 border-b border-rule dark:border-dark-border" aria-label="Note format">
+            {FORMAT_OPTIONS.map(fmt => (
               <button
                 key={fmt}
                 onClick={() => setSelectedFormat(fmt)}
-                className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
+                className={`-mb-px pb-2 text-[11px] uppercase tracking-[0.08em] font-sans font-semibold border-b-2 transition-colors ${
                   selectedFormat === fmt
-                    ? 'bg-primary-100 text-primary-800 dark:bg-primary-900/40 dark:text-primary-300'
-                    : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    ? 'text-primary-600 dark:text-primary-400 border-primary-500 dark:border-primary-400'
+                    : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-ink dark:hover:text-gray-100'
                 }`}
               >
-                <span className="mr-1.5">{FORMAT_ICONS[fmt]}</span>
                 {FORMAT_LABELS[fmt]}
               </button>
             ))}
-          </div>
+          </nav>
         </div>
 
-        {/* Note content */}
-        <div className="bg-white dark:bg-dark-surface rounded-xl border border-gray-200 dark:border-dark-border p-6 mb-4">
+        {/* Note content — the serif reading surface */}
+        <div className="mb-10">
           {isLoadingDetail ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex items-center justify-center py-16">
               <LoadingSpinner message="Loading note..." />
             </div>
           ) : selectedFormat === 'json' ? (
-            <pre className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg overflow-x-auto text-sm font-mono whitespace-pre-wrap text-gray-800 dark:text-gray-200">
+            <pre className="font-mono text-[13px] leading-relaxed text-gray-700 dark:text-gray-300 bg-panel dark:bg-dark-card rounded-sm p-4 overflow-x-auto whitespace-pre-wrap">
               {content}
             </pre>
           ) : (
@@ -342,36 +352,43 @@ export default function NotesPage() {
 
         {/* Insights section */}
         {noteInsights.length > 0 && (
-          <div className="bg-white dark:bg-dark-surface rounded-xl border border-gray-200 dark:border-dark-border p-6 mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
-              Extracted Insights ({noteInsights.length})
-            </h2>
-            <div className="space-y-3">
-              {noteInsights.map(insight => (
-                <div
-                  key={insight.id}
-                  className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
-                >
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-800 dark:text-gray-200">{insight.content}</p>
-                    <div className="flex items-center gap-3 mt-1.5">
-                      <span className="text-xs text-gray-500 dark:text-gray-300">
-                        Confidence: {insight.confidenceScore}%
-                      </span>
-                      <VerifiedBadge status={insight.verificationStatus} />
+          <section aria-label="Extracted insights" className="mb-10">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="uppercase text-[11px] tracking-[0.08em] font-medium font-sans text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                Extracted insights ({noteInsights.length})
+              </span>
+              <span className="flex-1 border-t border-rule dark:border-dark-border" aria-hidden="true" />
+            </div>
+            <div className="divide-y divide-rule dark:divide-dark-border">
+              {noteInsights.map((insight, idx) => {
+                const isVerified = insight.verificationStatus === 'verified';
+                const isRejected = insight.verificationStatus === 'rejected';
+                const variant = isVerified ? 'verified' : isRejected ? 'rejected' : 'pending';
+                return (
+                  <div key={insight.id} className="grid grid-cols-[2rem_1fr] gap-4 py-5 first:pt-0 last:pb-0">
+                    <span className={`text-xs font-semibold pt-1 ${isVerified ? 'text-primary-300 dark:text-primary-700' : 'text-gray-300 dark:text-gray-700'}`}>
+                      {String(idx + 1).padStart(2, '0')}
+                    </span>
+                    <div className="min-w-0">
+                      <p className={`font-serif text-base leading-snug mb-2 break-words ${
+                        isRejected ? 'text-gray-400 dark:text-gray-600 line-through' : 'text-gray-900 dark:text-white'
+                      }`}>
+                        {insight.content}
+                      </p>
+                      <Badge variant={variant} confidence={isVerified ? insight.confidenceScore : undefined} />
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
-          </div>
+          </section>
         )}
 
         {/* Link to session */}
         <div className="flex justify-center pb-4">
           <Link
             to={`/app/sessions/${selectedNote.sessionId}`}
-            className="text-sm text-primary-600 dark:text-primary-400 hover:underline"
+            className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
           >
             View original session &rarr;
           </Link>
@@ -386,33 +403,30 @@ export default function NotesPage() {
   if (isLoading) {
     return (
       <div className="max-w-4xl mx-auto">
-        <div className="mb-6">
-          <div className="h-8 w-48 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-          <div className="h-4 w-72 bg-gray-100 dark:bg-gray-800 rounded animate-pulse mt-2" />
+        <div className="mb-8 pb-6 border-b border-rule dark:border-dark-border">
+          <div className="h-9 w-40 bg-panel dark:bg-dark-card rounded-sm animate-pulse" />
+          <div className="h-4 w-64 bg-panel dark:bg-dark-card rounded-sm animate-pulse mt-3" />
         </div>
-        <div className="space-y-3">
+        <div className="divide-y divide-rule dark:divide-dark-border">
           {[1, 2, 3, 4].map(i => (
-            <div key={i} className="h-24 bg-white dark:bg-dark-surface rounded-lg border border-gray-200 dark:border-dark-border animate-pulse" />
+            <div key={i} className="py-5">
+              <div className="h-5 w-1/3 bg-panel dark:bg-dark-card rounded-sm animate-pulse mb-2.5" />
+              <div className="h-3 w-1/2 bg-panel dark:bg-dark-card rounded-sm animate-pulse" />
+            </div>
           ))}
         </div>
       </div>
     );
   }
 
+  const hasActiveFilters = filterFormat !== 'all' || searchQuery.trim() !== '';
+
   return (
     <div className="max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-          <svg className="w-6 h-6 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          Notes
-        </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-300 mt-1">
-          {notes.length} note{notes.length !== 1 ? 's' : ''} from distilled sessions
-        </p>
-      </div>
+      <PageHeader
+        title="Notes"
+        subtitle={`${notes.length} note${notes.length !== 1 ? 's' : ''} from distilled sessions`}
+      />
 
       <PageTabs
         tabs={[
@@ -421,49 +435,72 @@ export default function NotesPage() {
         ]}
       />
 
-      {/* Search & Filter bar */}
+      {/* Search & Filter toolbar */}
       {notes.length > 0 && (
-        <div className="flex flex-col sm:flex-row gap-3 mb-5">
-          <div className="relative flex-1">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-rule dark:border-dark-border pb-3 mb-6">
+          <div className="relative flex-1 min-w-[220px]">
             <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
-              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-600"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
               type="text"
-              placeholder="Search notes by title or topic..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-900 dark:text-gray-100"
+              placeholder="Search notes by title or topic…"
+              aria-label="Search notes by title or topic"
+              className="w-full bg-transparent border-0 pl-7 pr-8 py-1.5 text-sm text-ink dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:ring-0"
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary-600 dark:text-gray-600 dark:hover:text-primary-400"
+                title="Clear search"
+                aria-label="Clear search"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           </div>
-          <div className="flex gap-1.5 flex-wrap">
-            <button
-              onClick={() => setFilterFormat('all')}
-              className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
-                filterFormat === 'all'
-                  ? 'bg-primary-100 text-primary-800 dark:bg-primary-900/40 dark:text-primary-300'
-                  : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+
+          <span className="hidden sm:block w-px h-5 bg-rule dark:bg-dark-border" aria-hidden="true" />
+
+          <label className="relative inline-flex items-center gap-1.5 cursor-pointer shrink-0">
+            <span className="text-[10px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-400 dark:text-gray-600">
+              Format
+            </span>
+            <select
+              value={filterFormat}
+              onChange={(e) => setFilterFormat(e.target.value)}
+              className={`appearance-none bg-transparent border-0 pl-0 pr-5 py-1 text-sm font-medium cursor-pointer focus:outline-none focus:ring-0 ${
+                filterFormat !== 'all' ? 'text-primary-700 dark:text-primary-400' : 'text-gray-700 dark:text-gray-300'
               }`}
             >
-              All
+              <option value="all">All</option>
+              {FORMAT_OPTIONS.map(fmt => (
+                <option key={fmt} value={fmt}>{FORMAT_LABELS[fmt]}</option>
+              ))}
+            </select>
+            <svg
+              className="pointer-events-none absolute right-0.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-gray-600"
+              fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </label>
+
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="text-[10px] tracking-[0.08em] uppercase font-sans font-semibold text-gray-400 dark:text-gray-600 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+            >
+              Clear
             </button>
-            {(['full_analysis', 'brief_summary', 'decision_framework', 'json'] as NoteFormat[]).map(fmt => (
-              <button
-                key={fmt}
-                onClick={() => setFilterFormat(fmt)}
-                className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
-                  filterFormat === fmt
-                    ? 'bg-primary-100 text-primary-800 dark:bg-primary-900/40 dark:text-primary-300'
-                    : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                }`}
-              >
-                {FORMAT_ICONS[fmt]} {FORMAT_LABELS[fmt]}
-              </button>
-            ))}
-          </div>
+          )}
         </div>
       )}
 
@@ -472,95 +509,76 @@ export default function NotesPage() {
         <ApiErrorAlert
           message={error}
           onDismiss={() => setError(null)}
-          className="mb-4"
+          className="mb-6"
         />
       )}
 
       {/* Empty state */}
       {notes.length === 0 && !error && (
-        <div className="text-center py-16 bg-white dark:bg-dark-surface rounded-lg border border-gray-200 dark:border-dark-border">
-          <svg className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No notes yet</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-300 mb-4 max-w-md mx-auto">
-            Notes are created when you finish and distill a session. Start a session to begin building your knowledge base.
-          </p>
-          <Link
-            to="/app/session/new"
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors"
-          >
-            Start a Session
-          </Link>
-        </div>
+        <EmptyState
+          kicker="No notes yet"
+          message="Notes are created when you finish and distill a session. Start a session to begin building your knowledge base."
+          action={
+            <Link to="/app/session/new" className="btn-primary inline-block">
+              Start a session
+            </Link>
+          }
+        />
       )}
 
       {/* No results for filter */}
       {notes.length > 0 && filteredNotes.length === 0 && (
-        <div className="text-center py-12 bg-white dark:bg-dark-surface rounded-xl border border-gray-200 dark:border-dark-border">
-          <div className="text-3xl mb-2">&#128269;</div>
-          <p className="text-sm text-gray-500 dark:text-gray-300">
-            No notes match your search or filter.
-          </p>
-          <button
-            onClick={() => { setFilterFormat('all'); setSearchQuery(''); }}
-            className="mt-2 text-sm text-primary-600 dark:text-primary-400 hover:underline"
-          >
-            Clear filters
-          </button>
-        </div>
+        <EmptyState
+          kicker="No matching notes"
+          message="No notes match your search or filter."
+          action={
+            <button onClick={clearFilters} className="btn-secondary">
+              Clear filters
+            </button>
+          }
+        />
       )}
 
-      {/* Notes list */}
+      {/* Notes list — hairline rows */}
       {filteredNotes.length > 0 && (
-        <div className="space-y-3">
-          {/* Results count when filtered */}
-          {(filterFormat !== 'all' || searchQuery.trim()) && (
-            <p className="text-xs text-gray-500 dark:text-gray-300">
+        <div>
+          {hasActiveFilters && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
               Showing {filteredNotes.length} of {notes.length} notes
             </p>
           )}
 
-          {filteredNotes.map((note) => (
-            <button
-              key={note.id}
-              onClick={() => handleNoteClick(note)}
-              className="w-full text-left p-4 bg-white dark:bg-dark-surface rounded-lg border border-gray-200 dark:border-dark-border hover:border-primary-300 dark:hover:border-primary-700 hover:shadow-sm transition-all group"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-gray-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors truncate">
+          <div className="divide-y divide-rule dark:divide-dark-border">
+            {filteredNotes.map((note) => (
+              <button
+                key={note.id}
+                onClick={() => handleNoteClick(note)}
+                className="group w-full text-left flex items-start justify-between gap-6 py-5 -mx-2 px-2 rounded-sm hover:bg-panel/60 dark:hover:bg-dark-surface/60 transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-serif text-lg text-gray-900 dark:text-white truncate mb-1.5 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
                     {note.title || 'Untitled Note'}
                   </h3>
-                  <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                    {/* Format badge */}
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${FORMAT_COLORS[note.selectedFormat] || FORMAT_COLORS.full_analysis}`}>
-                      {FORMAT_ICONS[note.selectedFormat] || ''}
-                      {FORMAT_LABELS[note.selectedFormat] || 'Full Analysis'}
-                    </span>
-                    {/* Topic */}
-                    <span className="text-xs text-gray-500 dark:text-gray-300 flex items-center gap-1 truncate max-w-[200px]">
-                      <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                      </svg>
-                      {note.topicTitle}
-                    </span>
-                    {/* Date */}
-                    <span className="text-xs text-gray-500 dark:text-gray-300">
-                      {formatRelativeTime(note.createdAt)}
-                    </span>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] tracking-[0.08em] uppercase font-sans font-semibold text-gray-500 dark:text-gray-400 mb-2">
+                    <span>{FORMAT_LABELS[note.selectedFormat] || 'Full Analysis'}</span>
+                    <span aria-hidden="true" className="text-gray-300 dark:text-gray-700 normal-case font-normal">&middot;</span>
+                    <span className="normal-case tracking-normal font-normal truncate max-w-[220px]">{note.topicTitle}</span>
+                    <span aria-hidden="true" className="text-gray-300 dark:text-gray-700 normal-case font-normal">&middot;</span>
+                    <span className="normal-case tracking-normal font-normal">{formatRelativeTime(note.createdAt)}</span>
                   </div>
-                  {/* Content preview */}
-                  <p className="text-sm text-gray-500 dark:text-gray-300 mt-2 line-clamp-2">
+                  <p className="font-serif text-sm text-gray-600 dark:text-gray-300 line-clamp-2 max-w-2xl">
                     {getContentPreview(note)}
                   </p>
                 </div>
-                <svg className="w-4 h-4 text-gray-500 dark:text-gray-300 group-hover:text-primary-500 transition-colors shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </button>
-          ))}
+                <span
+                  aria-hidden="true"
+                  className="shrink-0 pt-1 text-gray-400 dark:text-gray-600 group-hover:text-primary-600 dark:group-hover:text-primary-400 group-hover:translate-x-0.5 transition-transform"
+                >
+                  &rarr;
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>

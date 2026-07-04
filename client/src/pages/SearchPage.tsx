@@ -6,6 +6,7 @@ import ApiErrorAlert from '@/components/ApiErrorAlert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { formatShortDate } from '@/utils/dateFormat';
 import { searchAll } from '@/services/search';
+import { PageHeader, EmptyState, Badge } from '@/components/ui';
 
 interface SearchResult {
   id: string;
@@ -41,18 +42,13 @@ const VERIFICATION_FILTERS: { label: string; value: VerificationFilter }[] = [
   { label: 'Re-verify', value: 're_verification_pending' },
 ];
 
-const TYPE_ICONS: Record<string, string> = {
-  topic: '📋',
-  insight: '💡',
-  session: '💬',
-  note: '📝',
-};
-
-const TYPE_COLORS: Record<string, string> = {
-  topic: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  insight: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-  session: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  note: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+// Type shown as a small-caps text label rather than an emoji + colored pill
+// (DESIGN.md "Status semantics" / "single amber accent" discipline).
+const TYPE_LABELS: Record<string, string> = {
+  topic: 'Topic',
+  insight: 'Insight',
+  session: 'Session',
+  note: 'Note',
 };
 
 const RESULTS_PER_PAGE = 20;
@@ -297,7 +293,8 @@ export default function SearchPage() {
     }
   }
 
-  // Highlight matching text in a snippet
+  // Highlight matching text in a snippet — amber wash rather than a
+  // default-yellow <mark>, to keep the single-accent discipline.
   function highlightMatch(text: string, searchQuery: string): React.ReactNode {
     if (!searchQuery.trim()) return text;
 
@@ -309,7 +306,7 @@ export default function SearchPage() {
         regex.test(part) ? (
           <mark
             key={i}
-            className="bg-yellow-200 dark:bg-yellow-800 text-gray-900 dark:text-yellow-100 rounded px-0.5"
+            className="bg-primary-100 dark:bg-primary-900/40 text-ink dark:text-primary-100 rounded-sm px-0.5"
           >
             {part}
           </mark>
@@ -327,6 +324,16 @@ export default function SearchPage() {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
+  // Map a result's verificationStatus to the shared typographic Badge
+  // (DESIGN.md "Status semantics" — no colored pills).
+  function verificationBadge(status: string | undefined) {
+    if (!status) return null;
+    if (status === 'verified') return { variant: 'verified' as const, label: undefined };
+    if (status === 'rejected') return { variant: 'rejected' as const, label: undefined };
+    if (status === 're_verification_pending') return { variant: 'pending' as const, label: 'Re-verify' };
+    return { variant: 'pending' as const, label: 'Unverified' };
+  }
+
   // Date formatting uses shared utility from @/utils/dateFormat
 
   // Check if any advanced filters are active
@@ -334,25 +341,28 @@ export default function SearchPage() {
   const hasAnyActiveFilters = activeFilter !== 'all' || hasActiveAdvancedFilters;
 
   return (
-    <div className="max-w-4xl mx-auto px-1 sm:px-0">
-      <div className="mb-4 sm:mb-6">
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Search</h1>
-        <p className="mt-1 text-sm sm:text-base text-gray-600 dark:text-gray-300">
-          Search across topics, insights, session transcripts, and notes
-        </p>
-      </div>
+    <div className="max-w-4xl mx-auto">
+      <PageHeader
+        title="Search"
+        subtitle="Search across topics, insights, session transcripts, and notes."
+      />
 
-      {/* Search input - full-width with min 44px touch target */}
-      <div className="relative mb-4 sm:mb-6">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+      {/* Search input — large quiet field, not a boxed input */}
+      <div className="relative mb-6">
+        <svg
+          className="absolute left-0 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-600"
+          fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
         <label htmlFor="global-search" className="sr-only">Search topics, insights, sessions, notes</label>
         <input
           id="global-search"
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="input-field pl-10 pr-10 w-full text-base min-h-[44px]"
-          placeholder="Search everything..."
+          className="w-full bg-transparent border-0 border-b border-rule dark:border-dark-border focus:border-primary-500 dark:focus:border-primary-400 pl-8 pr-8 py-3 font-serif text-xl md:text-2xl text-ink dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-600 placeholder:not-italic focus:outline-none focus:ring-0 transition-colors"
+          placeholder="Search everything…"
           autoFocus
         />
         {query && (
@@ -366,60 +376,67 @@ export default function SearchPage() {
               setCurrentPage(1);
               setSearchParams({}, { replace: true });
             }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 min-w-[44px] min-h-[44px] flex items-center justify-center"
+            className="absolute right-0 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary-600 dark:text-gray-600 dark:hover:text-primary-400 transition-colors"
             title="Clear search"
+            aria-label="Clear search"
           >
-            ✕
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         )}
       </div>
 
-      {/* Type Filters - horizontally scrollable on mobile */}
-      <div className="mb-4">
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
-          <span className="text-sm text-gray-500 dark:text-gray-300 py-1 flex-shrink-0">Type:</span>
-          {FILTERS.map((f) => (
-            <button
-              key={f.value}
-              onClick={() => handleFilterChange(f.value)}
-              className={`px-3 py-1.5 rounded-full text-sm transition-colors flex-shrink-0 min-h-[36px] ${
-                activeFilter === f.value
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-
-          {/* Toggle advanced filters - inline on desktop, visible on mobile */}
+      {/* Type filter chips — small-caps, amber underline when active */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-rule dark:border-dark-border pb-3 mb-4">
+        {FILTERS.map((f) => (
           <button
-            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-            className={`px-3 py-1.5 rounded-full text-sm transition-colors flex-shrink-0 min-h-[36px] sm:ml-auto ${
-              hasActiveAdvancedFilters
-                ? 'bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            key={f.value}
+            onClick={() => handleFilterChange(f.value)}
+            className={`-mb-[13px] pb-3 text-[11px] uppercase tracking-[0.08em] font-sans font-semibold border-b-2 transition-colors ${
+              activeFilter === f.value
+                ? 'text-primary-600 dark:text-primary-400 border-primary-500 dark:border-primary-400'
+                : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-ink dark:hover:text-gray-100'
             }`}
           >
-            {showAdvancedFilters ? '▲ Filters' : '▼ More Filters'}
-            {hasActiveAdvancedFilters && ' (active)'}
+            {f.label}
           </button>
-        </div>
+        ))}
+
+        <span className="flex-1" />
+
+        <button
+          onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+          className={`flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] font-sans font-semibold transition-colors ${
+            hasActiveAdvancedFilters
+              ? 'text-primary-600 dark:text-primary-400'
+              : 'text-gray-500 dark:text-gray-400 hover:text-ink dark:hover:text-gray-100'
+          }`}
+        >
+          More filters
+          {hasActiveAdvancedFilters && ' · active'}
+          <svg
+            className={`w-3 h-3 transition-transform ${showAdvancedFilters ? 'rotate-180' : ''}`}
+            fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
       </div>
 
       {/* Advanced Filters Panel (Feature #87) */}
       {showAdvancedFilters && (
-        <div className="card mb-4 sm:mb-6 p-3 sm:p-4 space-y-3 sm:space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="mb-6 pb-6 border-b border-rule dark:border-dark-border space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Verification Status filter */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-300 mb-1">
-                Verification Status
+              <label className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+                Verification status
               </label>
               <select
                 value={verificationStatus}
                 onChange={(e) => setVerificationStatus(e.target.value as VerificationFilter)}
-                className="w-full px-3 py-2 sm:py-1.5 rounded-lg text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent min-h-[40px]"
+                className="input-field text-sm"
               >
                 {VERIFICATION_FILTERS.map((vf) => (
                   <option key={vf.value} value={vf.value}>{vf.label}</option>
@@ -429,34 +446,34 @@ export default function SearchPage() {
 
             {/* Date From */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-300 mb-1">
-                Date From
+              <label className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+                Date from
               </label>
               <input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="w-full px-3 py-2 sm:py-1.5 rounded-lg text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent min-h-[40px]"
+                className="input-field text-sm"
               />
             </div>
 
             {/* Date To */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-300 mb-1">
-                Date To
+              <label className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+                Date to
               </label>
               <input
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="w-full px-3 py-2 sm:py-1.5 rounded-lg text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent min-h-[40px]"
+                className="input-field text-sm"
               />
             </div>
 
             {/* Confidence Score */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-300 mb-1">
-                Min Confidence: {minConfidence}%
+              <label className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+                Min confidence: {minConfidence}%
               </label>
               <input
                 type="range"
@@ -465,25 +482,25 @@ export default function SearchPage() {
                 step="5"
                 value={minConfidence}
                 onChange={(e) => setMinConfidence(parseInt(e.target.value, 10))}
-                className="w-full h-2 bg-gray-200 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer accent-primary-600 mt-2"
+                className="w-full h-1 bg-rule dark:bg-dark-border rounded-full appearance-none cursor-pointer accent-primary-500 mt-3"
               />
             </div>
           </div>
 
-          {/* Filter action buttons - stack on mobile */}
-          <div className="flex flex-col sm:flex-row gap-2 pt-2">
+          {/* Filter action buttons */}
+          <div className="flex flex-col sm:flex-row gap-3">
             <button
               onClick={handleAdvancedFilterApply}
-              className="px-4 py-2 sm:py-1.5 rounded-lg text-sm font-medium bg-primary-600 text-white hover:bg-primary-700 transition-colors min-h-[40px]"
+              className="btn-primary text-sm"
             >
-              Apply Filters
+              Apply filters
             </button>
             {hasActiveAdvancedFilters && (
               <button
                 onClick={handleClearFilters}
-                className="px-4 py-2 sm:py-1.5 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors min-h-[40px]"
+                className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors self-center"
               >
-                Clear All Filters
+                Clear all filters
               </button>
             )}
           </div>
@@ -492,40 +509,18 @@ export default function SearchPage() {
 
       {/* Active filters summary */}
       {hasAnyActiveFilters && hasSearched && (
-        <div className="flex flex-wrap gap-1.5 mb-3 sm:mb-4">
-          <span className="text-xs text-gray-500 dark:text-gray-300 py-0.5">Active filters:</span>
-          {activeFilter !== 'all' && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200">
-              Type: {activeFilter}
-            </span>
-          )}
-          {verificationStatus && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-              Status: {verificationStatus.replace('_', ' ')}
-            </span>
-          )}
-          {dateFrom && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-              From: {dateFrom}
-            </span>
-          )}
-          {dateTo && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-              To: {dateTo}
-            </span>
-          )}
-          {minConfidence > 0 && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
-              Confidence: {'>='}{minConfidence}%
-            </span>
-          )}
-          <button
-            onClick={handleClearFilters}
-            className="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 underline ml-1"
-          >
+        <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
+          Filtered by
+          {activeFilter !== 'all' && <> &middot; type: {activeFilter}</>}
+          {verificationStatus && <> &middot; status: {verificationStatus.replace(/_/g, ' ')}</>}
+          {dateFrom && <> &middot; from {dateFrom}</>}
+          {dateTo && <> &middot; to {dateTo}</>}
+          {minConfidence > 0 && <> &middot; confidence &ge; {minConfidence}%</>}
+          {' · '}
+          <button onClick={handleClearFilters} className="text-primary-600 dark:text-primary-400 hover:text-ink dark:hover:text-gray-100 transition-colors">
             Clear all
           </button>
-        </div>
+        </p>
       )}
 
       {/* Loading state */}
@@ -544,13 +539,13 @@ export default function SearchPage() {
 
       {/* Results count */}
       {hasSearched && !isLoading && !error && (
-        <div className="mb-3 sm:mb-4 text-xs sm:text-sm text-gray-500 dark:text-gray-300">
+        <div className="mb-4 text-sm text-gray-500 dark:text-gray-400">
           {total > 0 ? (
             <>
-              Found <span className="font-medium text-gray-900 dark:text-white">{total}</span>{' '}
-              result{total !== 1 ? 's' : ''} for &quot;{query}&quot;
+              Found <span className="font-semibold text-ink dark:text-white">{total}</span>{' '}
+              result{total !== 1 ? 's' : ''} for &ldquo;{query}&rdquo;
               {activeFilter !== 'all' && (
-                <> in <span className="font-medium">{activeFilter}</span></>
+                <> in <span className="font-semibold">{activeFilter}</span></>
               )}
               {totalPages > 1 && (
                 <> &middot; Page {currentPage} of {totalPages}</>
@@ -558,190 +553,141 @@ export default function SearchPage() {
             </>
           ) : (
             <span>
-              No results found for &quot;{query}&quot;
+              No results found for &ldquo;{query}&rdquo;
               {activeFilter !== 'all' && (
-                <> in <span className="font-medium">{activeFilter}</span></>
+                <> in <span className="font-semibold">{activeFilter}</span></>
               )}
             </span>
           )}
         </div>
       )}
 
-      {/* Results list */}
+      {/* Results list — hairline rows */}
       {!isLoading && !error && results.length > 0 && (
-        <div className="space-y-2 sm:space-y-3">
-          {results.map((result) => (
-            <div
-              key={`${result.type}-${result.id}`}
-              className="card hover:shadow-md transition-shadow cursor-pointer hover:border-primary-300 dark:hover:border-primary-700 p-3 sm:p-6 group"
-              onClick={() => handleResultClick(result)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleResultClick(result);
-                }
-              }}
-            >
-              <div className="flex items-start gap-2 sm:gap-3">
-                {/* Type icon - slightly smaller on mobile */}
-                <span className="text-lg sm:text-xl mt-0.5 flex-shrink-0">
-                  {TYPE_ICONS[result.type]}
-                </span>
-
-                <div className="flex-1 min-w-0">
-                  {/* Header row - badges wrap naturally */}
-                  <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
-                    <span
-                      className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-full text-xs font-medium ${
-                        TYPE_COLORS[result.type]
-                      }`}
-                    >
-                      {result.type.charAt(0).toUpperCase() + result.type.slice(1)}
-                    </span>
-                    {result.verificationStatus && (
-                      <span
-                        className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-full text-xs font-medium ${
-                          result.verificationStatus === 'verified'
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                            : result.verificationStatus === 'rejected'
-                            ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                            : result.verificationStatus === 're_verification_pending'
-                            ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
-                            : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
-                        }`}
-                      >
-                        {result.verificationStatus === 're_verification_pending'
-                          ? 're-verify'
-                          : result.verificationStatus}
-                      </span>
-                    )}
-                    {result.confidenceScore !== undefined && (
-                      <span className="text-xs text-gray-500 dark:text-gray-300 hidden sm:inline">
-                        {result.confidenceScore}% confidence
-                      </span>
+        <div className="divide-y divide-rule dark:divide-dark-border">
+          {results.map((result) => {
+            const badge = verificationBadge(result.verificationStatus);
+            return (
+              <div
+                key={`${result.type}-${result.id}`}
+                className="group flex items-start justify-between gap-6 py-5 -mx-2 px-2 rounded-sm hover:bg-panel/60 dark:hover:bg-dark-surface/60 transition-colors cursor-pointer"
+                onClick={() => handleResultClick(result)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleResultClick(result);
+                  }
+                }}
+              >
+                <div className="min-w-0 flex-1">
+                  {/* Meta row: type label + status badge + date */}
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+                    <span>{TYPE_LABELS[result.type] || result.type}</span>
+                    {badge && (
+                      <>
+                        <span aria-hidden="true" className="normal-case font-normal text-gray-300 dark:text-gray-700">&middot;</span>
+                        <Badge
+                          variant={badge.variant}
+                          label={badge.label}
+                          confidence={badge.variant === 'verified' ? result.confidenceScore : undefined}
+                        />
+                      </>
                     )}
                     {result.createdAt && (
-                      <span className="text-xs text-gray-500 dark:text-gray-300 ml-auto flex-shrink-0">
+                      <span className="ml-auto normal-case font-normal tracking-normal text-gray-400 dark:text-gray-600 shrink-0">
                         {formatShortDate(result.createdAt)}
                       </span>
                     )}
                   </div>
 
-                  {/* Confidence on own line for mobile (hidden on desktop where it's inline above) */}
-                  {result.confidenceScore !== undefined && (
-                    <span className="text-xs text-gray-500 dark:text-gray-300 sm:hidden block mb-1">
-                      {result.confidenceScore}% confidence
-                    </span>
-                  )}
-
-                  {/* Title with highlighting - allow wrapping on mobile */}
-                  <h3 className="font-medium text-gray-900 dark:text-white text-sm break-words line-clamp-2 sm:truncate">
+                  {/* Title with highlighting */}
+                  <h3 className="font-serif text-lg text-gray-900 dark:text-white mb-1.5 truncate group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
                     {highlightMatch(result.title, query)}
                   </h3>
 
-                  {/* Snippet with highlighting - readable on mobile */}
-                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 mt-1 line-clamp-3 sm:line-clamp-2 break-words">
+                  {/* Snippet with highlighting */}
+                  <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 max-w-2xl">
                     {highlightMatch(result.snippet, query)}
                   </p>
 
-                  {/* Topic context and navigation hint */}
-                  <div className="flex items-center gap-2 mt-1.5 sm:mt-1">
-                    {result.topicTitle && result.type !== 'topic' && (
-                      <p className="text-xs text-gray-500 dark:text-gray-300 truncate">
-                        📋 {result.topicTitle}
-                      </p>
-                    )}
-                    <span className="text-xs text-primary-500 dark:text-primary-400 ml-auto opacity-0 group-hover:opacity-100 hidden sm:inline">
-                      Click to view →
-                    </span>
-                  </div>
+                  {/* Topic context */}
+                  {result.topicTitle && result.type !== 'topic' && (
+                    <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-600 truncate">
+                      {result.topicTitle}
+                    </p>
+                  )}
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
       {/* Empty state - before searching (Feature #88) */}
       {!isLoading && !error && !hasSearched && (
-        <div className="card text-center py-8 sm:py-12 px-4">
-          <span className="text-3xl sm:text-4xl block mb-3">🔍</span>
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            Start searching
-          </h2>
-          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 mb-4">
-            Type in the search bar to find topics, insights, session transcripts, and notes.
-          </p>
-          <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-300 space-y-1">
-            <p>💡 <span className="font-medium">Tip:</span> Try searching for a topic name, a keyword from an interview, or an insight.</p>
-            <p>🔧 Use the <span className="font-medium">More Filters</span> button for advanced filtering by verification status, date, or confidence.</p>
-          </div>
-        </div>
+        <EmptyState
+          kicker="Start searching"
+          message="Type in the search bar to find topics, insights, session transcripts, and notes. Use More Filters for advanced filtering by verification status, date, or confidence."
+        />
       )}
 
       {/* No results state (Feature #88) */}
       {hasSearched && !isLoading && !error && results.length === 0 && (
-        <div className="card text-center py-8 sm:py-12 px-4">
-          <span className="text-3xl sm:text-4xl block mb-3">🔍</span>
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            No results found
-          </h2>
-          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 mb-4">
-            No results found for &quot;{query}&quot;
-            {activeFilter !== 'all' && (
-              <> in <span className="font-medium">{activeFilter}</span></>
-            )}
-            {hasActiveAdvancedFilters && <> with the active filters</>}
-            .
-          </p>
-          <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-300 space-y-1">
-            <p>Try the following:</p>
-            <ul className="list-disc list-inside text-left max-w-sm mx-auto space-y-1">
-              <li>Check your spelling</li>
-              <li>Try different or fewer keywords</li>
-              {activeFilter !== 'all' && <li>Change the type filter to &quot;All&quot;</li>}
-              {hasActiveAdvancedFilters && (
-                <li>
-                  <button onClick={handleClearFilters} className="text-primary-600 dark:text-primary-400 underline">
-                    Clear all filters
-                  </button>
-                </li>
-              )}
-              <li>Search for a broader term</li>
-            </ul>
-          </div>
-        </div>
+        <EmptyState
+          kicker="No results found"
+          message={
+            <>
+              No results found for &ldquo;{query}&rdquo;
+              {activeFilter !== 'all' && <> in {activeFilter}</>}
+              {hasActiveAdvancedFilters && <> with the active filters</>}. Try checking your spelling, using fewer keywords, or a broader term.
+            </>
+          }
+          action={
+            hasActiveAdvancedFilters ? (
+              <button onClick={handleClearFilters} className="btn-secondary">
+                Clear all filters
+              </button>
+            ) : undefined
+          }
+        />
       )}
 
-      {/* Pagination - touch-friendly on mobile */}
+      {/* Pagination */}
       {totalPages > 1 && !isLoading && (
-        <div className="flex items-center justify-center gap-1 sm:gap-2 mt-4 sm:mt-6 flex-wrap">
+        <div className="flex items-center justify-center gap-1 mt-8 pt-4 border-t border-rule dark:border-dark-border flex-wrap">
           <button
             onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage <= 1}
-            className="px-2 sm:px-3 py-2 sm:py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed min-h-[40px] min-w-[40px] flex items-center justify-center"
+            className={`px-2 py-1.5 text-sm font-medium transition-colors ${
+              currentPage <= 1
+                ? 'text-gray-300 dark:text-gray-700 cursor-not-allowed'
+                : 'text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400'
+            }`}
+            aria-label="Previous page"
           >
-            <span className="hidden sm:inline">← Previous</span>
-            <span className="sm:hidden">←</span>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
           </button>
 
-          {/* Page numbers - fewer visible on mobile */}
           {getPageNumbers(currentPage, totalPages).map((pageNum, idx) =>
             pageNum === -1 ? (
-              <span key={`ellipsis-${idx}`} className="px-1 sm:px-2 text-gray-400 text-sm">
-                ...
+              <span key={`ellipsis-${idx}`} className="px-2 py-1 text-gray-400 dark:text-gray-600 text-sm">
+                &hellip;
               </span>
             ) : (
               <button
                 key={pageNum}
                 onClick={() => handlePageChange(pageNum)}
-                className={`px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors min-h-[40px] min-w-[36px] sm:min-w-[40px] flex items-center justify-center ${
+                className={`min-w-[32px] px-2 py-1.5 text-sm font-medium transition-colors ${
                   pageNum === currentPage
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    ? 'text-primary-600 dark:text-primary-400 font-bold'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400'
                 }`}
+                aria-label={`Page ${pageNum}`}
+                aria-current={pageNum === currentPage ? 'page' : undefined}
               >
                 {pageNum}
               </button>
@@ -751,10 +697,16 @@ export default function SearchPage() {
           <button
             onClick={() => handlePageChange(currentPage + 1)}
             disabled={currentPage >= totalPages}
-            className="px-2 sm:px-3 py-2 sm:py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed min-h-[40px] min-w-[40px] flex items-center justify-center"
+            className={`px-2 py-1.5 text-sm font-medium transition-colors ${
+              currentPage >= totalPages
+                ? 'text-gray-300 dark:text-gray-700 cursor-not-allowed'
+                : 'text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400'
+            }`}
+            aria-label="Next page"
           >
-            <span className="hidden sm:inline">Next →</span>
-            <span className="sm:hidden">→</span>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
           </button>
         </div>
       )}
