@@ -214,7 +214,6 @@ export default function DashboardPage() {
     { label: 'Start an interview', to: '/app/session/new' },
     { label: 'Add a topic', to: '/app/topics/new' },
     { label: 'Explore the graph', to: '/app/graph' },
-    { label: 'Try the sandbox', to: '/app/sandbox' },
   ];
 
   const hasCategorizedTopics = !!stats?.categoryCompleteness?.some((c) => c.totalTopics > 0);

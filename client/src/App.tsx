@@ -12,7 +12,6 @@ import NewSessionPage from '@/pages/NewSessionPage';
 import KnowledgeGraphPage from '@/pages/KnowledgeGraphPage';
 import ProfilePage from '@/pages/ProfilePage';
 import VerificationPage from '@/pages/VerificationPage';
-import SandboxPage from '@/pages/SandboxPage';
 import BookmarksPage from '@/pages/BookmarksPage';
 import SearchPage from '@/pages/SearchPage';
 import ExportPage from '@/pages/ExportPage';
@@ -86,7 +85,6 @@ function App() {
             <Route path="review" element={<VerificationPage />} />
             <Route path="chat" element={<ChatPage />} />
             <Route path="verify" element={<Navigate to="/app/review" replace />} />
-            <Route path="sandbox" element={<SandboxPage />} />
             <Route path="bookmarks" element={<Navigate to="/app/notes/bookmarks" replace />} />
             <Route path="search" element={<SearchPage />} />
             <Route path="import" element={<ImportPage />} />

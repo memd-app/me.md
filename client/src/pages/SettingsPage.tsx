@@ -279,7 +279,7 @@ function PrivacyTab() {
       <Aside>
         <span className="font-semibold text-gray-700 dark:text-gray-300">How it works: </span>
         Items marked &ldquo;Never export&rdquo; are automatically excluded from profile exports (Markdown and
-        JSON), clipboard copy, MCP tool access, and the context testing sandbox. Only verified insights with
+        JSON), clipboard copy, and MCP tool access. Only verified insights with
         the &ldquo;Exportable&rdquo; tier are shared.
       </Aside>
     </div>
