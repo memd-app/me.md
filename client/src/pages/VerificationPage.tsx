@@ -78,7 +78,6 @@ export default function VerificationPage() {
   const { addToast } = useToast();
   const [pendingInsights, setPendingInsights] = useState<Insight[]>([]);
   const [verifiedInsights, setVerifiedInsights] = useState<Insight[]>([]);
-  const [activeView, setActiveView] = useState<'verification' | 'privacy'>('verification');
   const [stats, setStats] = useState<Stats>({ pending: 0, verified: 0, rejected: 0, total: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +87,6 @@ export default function VerificationPage() {
   const [editSaving, setEditSaving] = useState(false);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [historyState, setHistoryState] = useState<HistoryState | null>(null);
-  const [privacyUpdating, setPrivacyUpdating] = useState<string | null>(null);
   const [agreementUpdating, setAgreementUpdating] = useState<string | null>(null);
 
   // Batch review mode state
@@ -255,34 +253,6 @@ export default function VerificationPage() {
       console.error('Failed to fetch history:', err);
       setHistoryState({ insightId, entries: [], loading: false });
       setError('Failed to load verification history');
-    }
-  };
-
-  const handleTogglePrivacyTier = async (insightId: string, currentTier: string | null) => {
-    if (!user) return;
-    const newTier = currentTier === 'never_export' ? 'exportable' : 'never_export';
-    setPrivacyUpdating(insightId);
-    try {
-      const data = editInsight(db, insightId, { privacyTier: newTier });
-      const updatedTier = data.insight.privacyTier;
-
-      // Update in pending insights
-      setPendingInsights(prev =>
-        prev.map(i =>
-          i.id === insightId ? { ...i, privacyTier: updatedTier, updatedAt: data.insight.updatedAt } : i
-        )
-      );
-      // Update in verified insights
-      setVerifiedInsights(prev =>
-        prev.map(i =>
-          i.id === insightId ? { ...i, privacyTier: updatedTier, updatedAt: data.insight.updatedAt } : i
-        )
-      );
-    } catch (err) {
-      console.error('Failed to update privacy tier:', err);
-      setError(err instanceof Error ? err.message : 'Failed to update privacy tier');
-    } finally {
-      setPrivacyUpdating(null);
     }
   };
 
@@ -540,170 +510,12 @@ export default function VerificationPage() {
           <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
             {verifiedInsights.filter(i => i.privacyTier === 'never_export').length}
           </p>
-          <p className="text-sm text-gray-500 dark:text-gray-300">Never Export</p>
+          <p className="text-sm text-gray-500 dark:text-gray-300">Never export &middot; managed in Settings</p>
         </div>
       </div>
-
-      {/* View tabs */}
-      <div className="flex gap-2 mb-6 border-b border-gray-200 dark:border-gray-700" role="tablist" aria-label="Verification views">
-        <button
-          onClick={() => setActiveView('verification')}
-          role="tab"
-          aria-selected={activeView === 'verification'}
-          aria-controls="verification-panel"
-          id="verification-tab"
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeView === 'verification'
-              ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-              : 'border-transparent text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
-        >
-          Verification Queue
-          {stats.pending > 0 && (
-            <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 rounded-full">
-              {stats.pending}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveView('privacy')}
-          role="tab"
-          aria-selected={activeView === 'privacy'}
-          aria-controls="privacy-panel"
-          id="privacy-tab"
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeView === 'privacy'
-              ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-              : 'border-transparent text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
-        >
-          Privacy Settings
-          {verifiedInsights.filter(i => i.privacyTier === 'never_export').length > 0 && (
-            <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-xs font-bold bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300 rounded-full">
-              {verifiedInsights.filter(i => i.privacyTier === 'never_export').length}
-            </span>
-          )}
-        </button>
-      </div>
-
-      {/* Privacy Management View */}
-      {activeView === 'privacy' && (
-        <div>
-          <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-            <p className="text-sm text-blue-800 dark:text-blue-200">
-              <strong>Privacy Tiers:</strong> Control which insights are included in your profile exports.
-              Insights marked as <span className="font-semibold text-orange-600 dark:text-orange-400">&quot;Never Export&quot;</span> will
-              be excluded from all Markdown and JSON exports. Toggle the privacy setting on each insight below.
-            </p>
-          </div>
-
-          {verifiedInsights.length === 0 ? (
-            <div className="card text-center py-12">
-              <span className="text-4xl block mb-3">&#x1F512;</span>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                No verified insights yet
-              </h2>
-              <p className="text-gray-600 dark:text-gray-300">
-                Verify insights in the Verification Queue to manage their privacy settings here.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-sm text-gray-500 dark:text-gray-300">
-                {verifiedInsights.length} verified insight{verifiedInsights.length !== 1 ? 's' : ''} &mdash;{' '}
-                <span className="text-green-600 dark:text-green-400 font-medium">
-                  {verifiedInsights.filter(i => i.privacyTier !== 'never_export').length} exportable
-                </span>
-                {', '}
-                <span className="text-orange-600 dark:text-orange-400 font-medium">
-                  {verifiedInsights.filter(i => i.privacyTier === 'never_export').length} never export
-                </span>
-              </p>
-              {verifiedInsights.map(insight => (
-                <div
-                  key={insight.id}
-                  className={`card border transition-colors ${
-                    insight.privacyTier === 'never_export'
-                      ? 'border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-900/10'
-                      : 'border-gray-200 dark:border-gray-700'
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    {/* Privacy tier toggle */}
-                    <div className="flex-shrink-0 pt-0.5">
-                      <button
-                        onClick={() => handleTogglePrivacyTier(insight.id, insight.privacyTier)}
-                        disabled={privacyUpdating === insight.id}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                          insight.privacyTier === 'never_export'
-                            ? 'bg-orange-500'
-                            : 'bg-green-500'
-                        } ${privacyUpdating === insight.id ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
-                        title={insight.privacyTier === 'never_export' ? 'Click to make exportable' : 'Click to mark as never export'}
-                      >
-                        <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            insight.privacyTier === 'never_export' ? 'translate-x-6' : 'translate-x-1'
-                          }`}
-                        />
-                      </button>
-                    </div>
-
-                    {/* Insight content */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-gray-900 dark:text-white text-sm leading-relaxed break-words">{insight.content}</p>
-                      <div className="flex flex-wrap items-center gap-2 mt-2">
-                        {/* Privacy tier badge */}
-                        {insight.privacyTier === 'never_export' ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300">
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                            </svg>
-                            Never Export
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
-                            </svg>
-                            Exportable
-                          </span>
-                        )}
-
-                        {/* Topic */}
-                        {insight.topicTitle && (
-                          <span className="text-xs text-blue-600 dark:text-blue-400 truncate max-w-[200px] inline-block align-bottom">{insight.topicTitle}</span>
-                        )}
-
-                        {/* Confidence */}
-                        <span className={`text-xs ${getConfidenceColor(insight.confidenceScore)}`}>
-                          {insight.confidenceScore}% confidence
-                        </span>
-
-                        {/* Extraction method indicator — only shown for fallback */}
-                        {insight.extractionMethod === 'fallback' && (
-                          <span
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-                            title="Rule-based extraction (AI was unavailable)"
-                          >
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                            Rule-based
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Batch Review Mode */}
-      {activeView === 'verification' && batchMode && (
+      {batchMode && (
         batchComplete ? (
           <div className="card text-center py-12">
             <span className="text-4xl block mb-3">&#x1F389;</span>
@@ -985,7 +797,7 @@ export default function VerificationPage() {
       )}
 
       {/* Pending insights list (Verification Queue view) - hidden in batch mode */}
-      {activeView === 'verification' && !batchMode && (
+      {!batchMode && (
         pendingInsights.length === 0 ? (
         <div className="card text-center py-12">
           <span className="text-4xl block mb-3">&#x2705;</span>
@@ -1172,26 +984,17 @@ export default function VerificationPage() {
 
                 {/* Note: Re-verification badge/info shown in card banner above for re-check items */}
 
-                {/* Privacy tier indicator and toggle */}
-                <button
-                  onClick={() => handleTogglePrivacyTier(insight.id, insight.privacyTier)}
-                  disabled={privacyUpdating === insight.id}
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-colors cursor-pointer ${
+                {/* Privacy tier indicator — managed in Settings (single owner) */}
+                <span
+                  className={`inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] font-medium ${
                     insight.privacyTier === 'never_export'
-                      ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/70'
-                      : 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/70'
-                  } ${privacyUpdating === insight.id ? 'opacity-50 cursor-wait' : ''}`}
-                  title={insight.privacyTier === 'never_export' ? 'Click to make exportable' : 'Click to mark as never export'}
+                      ? 'text-gray-500 dark:text-gray-400'
+                      : 'text-primary-600 dark:text-primary-400'
+                  }`}
+                  title="Privacy tier is managed in Settings"
                 >
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={
-                      insight.privacyTier === 'never_export'
-                        ? 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z'
-                        : 'M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z'
-                    } />
-                  </svg>
-                  {insight.privacyTier === 'never_export' ? 'Never Export' : 'Exportable'}
-                </button>
+                  {insight.privacyTier === 'never_export' ? 'Never export' : 'Exportable'}
+                </span>
               </div>
 
               {/* Agreement Scale 1-10 */}
@@ -1439,7 +1242,7 @@ export default function VerificationPage() {
       ))}
 
       {/* Insight Conflicts Section - only in verification view */}
-      {activeView === 'verification' && (
+      {true && (
         <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
           <ConflictsSection />
         </div>

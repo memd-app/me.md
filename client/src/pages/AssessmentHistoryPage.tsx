@@ -1,3 +1,4 @@
+import PageTabs from '@/components/ui/PageTabs';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
@@ -447,6 +448,12 @@ export default function AssessmentHistoryPage() {
 
   return (
     <div className="max-w-5xl mx-auto">
+      <PageTabs
+        tabs={[
+          { to: '/app/personality', label: 'Take the test', end: true },
+          { to: '/app/personality/history', label: 'History' },
+        ]}
+      />
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>

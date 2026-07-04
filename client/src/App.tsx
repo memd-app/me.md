@@ -79,12 +79,13 @@ function App() {
             {/* Legacy singular form — canonicalized to /app/sessions/:id */}
             <Route path="session/:id" element={<LegacySessionRedirect />} />
             <Route path="notes" element={<NotesPage />} />
+            <Route path="notes/bookmarks" element={<BookmarksPage />} />
             <Route path="graph" element={<KnowledgeGraphPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="review" element={<VerificationPage />} />
             <Route path="verify" element={<Navigate to="/app/review" replace />} />
             <Route path="sandbox" element={<SandboxPage />} />
-            <Route path="bookmarks" element={<BookmarksPage />} />
+            <Route path="bookmarks" element={<Navigate to="/app/notes/bookmarks" replace />} />
             <Route path="search" element={<SearchPage />} />
             <Route path="import" element={<ImportPage />} />
             <Route path="export" element={<ExportPage />} />

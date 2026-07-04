@@ -34,8 +34,6 @@ const navGroups: NavGroup[] = [
     items: [
       { to: '/app/topics', label: 'Topics' },
       { to: '/app/notes', label: 'Notes' },
-      // Temporary until the Notes/Bookmarks merge slice — must stay reachable
-      { to: '/app/bookmarks', label: 'Bookmarks' },
       { to: '/app/graph', label: 'Graph' },
     ],
   },

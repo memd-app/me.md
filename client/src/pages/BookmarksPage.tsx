@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
+import PageTabs from '@/components/ui/PageTabs';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { formatShortDate, formatTime, formatDateTime } from '@/utils/dateFormat';
 import { getBookmarks, deleteBookmark } from '@/services/bookmarks';
@@ -125,7 +126,7 @@ export default function BookmarksPage() {
   return (
     <div className="max-w-4xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Bookmarks</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Notes</h1>
         <p className="mt-1 text-gray-600 dark:text-gray-300">
           Your saved aha moments from interview sessions
           {bookmarks.length > 0 && (
@@ -135,6 +136,13 @@ export default function BookmarksPage() {
           )}
         </p>
       </div>
+
+      <PageTabs
+        tabs={[
+          { to: '/app/notes', label: 'Notes', end: true },
+          { to: '/app/notes/bookmarks', label: 'Bookmarks' },
+        ]}
+      />
 
       {error && (
         <ApiErrorAlert

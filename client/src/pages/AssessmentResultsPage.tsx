@@ -1,3 +1,4 @@
+import PageTabs from '@/components/ui/PageTabs';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
@@ -625,6 +626,14 @@ export default function AssessmentResultsPage() {
           </div>
         </div>
 
+      <div className="print:hidden">
+      <PageTabs
+        tabs={[
+          { to: '/app/personality', label: 'Take the test', end: true },
+          { to: '/app/personality/history', label: 'History' },
+        ]}
+      />
+      </div>
         <div className="text-center">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary-100 dark:bg-primary-900/30 mb-4 print:mb-2">
             <svg className="w-8 h-8 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

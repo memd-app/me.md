@@ -1,3 +1,4 @@
+import PageTabs from '@/components/ui/PageTabs';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
@@ -362,6 +363,12 @@ export default function AssessmentPage() {
   if (phase === 'landing') {
     return (
       <div className="max-w-2xl mx-auto px-4 py-8">
+      <PageTabs
+        tabs={[
+          { to: '/app/personality', label: 'Take the test', end: true },
+          { to: '/app/personality/history', label: 'History' },
+        ]}
+      />
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary-100 dark:bg-primary-900/30 mb-4">
             <svg className="w-8 h-8 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

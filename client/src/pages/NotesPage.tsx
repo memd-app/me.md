@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
+import PageTabs from '@/components/ui/PageTabs';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import VerifiedBadge from '@/components/VerifiedBadge';
 import { formatRelativeTime, formatDateTime } from '@/utils/dateFormat';
@@ -412,6 +413,13 @@ export default function NotesPage() {
           {notes.length} note{notes.length !== 1 ? 's' : ''} from distilled sessions
         </p>
       </div>
+
+      <PageTabs
+        tabs={[
+          { to: '/app/notes', label: 'Notes', end: true },
+          { to: '/app/notes/bookmarks', label: 'Bookmarks' },
+        ]}
+      />
 
       {/* Search & Filter bar */}
       {notes.length > 0 && (
