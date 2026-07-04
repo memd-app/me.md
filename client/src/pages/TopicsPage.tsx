@@ -416,32 +416,45 @@ export default function TopicsPage() {
     return counts;
   }, [topics]);
 
-  // Small-caps filter option: amber underline when active, muted gray otherwise.
-  // Kept local to the render layer — no data implications.
-  const FilterOption = ({
-    active,
-    onClick,
-    children,
-    count,
+  // Compact toolbar dropdown: quiet small-caps label + borderless native select,
+  // amber-tinted when a non-default value is active. Render layer only.
+  const FilterSelect = ({
+    label,
+    value,
+    onChange,
+    options,
+    active = false,
   }: {
-    active: boolean;
-    onClick: () => void;
-    children: React.ReactNode;
-    count?: number;
+    label: string;
+    value: string;
+    onChange: (v: string) => void;
+    options: { value: string; label: string }[];
+    active?: boolean;
   }) => (
-    <button
-      onClick={onClick}
-      className={`text-[11px] tracking-[0.08em] uppercase font-sans font-semibold pb-1 border-b-2 transition-colors ${
-        active
-          ? 'text-primary-600 dark:text-primary-400 border-primary-500 dark:border-primary-400'
-          : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-800 dark:hover:text-gray-200'
-      }`}
-    >
-      {children}
-      {typeof count === 'number' && count > 0 && (
-        <span className="ml-1 text-gray-400 dark:text-gray-600 font-normal normal-case tracking-normal">({count})</span>
-      )}
-    </button>
+    <label className="relative inline-flex items-center gap-1.5 cursor-pointer shrink-0">
+      <span className="text-[10px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-400 dark:text-gray-600">
+        {label}
+      </span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`appearance-none bg-transparent border-0 pl-0 pr-5 py-1 text-sm font-medium cursor-pointer focus:outline-none focus:ring-0 ${
+          active
+            ? 'text-primary-700 dark:text-primary-400'
+            : 'text-gray-700 dark:text-gray-300'
+        }`}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+      <svg
+        className="pointer-events-none absolute right-0.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-gray-600"
+        fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+      </svg>
+    </label>
   );
 
   return (
@@ -512,19 +525,14 @@ export default function TopicsPage() {
         </div>
       )}
 
-      {/* Filters and Sort Controls */}
-      <div className="border border-rule dark:border-dark-border rounded-lg bg-white dark:bg-dark-card px-5 py-5 mb-8">
-        {/* Search Input */}
-        <div className="mb-4">
-          <label className="text-[11px] tracking-[0.08em] uppercase font-sans font-semibold text-gray-500 dark:text-gray-400 mb-2 block">
-            Search
-          </label>
-          <div className="relative">
+      {/* Filter toolbar — single line: search grows, quiet dropdowns right */}
+      <div className="mb-8">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-rule dark:border-dark-border pb-3">
+          {/* Search */}
+          <div className="relative flex-1 min-w-[220px]">
             <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+              className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-600"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
@@ -532,14 +540,16 @@ export default function TopicsPage() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search topics by name, description, or tags..."
-              className="input-field !py-2 !pl-10 !pr-10 text-sm w-full"
+              placeholder="Search topics…"
+              aria-label="Search topics by name, description, or tags"
+              className="w-full bg-transparent border-0 pl-7 pr-8 py-1.5 text-sm text-ink dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:ring-0"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary-600 dark:text-gray-600 dark:hover:text-primary-400"
+                className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary-600 dark:text-gray-600 dark:hover:text-primary-400"
                 title="Clear search"
+                aria-label="Clear search"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -547,103 +557,64 @@ export default function TopicsPage() {
               </button>
             )}
           </div>
-        </div>
 
-        {/* Status Filter Row */}
-        <div className="mb-4">
-          <p className="text-[11px] tracking-[0.08em] uppercase font-sans font-semibold text-gray-500 dark:text-gray-400 mb-2">
-            Status
-          </p>
-          <div className="flex flex-wrap gap-x-5 gap-y-2">
-            <FilterOption active={statusFilter === 'all'} onClick={() => setStatusFilter('all')} count={topics.length}>
-              All
-            </FilterOption>
-            {['backlog', 'scheduled', 'in_progress', 'extracted', 'refined'].map((status) => (
-              <FilterOption
-                key={status}
-                active={statusFilter === status}
-                onClick={() => setStatusFilter(status)}
-                count={statusCounts[status] || 0}
-              >
-                {STATUS_LABELS[status] || status}
-              </FilterOption>
-            ))}
-          </div>
-        </div>
+          <span className="hidden sm:block w-px h-5 bg-rule dark:bg-dark-border" aria-hidden="true" />
 
-        {/* Priority Filter and Sort Row */}
-        <div className="flex flex-wrap items-end gap-6">
-          {/* Priority Filter */}
-          <div className="flex-1 min-w-[220px]">
-            <p className="text-[11px] tracking-[0.08em] uppercase font-sans font-semibold text-gray-500 dark:text-gray-400 mb-2">
-              Priority
-            </p>
-            <div className="flex flex-wrap gap-x-5 gap-y-2">
-              <FilterOption active={priorityFilter === 'all'} onClick={() => setPriorityFilter('all')}>
-                All
-              </FilterOption>
-              {['high', 'medium', 'low'].map((priority) => (
-                <FilterOption
-                  key={priority}
-                  active={priorityFilter === priority}
-                  onClick={() => setPriorityFilter(priority)}
-                  count={priorityCounts[priority] || 0}
-                >
-                  {PRIORITY_LABELS[priority]}
-                </FilterOption>
-              ))}
-            </div>
-          </div>
+          <FilterSelect
+            label="Status"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            active={statusFilter !== 'all'}
+            options={[
+              { value: 'all', label: `All (${topics.length})` },
+              ...['backlog', 'scheduled', 'in_progress', 'extracted', 'refined'].map((status) => ({
+                value: status,
+                label: `${STATUS_LABELS[status] || status}${statusCounts[status] ? ` (${statusCounts[status]})` : ''}`,
+              })),
+            ]}
+          />
 
-          {/* Sort Selector */}
-          <div className="min-w-[180px]">
-            <label className="text-[11px] tracking-[0.08em] uppercase font-sans font-semibold text-gray-500 dark:text-gray-400 mb-2 block">
-              Sort by
-            </label>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortOption)}
-              className="input-field !py-1.5 text-sm"
-            >
-              {(Object.entries(SORT_LABELS) as [SortOption, string][]).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </select>
-          </div>
+          <FilterSelect
+            label="Priority"
+            value={priorityFilter}
+            onChange={setPriorityFilter}
+            active={priorityFilter !== 'all'}
+            options={[
+              { value: 'all', label: 'All' },
+              ...['high', 'medium', 'low'].map((priority) => ({
+                value: priority,
+                label: `${PRIORITY_LABELS[priority]}${priorityCounts[priority] ? ` (${priorityCounts[priority]})` : ''}`,
+              })),
+            ]}
+          />
 
-          {/* Clear Filters Button */}
+          <span className="hidden sm:block w-px h-5 bg-rule dark:bg-dark-border" aria-hidden="true" />
+
+          <FilterSelect
+            label="Sort"
+            value={sortBy}
+            onChange={(v) => setSortBy(v as SortOption)}
+            options={(Object.entries(SORT_LABELS) as [SortOption, string][]).map(([value, label]) => ({ value, label }))}
+          />
+
           {hasActiveFilters && (
             <button
               onClick={clearAllFilters}
-              className="text-[11px] tracking-[0.08em] uppercase font-sans font-semibold text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors pb-1"
+              className="text-[10px] tracking-[0.08em] uppercase font-sans font-semibold text-gray-400 dark:text-gray-600 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
             >
-              Clear Filters
+              Clear
             </button>
           )}
         </div>
 
         {/* Active filter summary */}
         {hasActiveFilters && (
-          <div className="mt-4 pt-4 border-t border-rule dark:border-dark-border">
-            <p className="text-sm text-gray-600 dark:text-gray-300">
-              Showing {filteredAndSortedTopics.length} of {topics.length} topics
-              {searchQuery.trim() && (
-                <span className="ml-1">
-                  &middot; Search: <span className="font-medium text-gray-800 dark:text-gray-200">&quot;{searchQuery.trim()}&quot;</span>
-                </span>
-              )}
-              {statusFilter !== 'all' && (
-                <span className="ml-1">
-                  &middot; Status: <span className="font-medium text-gray-800 dark:text-gray-200">{STATUS_LABELS[statusFilter]}</span>
-                </span>
-              )}
-              {priorityFilter !== 'all' && (
-                <span className="ml-1">
-                  &middot; Priority: <span className="font-medium text-gray-800 dark:text-gray-200">{PRIORITY_LABELS[priorityFilter]}</span>
-                </span>
-              )}
-            </p>
-          </div>
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            Showing {filteredAndSortedTopics.length} of {topics.length} topics
+            {searchQuery.trim() && <> &middot; &ldquo;{searchQuery.trim()}&rdquo;</>}
+            {statusFilter !== 'all' && <> &middot; {STATUS_LABELS[statusFilter]}</>}
+            {priorityFilter !== 'all' && <> &middot; {PRIORITY_LABELS[priorityFilter]} priority</>}
+          </p>
         )}
       </div>
 

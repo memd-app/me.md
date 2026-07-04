@@ -13,18 +13,42 @@ interface NavItem {
   badge?: boolean;
 }
 
-const navItems: NavItem[] = [
-  { to: '/app/dashboard', label: 'Desk' },
-  { to: '/app/topics', label: 'Topics' },
-  { to: '/app/session/new', label: 'Interview' },
-  { to: '/app/review', label: 'Review' },
-  { to: '/app/graph', label: 'Graph' },
-  { to: '/app/notes', label: 'Notes' },
-  // Temporary until the Notes/Bookmarks merge slice — must stay reachable
-  { to: '/app/bookmarks', label: 'Bookmarks' },
-  { to: '/app/personality', label: 'Personality' },
-  { to: '/app/search', label: 'Search' },
+interface NavGroup {
+  label: string | null;
+  items: NavItem[];
+}
+
+// The daily loop stays always visible; the library and explore groups
+// can be collapsed (persisted per group).
+const navGroups: NavGroup[] = [
+  {
+    label: null,
+    items: [
+      { to: '/app/dashboard', label: 'Desk' },
+      { to: '/app/session/new', label: 'Interview' },
+      { to: '/app/review', label: 'Review' },
+    ],
+  },
+  {
+    label: 'Library',
+    items: [
+      { to: '/app/topics', label: 'Topics' },
+      { to: '/app/notes', label: 'Notes' },
+      // Temporary until the Notes/Bookmarks merge slice — must stay reachable
+      { to: '/app/bookmarks', label: 'Bookmarks' },
+      { to: '/app/graph', label: 'Graph' },
+    ],
+  },
+  {
+    label: 'Explore',
+    items: [
+      { to: '/app/personality', label: 'Personality' },
+      { to: '/app/search', label: 'Search' },
+    ],
+  },
 ];
+
+const NAV_GROUPS_KEY = 'memd_nav_collapsed_groups';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -38,6 +62,21 @@ export default function Sidebar({ isOpen, onClose, collapsed = false, onToggleCo
   const db = useDatabase();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [hasNeverTakenTest, setHasNeverTakenTest] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(NAV_GROUPS_KEY) || '{}');
+    } catch {
+      return {};
+    }
+  });
+
+  const toggleGroup = (label: string) => {
+    setCollapsedGroups(prev => {
+      const next = { ...prev, [label]: !prev[label] };
+      localStorage.setItem(NAV_GROUPS_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
 
   // Check if user has ever taken the personality assessment (from local DB)
   useEffect(() => {
@@ -53,11 +92,7 @@ export default function Sidebar({ isOpen, onClose, collapsed = false, onToggleCo
     }
   }, [user, db]);
 
-  // Compute nav items with badge info
-  const navItemsWithBadge = navItems.map(item => ({
-    ...item,
-    badge: item.to === '/app/personality' && hasNeverTakenTest,
-  }));
+
 
   // Trap focus in sidebar when open on mobile + handle Escape key
   useEffect(() => {
@@ -135,44 +170,75 @@ export default function Sidebar({ isOpen, onClose, collapsed = false, onToggleCo
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto py-5 px-3" role="navigation" aria-label="Main navigation">
-            <ul className="space-y-0.5" role="list">
-              {navItemsWithBadge.map((item) => (
-                <li key={item.to} role="listitem">
-                  <NavLink
-                    to={item.to}
-                    end={item.end}
-                    onClick={onClose}
-                    aria-label={item.badge ? `${item.label} (not taken yet)` : item.label}
-                    className={({ isActive }) =>
-                      `group flex items-center gap-3 px-3 py-2 rounded-md font-sans text-[12px] font-medium uppercase tracking-[0.08em] transition-colors duration-150 ${
-                        isActive
-                          ? 'bg-panel dark:bg-dark-card text-ink dark:text-gray-100'
-                          : 'text-gray-600 dark:text-gray-400 hover:bg-panel/60 dark:hover:bg-dark-card/60 hover:text-ink dark:hover:text-gray-100'
-                      }`
-                    }
-                  >
-                    {({ isActive }) => (
-                      <>
-                        <span
-                          aria-hidden="true"
-                          className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors ${
-                            isActive ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-700 group-hover:bg-primary-300'
-                          }`}
-                        />
-                        <span className="flex-1">{item.label}</span>
-                        {item.badge && (
-                          <span
-                            className="w-1.5 h-1.5 rounded-full bg-primary-500 animate-pulse"
-                            aria-label="Not taken yet"
-                          />
-                        )}
-                      </>
-                    )}
-                  </NavLink>
-                </li>
-              ))}
-            </ul>
+          <nav className="flex-1 overflow-y-auto py-4 px-3" role="navigation" aria-label="Main navigation">
+            {navGroups.map((group) => {
+              const isCollapsed = group.label ? !!collapsedGroups[group.label] : false;
+              return (
+                <div key={group.label ?? 'main'} className="mb-1.5">
+                  {group.label && (
+                    <button
+                      onClick={() => toggleGroup(group.label!)}
+                      className="group/heading w-full flex items-center gap-2 px-3 pt-4 pb-1.5"
+                      aria-expanded={!isCollapsed}
+                      aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${group.label} section`}
+                    >
+                      <span className="text-[10px] uppercase tracking-[0.12em] font-sans font-semibold text-gray-400 dark:text-gray-600 group-hover/heading:text-gray-600 dark:group-hover/heading:text-gray-400 transition-colors">
+                        {group.label}
+                      </span>
+                      <span className="flex-1 border-t border-rule dark:border-dark-border" aria-hidden="true" />
+                      <svg
+                        className={`w-3 h-3 text-gray-300 dark:text-gray-700 group-hover/heading:text-gray-500 transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
+                        fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  )}
+                  {!isCollapsed && (
+                    <ul className="space-y-0.5" role="list">
+                      {group.items.map((item) => {
+                        const badge = item.to === '/app/personality' && hasNeverTakenTest;
+                        return (
+                          <li key={item.to} role="listitem">
+                            <NavLink
+                              to={item.to}
+                              end={item.end}
+                              onClick={onClose}
+                              aria-label={badge ? `${item.label} (not taken yet)` : item.label}
+                              className={({ isActive }) =>
+                                `group flex items-center gap-3 px-3 py-1.5 rounded-md font-sans text-[13.5px] font-medium transition-colors duration-150 ${
+                                  isActive
+                                    ? 'bg-panel dark:bg-dark-card text-ink dark:text-gray-100'
+                                    : 'text-gray-600 dark:text-gray-400 hover:bg-panel/60 dark:hover:bg-dark-card/60 hover:text-ink dark:hover:text-gray-100'
+                                }`
+                              }
+                            >
+                              {({ isActive }) => (
+                                <>
+                                  <span
+                                    aria-hidden="true"
+                                    className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors ${
+                                      isActive ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-700 group-hover:bg-primary-300'
+                                    }`}
+                                  />
+                                  <span className="flex-1">{item.label}</span>
+                                  {badge && (
+                                    <span
+                                      className="w-1.5 h-1.5 rounded-full bg-primary-500 animate-pulse"
+                                      aria-label="Not taken yet"
+                                    />
+                                  )}
+                                </>
+                              )}
+                            </NavLink>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
           </nav>
 
           {/* User section — profile link + settings, side by side */}
