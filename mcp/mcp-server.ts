@@ -261,9 +261,9 @@ function getPersonalityData(): {
   // Get latest results
   const latestResults = sqlite.prepare(`
     SELECT domain, domain_score as domainScore,
-           facet_1_score as facet1Score, facet_2_score as facet2Score,
-           facet_3_score as facet3Score, facet_4_score as facet4Score,
-           facet_5_score as facet5Score, facet_6_score as facet6Score
+           facet1_score as facet1Score, facet2_score as facet2Score,
+           facet3_score as facet3Score, facet4_score as facet4Score,
+           facet5_score as facet5Score, facet6_score as facet6Score
     FROM assessment_results
     WHERE attempt_id = ?
   `).all(latestAttempt.id) as AssessmentResultRow[];
