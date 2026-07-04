@@ -41,7 +41,8 @@ const FORMAT_LABELS: Record<NoteFormat, string> = {
   json: 'JSON',
 };
 
-const FORMAT_OPTIONS: NoteFormat[] = ['full_analysis', 'brief_summary', 'decision_framework', 'json'];
+const ACTIVE_FORMAT_OPTIONS: NoteFormat[] = ['full_analysis', 'json'];
+const LEGACY_FORMAT_OPTIONS: NoteFormat[] = ['brief_summary', 'decision_framework'];
 
 // Date formatting now uses shared utils from @/utils/dateFormat
 // formatRelativeTime replaces the old formatDate function
@@ -89,6 +90,33 @@ function getNoteContent(note: NoteListItem, format: NoteFormat): string {
     default:
       return note.contentFullAnalysis || '';
   }
+}
+
+function hasContentForFormat(note: NoteListItem, format: NoteFormat): boolean {
+  switch (format) {
+    case 'full_analysis':
+      return !!note.contentFullAnalysis?.trim();
+    case 'brief_summary':
+      return !!note.contentBriefSummary?.trim();
+    case 'decision_framework':
+      return !!note.contentDecisionFramework?.trim();
+    case 'json':
+      return !!note.contentJson?.trim();
+    default:
+      return false;
+  }
+}
+
+function getAvailableFormats(note: NoteListItem): NoteFormat[] {
+  return [
+    ...ACTIVE_FORMAT_OPTIONS,
+    ...LEGACY_FORMAT_OPTIONS.filter(format => hasContentForFormat(note, format)),
+  ];
+}
+
+function getInitialFormat(note: NoteListItem): NoteFormat {
+  const selected = (note.selectedFormat || 'full_analysis') as NoteFormat;
+  return getAvailableFormats(note).includes(selected) ? selected : 'full_analysis';
 }
 
 function renderInlineMarkdown(text: string): React.ReactNode {
@@ -225,7 +253,7 @@ export default function NotesPage() {
       };
       setSelectedNote(fullNote);
       setNoteInsights(data.insights || []);
-      setSelectedFormat((note.selectedFormat || 'full_analysis') as NoteFormat);
+      setSelectedFormat(getInitialFormat(fullNote));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load note detail');
     } finally {
@@ -236,7 +264,7 @@ export default function NotesPage() {
   const handleNoteClick = (note: NoteListItem) => {
     // Use the note from the list directly (already has all content fields)
     setSelectedNote(note);
-    setSelectedFormat((note.selectedFormat || 'full_analysis') as NoteFormat);
+    setSelectedFormat(getInitialFormat(note));
     // Fetch insights separately via the detail endpoint
     fetchNoteDetail(note.id);
   };
@@ -319,7 +347,7 @@ export default function NotesPage() {
 
           {/* Format tabs — small-caps, amber underline on the active format */}
           <nav className="flex items-center gap-6 border-b border-rule dark:border-dark-border" aria-label="Note format">
-            {FORMAT_OPTIONS.map(fmt => (
+            {getAvailableFormats(selectedNote).map(fmt => (
               <button
                 key={fmt}
                 onClick={() => setSelectedFormat(fmt)}
@@ -481,7 +509,7 @@ export default function NotesPage() {
               }`}
             >
               <option value="all">All</option>
-              {FORMAT_OPTIONS.map(fmt => (
+              {ACTIVE_FORMAT_OPTIONS.map(fmt => (
                 <option key={fmt} value={fmt}>{FORMAT_LABELS[fmt]}</option>
               ))}
             </select>

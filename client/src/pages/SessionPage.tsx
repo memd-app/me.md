@@ -90,6 +90,40 @@ const FORMAT_LABELS: Record<NoteFormat, string> = {
   json: 'JSON Data',
 };
 
+const ACTIVE_NOTE_FORMATS: NoteFormat[] = ['full_analysis', 'json'];
+const LEGACY_NOTE_FORMATS: NoteFormat[] = ['brief_summary', 'decision_framework'];
+
+function hasNoteContent(note: Note, format: NoteFormat): boolean {
+  switch (format) {
+    case 'full_analysis':
+      return !!note.contentFullAnalysis?.trim();
+    case 'brief_summary':
+      return !!note.contentBriefSummary?.trim();
+    case 'decision_framework':
+      return !!note.contentDecisionFramework?.trim();
+    case 'json':
+      return !!note.contentJson?.trim();
+    default:
+      return false;
+  }
+}
+
+function getAvailableNoteFormats(note: Note): NoteFormat[] {
+  return [
+    ...ACTIVE_NOTE_FORMATS,
+    ...LEGACY_NOTE_FORMATS.filter(format => hasNoteContent(note, format)),
+  ];
+}
+
+function getInitialNoteFormat(note: Note): NoteFormat {
+  const selected = (note.selectedFormat || 'full_analysis') as NoteFormat;
+  return getAvailableNoteFormats(note).includes(selected) ? selected : 'full_analysis';
+}
+
+function canRegenerateFormat(format: NoteFormat): boolean {
+  return format === 'full_analysis' || format === 'json';
+}
+
 // Distillation progress step labels - defined outside component to avoid re-creation
 const DISTILL_STEPS = [
   { label: 'Analyzing conversation...', description: 'Reading through your session messages' },
@@ -324,7 +358,7 @@ export default function SessionPage() {
         const data = getNoteForSession(db, sessionId);
         setNote(data.note);
         setNoteInsights(data.insights || []);
-        setSelectedFormat((data.note.selectedFormat || 'full_analysis') as NoteFormat);
+        setSelectedFormat(getInitialNoteFormat(data.note));
         setShowDistillation(true);
 
         // Also fetch multi-bucket cross-topic suggestions
@@ -371,7 +405,7 @@ export default function SessionPage() {
       const data = distillData;
       setNote(data.note);
       setNoteInsights(data.insights || []);
-      setSelectedFormat((data.note.selectedFormat || 'full_analysis') as NoteFormat);
+      setSelectedFormat(getInitialNoteFormat(data.note));
       setShowDistillation(true);
 
       // Set suggested cross-topic connections from multi-bucket extraction
@@ -481,7 +515,7 @@ export default function SessionPage() {
 
   // Regenerate note content in current format from session messages
   const handleRegenerateContent = async () => {
-    if (!user || !session || !note || isRegenerating) return;
+    if (!user || !session || !note || isRegenerating || !canRegenerateFormat(selectedFormat)) return;
 
     setIsRegenerating(true);
     setRegenerateSuccess(false);
@@ -1172,7 +1206,7 @@ export default function SessionPage() {
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 overflow-x-auto">
               <span className="text-xs font-medium text-gray-500 dark:text-gray-300 shrink-0">Format:</span>
-              {(Object.entries(FORMAT_LABELS) as [NoteFormat, string][]).map(([format, label]) => (
+              {getAvailableNoteFormats(note).map((format) => (
                 <button
                   key={format}
                   onClick={() => handleFormatChange(format)}
@@ -1183,7 +1217,7 @@ export default function SessionPage() {
                       : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
                   } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
-                  {label}
+                  {FORMAT_LABELS[format]}
                 </button>
               ))}
             </div>
@@ -1280,9 +1314,9 @@ export default function SessionPage() {
               {!isEditingNote && (
                 <button
                   onClick={handleRegenerateContent}
-                  disabled={isRegenerating}
+                  disabled={isRegenerating || !canRegenerateFormat(selectedFormat)}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Regenerate note content in current format from session messages"
+                  title={canRegenerateFormat(selectedFormat) ? 'Regenerate note content in current format from session messages' : 'Regeneration is only available for Full Analysis and JSON'}
                 >
                   {isRegenerating ? (
                     <>

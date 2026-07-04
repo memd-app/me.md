@@ -4,8 +4,6 @@ import { LOCAL_USER_ID } from '@/contexts/UserContext'
 import { notes, sessions, topics, messages, insights, conceptNodes, users } from '@/db/schema'
 import {
   generateFullAnalysisAI,
-  generateBriefSummaryAI,
-  generateDecisionFrameworkAI,
   generateJsonContentAI,
   type DistillationContext,
 } from './ai'
@@ -21,6 +19,9 @@ interface MessageData {
   content: string
   isBookmarked?: boolean | number | null
 }
+
+const ALL_NOTE_FORMATS = ['full_analysis', 'brief_summary', 'decision_framework', 'json'] as const
+const GENERATED_NOTE_FORMATS = ['full_analysis', 'json'] as const
 
 function generateFullAnalysis(
   topicTitle: string,
@@ -135,111 +136,6 @@ function generateFullAnalysis(
   analysis += `- Are there counterexamples that challenge the principles identified above?\n`
 
   return analysis
-}
-
-function generateBriefSummary(
-  topicTitle: string,
-  userMessages: MessageData[],
-  _assistantMessages: MessageData[]
-): string {
-  let summary = `# Brief Summary: ${topicTitle}\n\n`
-
-  summary += `## TL;DR\n\n`
-  summary += `Interview session covering ${topicTitle} with ${userMessages.length} responses. `
-
-  if (userMessages.length > 0) {
-    const firstResponse = userMessages[0].content.substring(0, 150).trim()
-    summary += `The conversation began with: "${firstResponse}${userMessages[0].content.length > 150 ? '...' : ''}"\n\n`
-  }
-
-  summary += `## Key Takeaways\n\n`
-  const takeaways = userMessages
-    .filter(m => m.content.length > 30)
-    .slice(0, 5)
-    .map(m => {
-      const sentences = m.content.split(/[.!?]+/).filter(s => s.trim().length > 15)
-      return sentences[0]?.trim() || m.content.substring(0, 100).trim()
-    })
-
-  takeaways.forEach((takeaway, i) => {
-    summary += `${i + 1}. ${takeaway}\n`
-  })
-  summary += `\n`
-
-  summary += `## One Thing to Remember\n\n`
-  const keyMessage = [...userMessages].sort((a, b) => b.content.length - a.content.length)[0]
-  if (keyMessage) {
-    const excerpt = keyMessage.content.substring(0, 200).trim()
-    summary += `> "${excerpt}${keyMessage.content.length > 200 ? '...' : ''}"\n`
-  }
-
-  return summary
-}
-
-function generateDecisionFramework(
-  topicTitle: string,
-  userMessages: MessageData[],
-  _assistantMessages: MessageData[]
-): string {
-  let framework = `# Decision Framework: ${topicTitle}\n\n`
-
-  framework += `## Decision Context\n\n`
-  framework += `This framework synthesizes decision-making patterns from an interview about **${topicTitle}**.\n\n`
-
-  framework += `## Guiding Principles\n\n`
-  const principles = userMessages
-    .filter(m => m.content.includes('important') || m.content.includes('believe') ||
-      m.content.includes('value') || m.content.includes('always') || m.content.includes('principle'))
-    .slice(0, 4)
-
-  if (principles.length > 0) {
-    principles.forEach((m, i) => {
-      const excerpt = m.content.substring(0, 150).trim()
-      framework += `${i + 1}. "${excerpt}${m.content.length > 150 ? '...' : ''}"\n`
-    })
-  } else {
-    framework += `- Explore further to identify explicit guiding principles\n`
-  }
-  framework += `\n`
-
-  framework += `## Decision Criteria\n\n`
-  framework += `When making decisions about ${topicTitle}, consider:\n\n`
-  framework += `- Does it align with the core principles above?\n`
-  framework += `- How does past experience inform this choice?\n`
-  framework += `- What are the potential trade-offs?\n\n`
-
-  framework += `## Red Flags\n\n`
-  const concerns = userMessages.filter(m =>
-    m.content.includes('worry') || m.content.includes('concern') ||
-    m.content.includes('avoid') || m.content.includes('risk') || m.content.includes('problem')
-  ).slice(0, 3)
-
-  if (concerns.length > 0) {
-    concerns.forEach(m => {
-      const excerpt = m.content.substring(0, 150).trim()
-      framework += `- "${excerpt}${m.content.length > 150 ? '...' : ''}"\n`
-    })
-  } else {
-    framework += `- No explicit red flags identified in this session\n`
-  }
-  framework += `\n`
-
-  framework += `## Green Lights\n\n`
-  const positives = userMessages.filter(m =>
-    m.content.includes('love') || m.content.includes('enjoy') ||
-    m.content.includes('excited') || m.content.includes('passion') || m.content.includes('great')
-  ).slice(0, 3)
-
-  if (positives.length > 0) {
-    positives.forEach(m => {
-      const excerpt = m.content.substring(0, 150).trim()
-      framework += `- "${excerpt}${m.content.length > 150 ? '...' : ''}"\n`
-    })
-  } else {
-    framework += `- Further sessions can help identify positive signals\n`
-  }
-
-  return framework
 }
 
 function generateJsonContent(
@@ -385,7 +281,7 @@ export async function distillSession(
     updatedAt: new Date().toISOString(),
   }).where(eq(topics.id, session.topicId)).run()
 
-  // Generate distillation in all formats (AI-powered with fallback)
+  // Generate distillation in active formats (AI-powered with fallback).
   const userMsgs = sessionMessages.filter((m: any) => m.role === 'user')
   const assistantMsgs = sessionMessages.filter((m: any) => m.role === 'assistant')
 
@@ -401,22 +297,19 @@ export async function distillSession(
     isMiniSession: !!session.isMiniSession,
   }
 
-  // Run all 4 AI distillation calls in parallel, falling back to regex-based versions
-  const [aiFullAnalysis, aiBriefSummary, aiDecisionFramework, aiJsonContent] = await Promise.all([
+  const [aiFullAnalysis, aiJsonContent] = await Promise.all([
     generateFullAnalysisAI(distillCtx).catch(() => null),
-    generateBriefSummaryAI(distillCtx).catch(() => null),
-    generateDecisionFrameworkAI(distillCtx).catch(() => null),
     generateJsonContentAI(distillCtx).catch(() => null),
   ])
 
   const fullAnalysis = aiFullAnalysis || generateFullAnalysis(topic.title, topic.description, userMsgs, assistantMsgs)
-  const briefSummary = aiBriefSummary || generateBriefSummary(topic.title, userMsgs, assistantMsgs)
-  const decisionFramework = aiDecisionFramework || generateDecisionFramework(topic.title, userMsgs, assistantMsgs)
   const jsonContent = aiJsonContent || generateJsonContent(topic.title, userMsgs, assistantMsgs)
 
   // Create note
   const noteId = crypto.randomUUID()
-  const selectedFormat = format || 'full_analysis'
+  const selectedFormat = GENERATED_NOTE_FORMATS.includes(format as typeof GENERATED_NOTE_FORMATS[number])
+    ? format
+    : 'full_analysis'
 
   const newNote = db.insert(notes).values({
     id: noteId,
@@ -425,8 +318,6 @@ export async function distillSession(
     userId,
     title: `Session Notes: ${topic.title}`,
     contentFullAnalysis: fullAnalysis,
-    contentBriefSummary: briefSummary,
-    contentDecisionFramework: decisionFramework,
     contentJson: jsonContent,
     selectedFormat,
   }).returning().get()
@@ -595,8 +486,12 @@ export async function regenerateNote(
 ) {
   const userId = LOCAL_USER_ID
 
-  if (!format || !['full_analysis', 'brief_summary', 'decision_framework', 'json'].includes(format)) {
+  if (!format || !ALL_NOTE_FORMATS.includes(format as typeof ALL_NOTE_FORMATS[number])) {
     throw new Error('Invalid format. Must be: full_analysis, brief_summary, decision_framework, or json')
+  }
+
+  if (regenerateContent && !GENERATED_NOTE_FORMATS.includes(format as typeof GENERATED_NOTE_FORMATS[number])) {
+    throw new Error('Regeneration is only available for Full Analysis and JSON formats')
   }
 
   // Find existing note
@@ -650,16 +545,6 @@ export async function regenerateNote(
       case 'full_analysis': {
         const aiResult = await generateFullAnalysisAI(regenCtx).catch(() => null)
         updateData.contentFullAnalysis = aiResult || generateFullAnalysis(topic.title, topic.description, userMsgs, assistantMsgs)
-        break
-      }
-      case 'brief_summary': {
-        const aiResult = await generateBriefSummaryAI(regenCtx).catch(() => null)
-        updateData.contentBriefSummary = aiResult || generateBriefSummary(topic.title, userMsgs, assistantMsgs)
-        break
-      }
-      case 'decision_framework': {
-        const aiResult = await generateDecisionFrameworkAI(regenCtx).catch(() => null)
-        updateData.contentDecisionFramework = aiResult || generateDecisionFramework(topic.title, userMsgs, assistantMsgs)
         break
       }
       case 'json': {
