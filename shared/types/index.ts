@@ -1,12 +1,10 @@
 // ============================================
 // Shared Types for me.md
-// Used by both client and server
 // ============================================
 
 // User
 export interface User {
   id: string;
-  firebaseUid: string;
   email: string;
   name: string;
   dateOfBirth: string;
