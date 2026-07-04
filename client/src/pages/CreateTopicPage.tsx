@@ -8,13 +8,6 @@ import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 import { checkTopicTitle, createTopic } from '@/services/topics';
 import { PageHeader, Button } from '@/components/ui';
 
-const INTENT_OPTIONS = [
-  { value: 'articulate', label: 'Articulate', description: 'Express something you already know' },
-  { value: 'explore', label: 'Explore', description: 'Discover something new about yourself' },
-  { value: 'decide', label: 'Decide', description: 'Work through a decision or choice' },
-  { value: 'document', label: 'Document', description: 'Record knowledge for future reference' },
-];
-
 const TITLE_MAX_LENGTH = 200;
 const TAG_MAX_LENGTH = 50;
 const MAX_TAGS = 20;
@@ -29,8 +22,6 @@ export default function CreateTopicPage() {
   const [description, setDescription] = useState('');
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
-  const [intent, setIntent] = useState('');
-  const [trigger, setTrigger] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,11 +42,9 @@ export default function CreateTopicPage() {
     return (
       title.trim() !== '' ||
       description.trim() !== '' ||
-      tags.length > 0 ||
-      intent !== '' ||
-      trigger.trim() !== ''
+      tags.length > 0
     );
-  }, [title, description, tags, intent, trigger]);
+  }, [title, description, tags]);
 
   // Warn user about unsaved changes on page refresh/close (but not after successful submit)
   useUnsavedChangesWarning(isDirty && !hasSubmitted);
@@ -202,8 +191,6 @@ export default function CreateTopicPage() {
         title: title.trim(),
         description: description.trim() || null,
         tags: tags.length > 0 ? tags : null,
-        intent: intent || null,
-        trigger: trigger.trim() || null,
       });
 
       // Mark as submitted to prevent back-button resubmission
@@ -227,8 +214,6 @@ export default function CreateTopicPage() {
     setDescription('');
     setTagInput('');
     setTags([]);
-    setIntent('');
-    setTrigger('');
     setError(null);
     setIsNetworkError(false);
     setTitleTouched(false);
@@ -402,59 +387,6 @@ export default function CreateTopicPage() {
               Press Enter or comma to add a tag. Max {TAG_MAX_LENGTH} chars per tag, up to {MAX_TAGS} tags.
             </p>
           )}
-        </div>
-
-        {/* Intent */}
-        <div>
-          <span className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
-            Intent <span className="text-gray-400 dark:text-gray-500 normal-case font-normal tracking-normal">(optional)</span>
-          </span>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2.5">
-            Select what you want to achieve with this topic
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            {INTENT_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setIntent(intent === option.value ? '' : option.value)}
-                className={`p-3 rounded-sm border text-left transition-colors ${
-                  intent === option.value
-                    ? 'border-primary-500 dark:border-primary-400'
-                    : 'border-rule dark:border-dark-border hover:border-gray-400 dark:hover:border-gray-600'
-                }`}
-              >
-                <div className={`text-xs font-semibold uppercase tracking-wide ${
-                  intent === option.value
-                    ? 'text-primary-600 dark:text-primary-400'
-                    : 'text-gray-900 dark:text-white'
-                }`}>
-                  {option.label}
-                </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {option.description}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Trigger */}
-        <div>
-          <label htmlFor="trigger" className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
-            Trigger <span className="text-gray-400 dark:text-gray-500 normal-case font-normal tracking-normal">(optional)</span>
-          </label>
-          <textarea
-            id="trigger"
-            value={trigger}
-            onChange={(e) => setTrigger(e.target.value)}
-            className="input-field font-serif min-h-[80px] resize-y"
-            placeholder="What prompted you to explore this topic? (optional)"
-            rows={2}
-          />
-          <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-            What made you think about exploring this area?
-          </p>
         </div>
 
         {/* Actions — primary ink action, quiet ghost actions */}

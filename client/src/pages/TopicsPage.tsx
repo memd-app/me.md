@@ -32,12 +32,6 @@ const STATUS_LABELS: Record<string, string> = {
   refined: 'Refined',
 };
 
-const PRIORITY_LABELS: Record<string, string> = {
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-};
-
 type SortOption = 'name_asc' | 'name_desc' | 'date_newest' | 'date_oldest' | 'priority_high' | 'priority_low';
 
 const SORT_LABELS: Record<SortOption, string> = {
@@ -89,7 +83,6 @@ export default function TopicsPage() {
   const [topics, setTopics] = useState<Topic[]>([]);
   // Initialize filter state from URL params for deep-linking support
   const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || 'all');
-  const [priorityFilter, setPriorityFilter] = useState(() => searchParams.get('priority') || 'all');
   const [sortBy, setSortBy] = useState<SortOption>(() => {
     const sortParam = searchParams.get('sort');
     return (sortParam && sortParam in SORT_LABELS) ? sortParam as SortOption : 'date_newest';
@@ -222,11 +215,10 @@ export default function TopicsPage() {
   // Filter out dismissed suggestions
   const visibleSuggestions = suggestions.filter(s => !dismissedSuggestions.has(s.title));
 
-  const hasActiveFilters = statusFilter !== 'all' || priorityFilter !== 'all' || searchQuery.trim() !== '';
+  const hasActiveFilters = statusFilter !== 'all' || searchQuery.trim() !== '';
 
   const clearAllFilters = () => {
     setStatusFilter('all');
-    setPriorityFilter('all');
     setSortBy('date_newest');
     setSearchQuery('');
     setCurrentPage(1);
@@ -247,7 +239,6 @@ export default function TopicsPage() {
 
     // Set filter params (only include non-default values to keep URL clean)
     if (statusFilter !== 'all') newParams.set('status', statusFilter);
-    if (priorityFilter !== 'all') newParams.set('priority', priorityFilter);
     if (sortBy !== 'date_newest') newParams.set('sort', sortBy);
     if (searchQuery.trim()) newParams.set('q', searchQuery.trim());
     if (currentPage > 1) newParams.set('page', String(currentPage));
@@ -258,7 +249,7 @@ export default function TopicsPage() {
     if (currentStr !== newStr) {
       setSearchParams(newParams, { replace: true });
     }
-  }, [statusFilter, priorityFilter, sortBy, searchQuery, currentPage]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [statusFilter, sortBy, searchQuery, currentPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filter and sort topics - deduplicate by ID for consistency during data updates
   const filteredAndSortedTopics = useMemo(() => {
@@ -285,11 +276,6 @@ export default function TopicsPage() {
     // Apply status filter
     if (statusFilter !== 'all') {
       result = result.filter((t) => t.status === statusFilter);
-    }
-
-    // Apply priority filter
-    if (priorityFilter !== 'all') {
-      result = result.filter((t) => t.priority === priorityFilter);
     }
 
     // Apply sorting with stable tiebreaker by ID to prevent item shifting when data changes
@@ -326,7 +312,7 @@ export default function TopicsPage() {
     });
 
     return result;
-  }, [topics, statusFilter, priorityFilter, sortBy, searchQuery]);
+  }, [topics, statusFilter, sortBy, searchQuery]);
 
   // Pagination computed values with immediate clamping for consistency during data updates.
   // Instead of clamping in a useEffect (which causes a render with stale page), we compute
@@ -352,7 +338,7 @@ export default function TopicsPage() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, priorityFilter, sortBy, searchQuery]);
+  }, [statusFilter, sortBy, searchQuery]);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -402,15 +388,6 @@ export default function TopicsPage() {
     const counts: Record<string, number> = {};
     topics.forEach((t) => {
       counts[t.status] = (counts[t.status] || 0) + 1;
-    });
-    return counts;
-  }, [topics]);
-
-  // Count topics per priority
-  const priorityCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    topics.forEach((t) => {
-      counts[t.priority] = (counts[t.priority] || 0) + 1;
     });
     return counts;
   }, [topics]);
@@ -473,12 +450,6 @@ export default function TopicsPage() {
               className="text-sm font-semibold text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
             >
               Import
-            </Link>
-            <Link
-              to="/app/templates"
-              className="text-sm font-semibold text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
-            >
-              Templates
             </Link>
             <Link to="/app/topics/new" className="btn-primary">
               + New Topic
@@ -573,20 +544,6 @@ export default function TopicsPage() {
             ]}
           />
 
-          <FilterSelect
-            label="Priority"
-            value={priorityFilter}
-            onChange={setPriorityFilter}
-            active={priorityFilter !== 'all'}
-            options={[
-              { value: 'all', label: 'All' },
-              ...['high', 'medium', 'low'].map((priority) => ({
-                value: priority,
-                label: `${PRIORITY_LABELS[priority]}${priorityCounts[priority] ? ` (${priorityCounts[priority]})` : ''}`,
-              })),
-            ]}
-          />
-
           <span className="hidden sm:block w-px h-5 bg-rule dark:bg-dark-border" aria-hidden="true" />
 
           <FilterSelect
@@ -612,7 +569,6 @@ export default function TopicsPage() {
             Showing {filteredAndSortedTopics.length} of {topics.length} topics
             {searchQuery.trim() && <> &middot; &ldquo;{searchQuery.trim()}&rdquo;</>}
             {statusFilter !== 'all' && <> &middot; {STATUS_LABELS[statusFilter]}</>}
-            {priorityFilter !== 'all' && <> &middot; {PRIORITY_LABELS[priorityFilter]} priority</>}
           </p>
         )}
       </div>

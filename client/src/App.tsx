@@ -20,7 +20,6 @@ import CreateTopicPage from '@/pages/CreateTopicPage';
 import TopicDetailPage from '@/pages/TopicDetailPage';
 import SessionPage from '@/pages/SessionPage';
 import ChatPage from '@/pages/ChatPage';
-import TemplatesPage from '@/pages/TemplatesPage';
 import NotesPage from '@/pages/NotesPage';
 import ImportPage from '@/pages/ImportPage';
 import AssessmentPage from '@/pages/AssessmentPage';
@@ -72,7 +71,6 @@ function App() {
             <Route path="topics" element={<TopicsPage />} />
             <Route path="topics/new" element={<CreateTopicPage />} />
             <Route path="topics/:id" element={<TopicDetailPage />} />
-            <Route path="templates" element={<TemplatesPage />} />
             <Route path="session/new" element={<Navigate to="/app/topics" replace />} />
             <Route path="sessions/:id" element={<SessionPage />} />
             {/* Legacy singular form — canonicalized to /app/sessions/:id */}

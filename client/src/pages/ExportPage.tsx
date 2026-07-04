@@ -1,14 +1,12 @@
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '@/contexts/ToastContext';
-import Modal from '@/components/common/Modal';
 import { getExportStatus, exportAsMarkdown, exportAsJson } from '@/services/profile';
-import { PageHeader, Badge } from '@/components/ui';
+import { PageHeader } from '@/components/ui';
 
 type ExportFormat = 'markdown' | 'json' | 'both';
-type ExportAction = 'download' | 'clipboard';
 
 export default function ExportPage() {
   const { user } = useUser();
@@ -22,13 +20,6 @@ export default function ExportPage() {
   // Export readiness state
   const [exportStatus, setExportStatus] = useState<{ hasVerifiedData: boolean; verifiedInsightCount: number; topicCount: number } | null>(null);
   const [loadingExportStatus, setLoadingExportStatus] = useState(true);
-
-  // Authentication verification state
-  const [isVerified, setIsVerified] = useState(false);
-  const [showVerifyDialog, setShowVerifyDialog] = useState(false);
-  const [verifyError, setVerifyError] = useState<string | null>(null);
-  const [verifying, _setVerifying] = useState(false);
-  const [pendingAction, setPendingAction] = useState<ExportAction | null>(null);
 
   // Check export readiness on mount
   useEffect(() => {
@@ -114,7 +105,7 @@ export default function ExportPage() {
     }
   };
 
-  const requireVerification = (action: ExportAction) => {
+  const hasExportableData = () => {
     // Check if there's verified data to export
     if (exportStatus && !exportStatus.hasVerifiedData) {
       addToast('No verified insights available to export. Complete interview sessions and verify insights first.', 'warning', 5000);
@@ -122,48 +113,22 @@ export default function ExportPage() {
         type: 'error',
         message: 'Nothing to export yet. To build your exportable profile: 1) Create topics and complete interview sessions, 2) Review and verify your insights on the Verification page, 3) Ensure verified insights have the "exportable" privacy tier.',
       });
-      return;
+      return false;
     }
-
-    if (isVerified) {
-      // Already verified this session
-      if (action === 'download') {
-        performExport();
-      } else {
-        performCopy();
-      }
-      return;
-    }
-    setPendingAction(action);
-    setShowVerifyDialog(true);
-    setVerifyError(null);
+    return true;
   };
 
-  const handleVerify = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-
-    // Local-only app: this dialog is an informed-consent confirmation, not authentication
-    setIsVerified(true);
-    setShowVerifyDialog(false);
-
-    // Execute the pending action
-    if (pendingAction === 'download') {
+  const handleExport = () => {
+    if (hasExportableData()) {
       performExport();
-    } else if (pendingAction === 'clipboard') {
+    }
+  };
+
+  const handleCopyToClipboard = () => {
+    if (hasExportableData()) {
       performCopy();
     }
-    setPendingAction(null);
   };
-
-  const handleCancelVerify = () => {
-    setShowVerifyDialog(false);
-    setVerifyError(null);
-    setPendingAction(null);
-  };
-
-  const handleExport = () => requireVerification('download');
-  const handleCopyToClipboard = () => requireVerification('clipboard');
 
   const formatOptions: { value: ExportFormat; label: string; description: string }[] = [
     {
@@ -238,14 +203,6 @@ export default function ExportPage() {
         </p>
       )}
 
-      {/* Verification status banner */}
-      {isVerified && (
-        <p className="mb-8 text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
-          <Badge variant="verified" label="Identity verified" />
-          <span>You can export freely during this session.</span>
-        </p>
-      )}
-
       {/* Format selection — quiet selectable cards, amber ring on selection */}
       <div className="mb-8">
         <h2 className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-3">
@@ -312,14 +269,6 @@ export default function ExportPage() {
               ? 'Downloads your profile as me.md'
               : 'Downloads structured profile data as JSON'}
           </p>
-          {!isVerified && (
-            <p className="text-[11px] uppercase tracking-[0.08em] font-sans font-medium text-primary-600 dark:text-primary-400 mt-1.5 flex items-center gap-1.5">
-              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-              </svg>
-              Requires identity verification
-            </p>
-          )}
         </div>
         <button
           onClick={handleExport}
@@ -345,14 +294,6 @@ export default function ExportPage() {
           <p className="text-sm text-gray-600 dark:text-gray-300">
             Copy your profile as markdown directly to paste into any AI tool
           </p>
-          {!isVerified && (
-            <p className="text-[11px] uppercase tracking-[0.08em] font-sans font-medium text-primary-600 dark:text-primary-400 mt-1.5 flex items-center gap-1.5">
-              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-              </svg>
-              Requires identity verification
-            </p>
-          )}
         </div>
         <button
           onClick={handleCopyToClipboard}
@@ -373,53 +314,6 @@ export default function ExportPage() {
         </p>
       </div>
 
-      {/* Authentication Verification Dialog */}
-      <Modal
-        open={showVerifyDialog}
-        onClose={handleCancelVerify}
-        title="Confirm Export"
-        labelledBy="verify-dialog-title"
-        icon={
-          <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
-            <svg className="w-5 h-5 text-primary-600 dark:text-primary-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-              <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-            </svg>
-          </div>
-        }
-        footer={
-          <>
-            <button
-              type="button"
-              onClick={handleCancelVerify}
-              className="btn-secondary"
-              disabled={verifying}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={(e) => handleVerify(e as unknown as FormEvent)}
-              disabled={verifying}
-              className="btn-primary"
-            >
-              {verifying ? 'Exporting...' : 'Export'}
-            </button>
-          </>
-        }
-      >
-        <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-          The exported file contains your personal knowledge base in unencrypted form.
-          This app has no password protection &mdash; anyone with access to the file can read it,
-          so store and share it carefully.
-        </p>
-
-        {verifyError && (
-          <p className="mb-4 text-sm text-red-600 dark:text-red-400">
-            {verifyError}
-          </p>
-        )}
-
-      </Modal>
     </div>
   );
 }
