@@ -3,7 +3,6 @@ import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '../contexts/ToastContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
-import SwipeableCard from '../components/verification/SwipeableCard';
 import { Badge, Button, EmptyState, PageHeader, SectionHeading } from '@/components/ui';
 import { getInsightStats, getPendingInsights, getAllInsights, verifyInsight, rejectInsight, editInsight, getInsight } from '@/services/insights';
 import { formatDateTime as sharedFormatDateTime, formatShortDate } from '@/utils/dateFormat';
@@ -69,13 +68,6 @@ export default function VerificationPage() {
   const [editSaving, setEditSaving] = useState(false);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [historyState, setHistoryState] = useState<HistoryState | null>(null);
-
-  // Batch review mode state
-  const [batchMode, setBatchMode] = useState(false);
-  const [batchIndex, setBatchIndex] = useState(0);
-  const [batchTotal, setBatchTotal] = useState(0);
-  const [batchReviewed, setBatchReviewed] = useState(0);
-  const [batchInsights, setBatchInsights] = useState<Insight[]>([]);
 
   const fetchData = useCallback(async (signal?: AbortSignal) => {
     if (!user) return;
@@ -230,81 +222,6 @@ export default function VerificationPage() {
     }
   };
 
-  // ============================================
-  // Batch Review Mode Handlers
-  // ============================================
-
-  const startBatchReview = () => {
-    if (pendingInsights.length === 0) return;
-    // Snapshot the current pending insights for the batch
-    setBatchInsights([...pendingInsights]);
-    setBatchTotal(pendingInsights.length);
-    setBatchIndex(0);
-    setBatchReviewed(0);
-    setBatchMode(true);
-    // Reset edit/history state
-    setEditState(null);
-    setHistoryState(null);
-  };
-
-  const exitBatchReview = () => {
-    setBatchMode(false);
-    setBatchInsights([]);
-    setBatchIndex(0);
-    setBatchReviewed(0);
-    setBatchTotal(0);
-    setEditState(null);
-    setHistoryState(null);
-  };
-
-  const advanceBatch = () => {
-    setBatchReviewed(prev => prev + 1);
-    setEditState(null);
-    setHistoryState(null);
-    // Find the next insight that hasn't been acted on yet
-    // We check against the current pendingInsights which gets updated as items are approved/rejected
-    setBatchIndex(prev => prev + 1);
-  };
-
-  const handleBatchApprove = async (insightId: string) => {
-    await handleApprove(insightId);
-    // Remove from batchInsights too
-    setBatchInsights(prev => prev.map(i => i.id === insightId ? { ...i, verificationStatus: '_done' } : i));
-    advanceBatch();
-  };
-
-  const handleBatchReject = async (insightId: string) => {
-    await handleReject(insightId);
-    setBatchInsights(prev => prev.map(i => i.id === insightId ? { ...i, verificationStatus: '_done' } : i));
-    advanceBatch();
-  };
-
-  const handleBatchSaveEditAndContinue = async () => {
-    await handleSaveEdit();
-    // After save, mark as reviewed and advance
-    if (editState) {
-      setBatchInsights(prev => prev.map(i => i.id === editState.insightId ? { ...i, verificationStatus: '_done' } : i));
-    }
-    advanceBatch();
-  };
-
-  // Get the current batch insight (skipping already-done ones)
-  const getCurrentBatchInsight = (): Insight | null => {
-    if (!batchMode || batchInsights.length === 0) return null;
-    // Find the next un-acted insight starting from batchIndex
-    for (let i = batchIndex; i < batchInsights.length; i++) {
-      if (batchInsights[i].verificationStatus !== '_done') {
-        // Update batchIndex if we skipped some
-        if (i !== batchIndex) setBatchIndex(i);
-        return batchInsights[i];
-      }
-    }
-    return null; // All done
-  };
-
-  const currentBatchInsight = batchMode ? getCurrentBatchInsight() : null;
-  const batchComplete = batchMode && currentBatchInsight === null;
-
   const getActionLabel = (action: string): string => {
     switch (action) {
       case 'verified': return 'Verified';
@@ -384,13 +301,6 @@ export default function VerificationPage() {
       <PageHeader
         title="Verification queue"
         subtitle="Review and verify AI-extracted insights."
-        actions={
-          !batchMode && pendingInsights.length >= 2 ? (
-            <Button variant="secondary" size="sm" onClick={startBatchReview}>
-              Start batch review ({pendingInsights.length})
-            </Button>
-          ) : undefined
-        }
       />
 
       {/* Error message */}
@@ -427,180 +337,12 @@ export default function VerificationPage() {
         </div>
       </section>
 
-      {/* Batch Review Mode */}
-      {batchMode && (
-        batchComplete ? (
-          <div className="text-center py-16 border-y border-rule dark:border-dark-border">
-            <p className="text-[11px] tracking-[0.16em] uppercase font-sans font-bold text-primary-600 dark:text-primary-400 mb-3">
-              Batch review
-            </p>
-            <h2 className="font-serif italic font-medium text-3xl text-gray-900 dark:text-white mb-3">
-              Queue cleared.
-            </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
-              You reviewed <span className="font-serif italic text-lg text-primary-600 dark:text-primary-400">{batchReviewed}</span> of {batchTotal} insights.
-            </p>
-            <div className="flex items-center justify-center gap-3">
-              <Button variant="primary" onClick={exitBatchReview}>
-                Back to queue
-              </Button>
-              {pendingInsights.length > 0 && (
-                <Button variant="secondary" onClick={startBatchReview}>
-                  Review remaining ({pendingInsights.length})
-                </Button>
-              )}
-            </div>
-          </div>
-        ) : currentBatchInsight && (() => {
-          const insight = currentBatchInsight;
-          return (
-            <div className="space-y-6">
-              {/* Batch progress indicator */}
-              <div className="border border-rule dark:border-dark-border bg-panel dark:bg-dark-card rounded-lg px-5 py-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-baseline gap-3">
-                    <span className="text-[11px] tracking-[0.14em] uppercase font-sans font-bold text-primary-600 dark:text-primary-400">
-                      Batch review
-                    </span>
-                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                      {batchReviewed + 1} of {batchTotal}
-                    </span>
-                  </div>
-                  <button
-                    onClick={exitBatchReview}
-                    className="text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
-                  >
-                    Exit batch
-                  </button>
-                </div>
-                {/* Thin amber hairline fill, not a bar */}
-                <div className="h-[2px] bg-rule dark:bg-dark-border rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary-500 dark:bg-primary-400 rounded-full transition-all duration-300"
-                    style={{ width: `${(batchReviewed / batchTotal) * 100}%` }}
-                  />
-                </div>
-                <div className="flex justify-between mt-2 text-[11px] text-gray-500 dark:text-gray-400">
-                  <span>{batchReviewed} reviewed</span>
-                  <span>{batchTotal - batchReviewed} remaining</span>
-                </div>
-              </div>
-
-              {/* Single insight card in focus */}
-              <div className="card">
-                {/* Insight content - view or edit mode */}
-                <div className="mb-5">
-                  {editState?.insightId === insight.id ? (
-                    <div className="space-y-3">
-                      <textarea
-                        ref={editTextareaRef}
-                        value={editState.editedContent}
-                        onChange={(e) => setEditState({ ...editState, editedContent: e.target.value })}
-                        className="input-field font-serif text-lg leading-relaxed resize-y min-h-[100px]"
-                        rows={4}
-                        disabled={editSaving}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape') handleCancelEdit();
-                        }}
-                      />
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={handleBatchSaveEditAndContinue}
-                          loading={editSaving}
-                          disabled={editSaving || editState.editedContent.trim() === '' || editState.editedContent.trim() === insight.content}
-                        >
-                          Save &amp; continue
-                        </Button>
-                        <Button variant="secondary" size="sm" onClick={handleCancelEdit} disabled={editSaving}>
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="font-serif text-lg leading-relaxed text-gray-900 dark:text-white break-words">
-                      {insight.content}
-                    </p>
-                  )}
-                </div>
-
-                {/* Metadata */}
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-5 text-xs text-gray-500 dark:text-gray-400">
-                  <span>{insight.confidenceScore}% confidence ({getConfidenceLabel(insight.confidenceScore)})</span>
-                  {insight.extractionMethod === 'fallback' && (
-                    <>
-                      <span aria-hidden="true" className="text-gray-300 dark:text-gray-700">&middot;</span>
-                      <span title="This insight was extracted using rule-based pattern matching instead of AI. It may be lower quality — please review carefully.">
-                        <Badge variant="neutral" label="Rule-based" />
-                      </span>
-                    </>
-                  )}
-                  {insight.topicTitle && (
-                    <>
-                      <span aria-hidden="true" className="text-gray-300 dark:text-gray-700">&middot;</span>
-                      <span className="truncate max-w-[200px]">{insight.topicTitle}</span>
-                    </>
-                  )}
-                  {insight.createdAt && (
-                    <>
-                      <span aria-hidden="true" className="text-gray-300 dark:text-gray-700">&middot;</span>
-                      <span>{formatDate(insight.createdAt)}</span>
-                    </>
-                  )}
-                </div>
-
-                {/* Batch action buttons */}
-                {editState?.insightId !== insight.id && (
-                  <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-rule dark:border-dark-border">
-                    <Button
-                      variant="primary"
-                      onClick={() => handleBatchApprove(insight.id)}
-                      loading={actionInProgress === insight.id}
-                      disabled={actionInProgress === insight.id}
-                    >
-                      Approve
-                    </Button>
-
-                    <Button
-                      variant="secondary"
-                      onClick={() => handleStartEdit(insight)}
-                      disabled={actionInProgress === insight.id}
-                    >
-                      Edit &amp; continue
-                    </Button>
-
-                    <button
-                      onClick={() => handleBatchReject(insight.id)}
-                      disabled={actionInProgress === insight.id}
-                      className="inline-flex items-center px-5 py-2.5 text-sm font-semibold text-gray-600 dark:text-gray-400 border border-rule dark:border-dark-border rounded-md hover:text-primary-600 dark:hover:text-primary-400 hover:border-primary-400 dark:hover:border-primary-500 transition-colors disabled:opacity-50"
-                    >
-                      Reject
-                    </button>
-
-                    {/* Skip button for batch mode */}
-                    <button
-                      onClick={advanceBatch}
-                      className="ml-auto text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-                    >
-                      Skip &rarr;
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })()
-      )}
-
-      {/* Pending insights list (Verification Queue view) - hidden in batch mode */}
-      {!batchMode && (
-        pendingInsights.length === 0 ? (
-          <EmptyState
-            message="No insights to verify. Complete interview sessions to generate insights for verification."
-            className="py-16"
-          />
-        ) : (
+      {pendingInsights.length === 0 ? (
+        <EmptyState
+          message="No insights to verify. Complete interview sessions to generate insights for verification."
+          className="py-16"
+        />
+      ) : (
         <div className="space-y-5">
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -609,24 +351,15 @@ export default function VerificationPage() {
           </div>
           {/* Keyboard navigation hint */}
           <p className="text-xs text-gray-400 dark:text-gray-600 hidden lg:block" aria-hidden="true">
-            <kbd className="px-1.5 py-0.5 rounded-sm border border-rule dark:border-dark-border text-gray-500 dark:text-gray-400 font-mono text-[10px]">Tab</kbd> to navigate cards,{' '}
-            <kbd className="px-1.5 py-0.5 rounded-sm border border-rule dark:border-dark-border text-gray-500 dark:text-gray-400 font-mono text-[10px]">A</kbd> to approve,{' '}
-            <kbd className="px-1.5 py-0.5 rounded-sm border border-rule dark:border-dark-border text-gray-500 dark:text-gray-400 font-mono text-[10px]">R</kbd> to reject,{' '}
-            <kbd className="px-1.5 py-0.5 rounded-sm border border-rule dark:border-dark-border text-gray-500 dark:text-gray-400 font-mono text-[10px]">Tab</kbd> into card for Edit/History buttons
+            <kbd className="px-1.5 py-0.5 rounded-sm border border-rule dark:border-dark-border text-gray-500 dark:text-gray-400 font-mono text-[10px]">Tab</kbd> to navigate review actions
           </p>
-          {pendingInsights.map(insight => {
-            return (
-            <SwipeableCard
+          {pendingInsights.map(insight => (
+            <div
               key={insight.id}
-              onSwipeRight={() => handleApprove(insight.id)}
-              onSwipeLeft={() => handleReject(insight.id)}
-              rightLabel="Approve"
-              leftLabel="Reject"
-              disabled={actionInProgress === insight.id || editState?.insightId === insight.id}
-              tabIndex={0}
-              ariaLabel={`Insight: ${insight.content.substring(0, 80)}${insight.content.length > 80 ? '...' : ''}. Press A to approve, R to reject, or Tab to action buttons.`}
+              role="article"
+              aria-label={`Insight: ${insight.content.substring(0, 80)}${insight.content.length > 80 ? '...' : ''}. Use the review action buttons to approve, edit, reject, or view history.`}
+              className="card hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
             >
-            <div className="card hover:border-gray-300 dark:hover:border-gray-600 transition-colors">
               {/* Insight content - view or edit mode */}
               <div className="mb-4">
                 {editState?.insightId === insight.id ? (
@@ -847,11 +580,9 @@ export default function VerificationPage() {
                 </div>
               )}
             </div>
-            </SwipeableCard>
-          );
-          })}
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }
