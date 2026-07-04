@@ -2,8 +2,10 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
+import { Button, EmptyState, SectionHeading } from '@/components/ui';
 import { formatShortDate } from '@/utils/dateFormat';
 import * as d3 from 'd3';
 import { getGraphData } from '@/services/graph';
@@ -63,72 +65,185 @@ interface GraphStats {
   totalCategories?: number;
 }
 
-// Color palette for topic categories
-const CATEGORY_COLORS: Record<string, string> = {
-  identity: '#6366f1',     // indigo
-  skills: '#06b6d4',       // cyan
-  experiences: '#f59e0b',  // amber
-  perspectives: '#8b5cf6', // violet
-  goals: '#10b981',        // emerald
-  default: '#3b82f6',      // blue
+// ---------------------------------------------------------------------------
+// GRAPH_PALETTE — the single source of truth for every color the knowledge
+// graph renders, in both themes. Nothing outside this object should contain a
+// hex literal; the graph is DESIGN.md's one deliberately theatrical element
+// ("luminous nodes on paper"), so it earns its own tightly-scoped palette
+// rather than reusing UI chrome tokens directly.
+// ---------------------------------------------------------------------------
+interface GraphPalette {
+  /** The page/canvas background this theme paints under the SVG. Doubles as
+   * node strokes and "cutout" badge marks so shapes read as sitting ON the
+   * canvas rather than floating with a stark white ring. */
+  canvasBg: string;
+  accent: string;
+  rule: string;
+  panel: string;
+  /** Topic category fills. */
+  categories: Record<string, string>;
+  /** Paler/desaturated companions used for unexplored ("gap") nodes. */
+  categoriesDim: Record<string, string>;
+  /** Big Five domain node fills (pentagons). */
+  personalityDomain: Record<string, string>;
+  /** Big Five facet node fills (diamonds) — tints within the domain family. */
+  personalityFacet: Record<string, string>;
+  /** Topic status ring colors. */
+  status: Record<string, string>;
+  concept: { verified: string; unverified: string };
+  edge: {
+    contains: string;
+    tagShared: string;
+    multiBucket: string;
+    conceptRelation: string;
+    personalityContains: string;
+    personalityRelated: string;
+    default: string;
+  };
+  /** Generic "unexplored area" accent used by the legend swatch (not tied to
+   * any single category, unlike categoriesDim). */
+  gapAccent: string;
+}
+
+const GRAPH_PALETTE: { light: GraphPalette; dark: GraphPalette } = {
+  light: {
+    canvasBg: '#FBF9F4',
+    accent: '#C77B21',
+    rule: '#E7DFD0',
+    panel: '#F4EDDF',
+    categories: {
+      identity: '#B4552D',
+      skills: '#8C6D1F',
+      experiences: '#5F7161',
+      perspectives: '#2E6B65',
+      goals: '#7D5A7A',
+      default: '#857B69',
+    },
+    categoriesDim: {
+      identity: '#DDAF9B',
+      skills: '#D3C08C',
+      experiences: '#B7C2B1',
+      perspectives: '#9FC5C0',
+      goals: '#C4AEC2',
+      default: '#D2CABB',
+    },
+    personalityDomain: {
+      O: '#2E6B65', // Openness — deep teal (perspective-taking)
+      C: '#8C6D1F', // Conscientiousness — ochre (discipline)
+      E: '#B4552D', // Extraversion — terracotta (outward energy)
+      A: '#5F7161', // Agreeableness — olive-sage (harmony)
+      N: '#7D5A7A', // Neuroticism — muted plum
+      default: '#857B69',
+    },
+    personalityFacet: {
+      O: '#7FAFA9',
+      C: '#C9A94A',
+      E: '#D89A78',
+      A: '#9DAE97',
+      N: '#B092AF',
+      default: '#B3AA97',
+    },
+    status: {
+      backlog: '#C7BEB0',
+      scheduled: '#D89A48', // paused
+      in_progress: '#C77B21', // active
+      extracted: '#857B69', // completed
+      refined: '#857B69', // completed
+    },
+    concept: {
+      verified: '#C77B21', // amber — matches DESIGN.md's "verified = amber"
+      unverified: '#A99E8A', // warm gray
+    },
+    edge: {
+      contains: '#D5CAB6',
+      tagShared: '#C2B392',
+      multiBucket: '#A8916B', // stronger relationship, darker warm tan
+      conceptRelation: '#B99B6B', // amber-tinted honey
+      personalityContains: '#9A7C97', // plum-gray, ties to the N domain
+      personalityRelated: '#C2ACC0',
+      default: '#9C9284',
+    },
+    gapAccent: '#D89A48',
+  },
+  dark: {
+    canvasBg: '#17130D',
+    accent: '#E09A3E',
+    rule: '#3A3226',
+    panel: '#241D14',
+    categories: {
+      identity: '#D9754A',
+      skills: '#C79A3D',
+      experiences: '#7E9483',
+      perspectives: '#4B948C',
+      goals: '#A17CA0',
+      default: '#A99E8A',
+    },
+    categoriesDim: {
+      identity: '#5A3D2E',
+      skills: '#4F4425',
+      experiences: '#3A4238',
+      perspectives: '#293F3D',
+      goals: '#3E323D',
+      default: '#3A362E',
+    },
+    personalityDomain: {
+      O: '#4B948C',
+      C: '#C79A3D',
+      E: '#D9754A',
+      A: '#7E9483',
+      N: '#A17CA0',
+      default: '#A99E8A',
+    },
+    personalityFacet: {
+      O: '#7CB3AC',
+      C: '#D9BC72',
+      E: '#E39B79',
+      A: '#A3B4A0',
+      N: '#BC9FBB',
+      default: '#C2BAAA',
+    },
+    status: {
+      backlog: '#4A4234',
+      scheduled: '#E3AE66', // paused
+      in_progress: '#E09A3E', // active
+      extracted: '#A99E8A', // completed
+      refined: '#A99E8A', // completed
+    },
+    concept: {
+      verified: '#E09A3E', // amber
+      unverified: '#A99E8A', // warm gray
+    },
+    edge: {
+      contains: '#4A4234',
+      tagShared: '#5C5138',
+      multiBucket: '#6B5B3E',
+      conceptRelation: '#7A5C2E',
+      personalityContains: '#5C4A5A',
+      personalityRelated: '#4A3D48',
+      default: '#443C30',
+    },
+    gapAccent: '#E3AE66',
+  },
 };
 
-// Dimmed versions of category colors for gap nodes
-const CATEGORY_COLORS_DIM: Record<string, string> = {
-  identity: '#a5b4fc',     // primary-300
-  skills: '#67e8f9',       // cyan-300
-  experiences: '#fcd34d',  // amber-300
-  perspectives: '#c4b5fd', // violet-300
-  goals: '#6ee7b7',        // emerald-300
-  default: '#93c5fd',      // blue-300
-};
-
-// Colors for Big Five personality domain nodes
-const PERSONALITY_DOMAIN_COLORS: Record<string, string> = {
-  O: '#3B82F6',   // blue (Openness)
-  C: '#8B5CF6',   // purple (Conscientiousness)
-  E: '#F59E0B',   // amber (Extraversion)
-  A: '#10B981',   // emerald (Agreeableness)
-  N: '#F43F5E',   // rose (Neuroticism)
-  default: '#ec4899', // pink fallback
-};
-
-// Lighter versions for facet nodes
-const PERSONALITY_FACET_COLORS: Record<string, string> = {
-  O: '#93c5fd',   // blue-300
-  C: '#c4b5fd',   // purple-300
-  E: '#fcd34d',   // amber-300
-  A: '#6ee7b7',   // emerald-300
-  N: '#fda4af',   // rose-300
-  default: '#f9a8d4', // pink-300
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  backlog: '#9ca3af',      // gray
-  scheduled: '#f59e0b',    // amber
-  in_progress: '#3b82f6',  // blue
-  extracted: '#10b981',    // green
-  refined: '#6366f1',      // indigo
-};
-
-function getNodeColor(node: GraphNode): string {
+function getNodeColor(node: GraphNode, pal: GraphPalette): string {
   if (node.type === 'personality_domain') {
-    return PERSONALITY_DOMAIN_COLORS[node.domainKey || 'default'] || PERSONALITY_DOMAIN_COLORS.default;
+    return pal.personalityDomain[node.domainKey || 'default'] || pal.personalityDomain.default;
   }
   if (node.type === 'personality_facet') {
-    return PERSONALITY_FACET_COLORS[node.domainKey || 'default'] || PERSONALITY_FACET_COLORS.default;
+    return pal.personalityFacet[node.domainKey || 'default'] || pal.personalityFacet.default;
   }
   if (node.type === 'gap') {
     // Dim version of the category color for unexplored nodes
-    return CATEGORY_COLORS_DIM[node.category || 'default'] || CATEGORY_COLORS_DIM.default;
+    return pal.categoriesDim[node.category || 'default'] || pal.categoriesDim.default;
   }
   if (node.type === 'concept') {
-    // Verified concept nodes get a green color, unverified stay violet
-    if (node.verificationStatus === 'verified') return '#10b981'; // emerald-500
-    return '#a78bfa'; // violet-400
+    // Verified concept nodes get the amber accent; unverified stay warm gray
+    if (node.verificationStatus === 'verified') return pal.concept.verified;
+    return pal.concept.unverified;
   }
-  if (node.category) return CATEGORY_COLORS[node.category] || CATEGORY_COLORS.default;
-  return CATEGORY_COLORS.default;
+  if (node.category) return pal.categories[node.category] || pal.categories.default;
+  return pal.categories.default;
 }
 
 function getNodeRadius(node: GraphNode): number {
@@ -140,22 +255,39 @@ function getNodeRadius(node: GraphNode): number {
   return 12 + Math.min(node.weight * 3, 24);
 }
 
-function getEdgeColor(edge: GraphEdge): string {
+function getEdgeColor(edge: GraphEdge, pal: GraphPalette): string {
   switch (edge.type) {
-    case 'contains': return '#d1d5db'; // gray-300
-    case 'tag_shared': return '#93c5fd'; // blue-300
-    case 'multi_bucket': return '#c4b5fd'; // violet-300
-    case 'concept_relation': return '#a5f3fc'; // cyan-200
-    case 'personality_contains': return '#f9a8d4'; // pink-300
-    case 'personality_related': return '#fbcfe8'; // pink-200
-    default: return '#9ca3af'; // gray-400
+    case 'contains': return pal.edge.contains;
+    case 'tag_shared': return pal.edge.tagShared;
+    case 'multi_bucket': return pal.edge.multiBucket;
+    case 'concept_relation': return pal.edge.conceptRelation;
+    case 'personality_contains': return pal.edge.personalityContains;
+    case 'personality_related': return pal.edge.personalityRelated;
+    default: return pal.edge.default;
   }
 }
+
+// Small-caps chrome label, shared by toggles/legend/meta text (DESIGN.md
+// "small caps everywhere chrome speaks").
+const SMALL_CAPS = 'uppercase tracking-[0.08em] font-medium font-sans';
+
+const SCORE_LEVEL_ACCENT_CLASS = 'text-primary-600 dark:text-primary-400';
+const SCORE_LEVEL_MUTED_CLASS = 'text-gray-500 dark:text-gray-400';
+const SCORE_LEVEL_FAINT_CLASS = 'text-gray-400 dark:text-gray-500';
+const SCORE_LEVEL_CLASS: Record<string, string> = {
+  High: SCORE_LEVEL_ACCENT_CLASS,
+  'Above Average': SCORE_LEVEL_ACCENT_CLASS,
+  'Moderate-High': SCORE_LEVEL_ACCENT_CLASS,
+  Average: SCORE_LEVEL_MUTED_CLASS,
+};
 
 export default function KnowledgeGraphPage() {
   const { user } = useUser();
   const db = useDatabase();
   const navigate = useNavigate();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const pal = GRAPH_PALETTE[isDark ? 'dark' : 'light'];
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [graphData, setGraphData] = useState<{ nodes: GraphNode[]; edges: GraphEdge[]; stats: GraphStats } | null>(null);
@@ -276,6 +408,25 @@ export default function KnowledgeGraphPage() {
 
     svg.attr('width', width).attr('height', height);
 
+    // Luminosity: a single shared glow filter for node shapes — "luminous
+    // nodes on paper". One <filter> definition, applied via .attr('filter',
+    // ...) to whole selections (never created per-node or inside the tick
+    // loop), restrained in light mode and a touch stronger in dark ("lamplight").
+    const defs = svg.append('defs');
+    const glow = defs.append('filter')
+      .attr('id', 'graph-node-glow')
+      .attr('x', '-75%')
+      .attr('y', '-75%')
+      .attr('width', '250%')
+      .attr('height', '250%');
+    glow.append('feGaussianBlur')
+      .attr('in', 'SourceGraphic')
+      .attr('stdDeviation', isDark ? 3.2 : 1.6)
+      .attr('result', 'glowBlur');
+    const glowMerge = glow.append('feMerge');
+    glowMerge.append('feMergeNode').attr('in', 'glowBlur');
+    glowMerge.append('feMergeNode').attr('in', 'SourceGraphic');
+
     // Create zoom group
     const g = svg.append('g');
 
@@ -348,7 +499,7 @@ export default function KnowledgeGraphPage() {
       .selectAll('line')
       .data(simEdges)
       .join('line')
-      .attr('stroke', (d: any) => getEdgeColor(d))
+      .attr('stroke', (d: any) => getEdgeColor(d, pal))
       .attr('stroke-opacity', (d: any) => d.type === 'contains' ? 0.3 : 0.5)
       .attr('stroke-width', (d: any) => {
         if (d.type === 'contains') return 1;
@@ -399,31 +550,30 @@ export default function KnowledgeGraphPage() {
     node.filter((d: GraphNode) => d.type === 'personality_domain')
       .append('path')
       .attr('d', (d: GraphNode) => pentagonPath(getNodeRadius(d)))
-      .attr('fill', (d: GraphNode) => getNodeColor(d))
-      .attr('stroke', '#fff')
+      .attr('fill', (d: GraphNode) => getNodeColor(d, pal))
+      .attr('stroke', pal.canvasBg)
       .attr('stroke-width', 2)
-      .attr('opacity', 0.95);
+      .attr('opacity', 0.95)
+      .attr('filter', 'url(#graph-node-glow)');
 
     // Personality facet nodes: diamond shape
     node.filter((d: GraphNode) => d.type === 'personality_facet')
       .append('path')
       .attr('d', (d: GraphNode) => diamondPath(getNodeRadius(d)))
-      .attr('fill', (d: GraphNode) => getNodeColor(d))
-      .attr('stroke', (d: GraphNode) => PERSONALITY_DOMAIN_COLORS[d.domainKey || 'default'] || PERSONALITY_DOMAIN_COLORS.default)
+      .attr('fill', (d: GraphNode) => getNodeColor(d, pal))
+      .attr('stroke', (d: GraphNode) => pal.personalityDomain[d.domainKey || 'default'] || pal.personalityDomain.default)
       .attr('stroke-width', 1.5)
-      .attr('opacity', 0.85);
+      .attr('opacity', 0.85)
+      .attr('filter', 'url(#graph-node-glow)');
 
     // Non-personality node circles - explored nodes are fully opaque, gap nodes are dim
     node.filter((d: GraphNode) => d.type !== 'personality_domain' && d.type !== 'personality_facet')
       .append('circle')
       .attr('r', (d: GraphNode) => getNodeRadius(d))
-      .attr('fill', (d: GraphNode) => {
-        if (d.type === 'gap') return getNodeColor(d);
-        return getNodeColor(d);
-      })
+      .attr('fill', (d: GraphNode) => getNodeColor(d, pal))
       .attr('stroke', (d: GraphNode) => {
-        if (d.type === 'gap') return CATEGORY_COLORS[d.category || 'default'] || CATEGORY_COLORS.default;
-        return '#fff';
+        if (d.type === 'gap') return pal.categories[d.category || 'default'] || pal.categories.default;
+        return pal.canvasBg;
       })
       .attr('stroke-width', (d: GraphNode) => {
         if (d.type === 'gap') return 2;
@@ -437,7 +587,8 @@ export default function KnowledgeGraphPage() {
         if (d.type === 'gap') return 0.35; // Very dim for unexplored
         if (d.type === 'concept') return 0.8;
         return 1;
-      });
+      })
+      .attr('filter', 'url(#graph-node-glow)');
 
     // Score text inside personality domain nodes
     node.filter((d: GraphNode) => d.type === 'personality_domain')
@@ -446,7 +597,7 @@ export default function KnowledgeGraphPage() {
       .attr('dy', '0.35em')
       .attr('font-size', '10px')
       .attr('font-weight', 'bold')
-      .attr('fill', '#fff')
+      .attr('fill', pal.canvasBg)
       .style('pointer-events', 'none')
       .text((d: GraphNode) => d.domainScore ? d.domainScore.toFixed(1) : '');
 
@@ -485,7 +636,7 @@ export default function KnowledgeGraphPage() {
       .attr('dy', '0.35em')
       .attr('font-size', '14px')
       .attr('font-weight', 'bold')
-      .attr('fill', (d: GraphNode) => CATEGORY_COLORS[d.category || 'default'] || CATEGORY_COLORS.default)
+      .attr('fill', (d: GraphNode) => pal.categories[d.category || 'default'] || pal.categories.default)
       .attr('opacity', 0.6)
       .text('?');
 
@@ -494,7 +645,7 @@ export default function KnowledgeGraphPage() {
       .append('circle')
       .attr('r', (d: GraphNode) => getNodeRadius(d) + 3)
       .attr('fill', 'none')
-      .attr('stroke', (d: GraphNode) => STATUS_COLORS[d.status || 'backlog'] || '#9ca3af')
+      .attr('stroke', (d: GraphNode) => pal.status[d.status || 'backlog'] || pal.status.backlog)
       .attr('stroke-width', 2)
       .attr('stroke-dasharray', (d: GraphNode) => {
         if (d.status === 'refined' || d.status === 'extracted') return 'none';
@@ -508,8 +659,8 @@ export default function KnowledgeGraphPage() {
       .attr('cx', (d: GraphNode) => getNodeRadius(d) * 0.6)
       .attr('cy', (d: GraphNode) => -getNodeRadius(d) * 0.6)
       .attr('r', 8)
-      .attr('fill', '#10b981')
-      .attr('stroke', '#fff')
+      .attr('fill', pal.accent)
+      .attr('stroke', pal.canvasBg)
       .attr('stroke-width', 1.5);
 
     node.filter((d: GraphNode) => d.type === 'topic' && (d.verifiedInsightCount || 0) > 0)
@@ -519,7 +670,7 @@ export default function KnowledgeGraphPage() {
       .attr('text-anchor', 'middle')
       .attr('font-size', '9px')
       .attr('font-weight', 'bold')
-      .attr('fill', '#fff')
+      .attr('fill', pal.canvasBg)
       .text((d: GraphNode) => d.verifiedInsightCount || 0);
 
     // Labels for topic nodes
@@ -556,7 +707,7 @@ export default function KnowledgeGraphPage() {
       .append('circle')
       .attr('r', (d: GraphNode) => getNodeRadius(d) + 2)
       .attr('fill', 'none')
-      .attr('stroke', '#10b981') // emerald-500
+      .attr('stroke', pal.concept.verified)
       .attr('stroke-width', 1.5)
       .attr('opacity', 0.8);
 
@@ -566,8 +717,8 @@ export default function KnowledgeGraphPage() {
       .attr('cx', (d: GraphNode) => getNodeRadius(d) * 0.5)
       .attr('cy', (d: GraphNode) => -getNodeRadius(d) * 0.5)
       .attr('r', 5)
-      .attr('fill', '#10b981')
-      .attr('stroke', '#fff')
+      .attr('fill', pal.concept.verified)
+      .attr('stroke', pal.canvasBg)
       .attr('stroke-width', 1);
 
     node.filter((d: GraphNode) => d.type === 'concept' && d.verificationStatus === 'verified')
@@ -577,8 +728,8 @@ export default function KnowledgeGraphPage() {
       .attr('text-anchor', 'middle')
       .attr('font-size', '7px')
       .attr('font-weight', 'bold')
-      .attr('fill', '#fff')
-      .text('\u2713');
+      .attr('fill', pal.canvasBg)
+      .text('✓');
 
     // Labels for concept nodes (smaller, only visible on hover)
     node.filter((d: GraphNode) => d.type === 'concept')
@@ -675,35 +826,28 @@ export default function KnowledgeGraphPage() {
       simulation.stop();
       simulationRef.current = null;
     };
-  }, [graphData, showConcepts, showGaps, showPersonality, navigate]);
+  }, [graphData, showConcepts, showGaps, showPersonality, navigate, isDark, pal]);
 
   // Empty state
   if (!loading && graphData && graphData.nodes.length === 0) {
     return (
       <div className="max-w-6xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Knowledge Graph</h1>
+          <h1 className="font-serif text-2xl text-gray-900 dark:text-white">Knowledge Graph</h1>
           <p className="mt-1 text-gray-600 dark:text-gray-300">
             Visualize connections between your topics and insights
           </p>
         </div>
         <div className="card" style={{ minHeight: '500px' }}>
-          <div className="flex flex-col items-center justify-center h-96">
-            <span className="text-5xl block mb-4">🔗</span>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Your Knowledge Graph
-            </h2>
-            <p className="text-gray-600 dark:text-gray-300 text-center max-w-md">
-              Complete interview sessions and verify insights to see your knowledge graph grow.
-              Topics and concepts will appear as connected nodes.
-            </p>
-            <button
-              onClick={() => navigate('/app/topics')}
-              className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-            >
-              Create Your First Topic
-            </button>
-          </div>
+          <EmptyState
+            kicker="Your knowledge graph"
+            message="Complete interview sessions and verify insights to see your knowledge graph grow. Topics and concepts will appear as connected nodes."
+            action={
+              <Button onClick={() => navigate('/app/topics')}>
+                Create your first topic
+              </Button>
+            }
+          />
         </div>
       </div>
     );
@@ -712,53 +856,56 @@ export default function KnowledgeGraphPage() {
   return (
     <div className="max-w-full mx-auto px-1 sm:px-2" role="region" aria-label="Knowledge Graph visualization">
       {/* Header */}
-      <div className="mb-3 sm:mb-4 flex items-center justify-between flex-wrap gap-2">
+      <div className="mb-3 sm:mb-4 pb-3 border-b border-rule dark:border-dark-border flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Knowledge Graph</h1>
-          <p className="mt-0.5 sm:mt-1 text-sm text-gray-600 dark:text-gray-300 hidden sm:block">
+          <p className={`${SMALL_CAPS} text-[10px] text-primary-600 dark:text-primary-400 mb-0.5`}>Explore</p>
+          <h1 className="font-serif italic text-xl sm:text-2xl text-gray-900 dark:text-white">Knowledge Graph</h1>
+          <p className="mt-0.5 sm:mt-1 text-sm font-serif italic text-gray-600 dark:text-gray-300 hidden sm:block">
             Visualize connections between your topics and insights
           </p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           {/* Toggle gap nodes */}
-          <label className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
+          <label className={`flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs ${SMALL_CAPS} text-gray-600 dark:text-gray-300 cursor-pointer`}>
             <input
               type="checkbox"
               checked={showGaps}
               onChange={(e) => setShowGaps(e.target.checked)}
-              className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+              className="w-4 h-4 accent-primary-500 rounded"
             />
             <span className="hidden sm:inline">Show </span>Gaps
           </label>
           {/* Toggle concepts */}
-          <label className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
+          <label className={`flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs ${SMALL_CAPS} text-gray-600 dark:text-gray-300 cursor-pointer`}>
             <input
               type="checkbox"
               checked={showConcepts}
               onChange={(e) => setShowConcepts(e.target.checked)}
-              className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+              className="w-4 h-4 accent-primary-500 rounded"
             />
             <span className="hidden sm:inline">Show </span>Concepts
           </label>
           {/* Toggle personality nodes */}
           {(graphData?.stats?.personalityNodeCount || 0) > 0 && (
-            <label className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
+            <label className={`flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs ${SMALL_CAPS} text-gray-600 dark:text-gray-300 cursor-pointer`}>
               <input
                 type="checkbox"
                 checked={showPersonality}
                 onChange={(e) => setShowPersonality(e.target.checked)}
-                className="w-4 h-4 text-pink-600 border-gray-300 rounded focus:ring-pink-500"
+                className="w-4 h-4 accent-primary-500 rounded"
               />
               <span className="hidden sm:inline">Show </span>Personality
             </label>
           )}
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={handleRefreshGraph}
-            className="px-3 py-1.5 text-xs sm:text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors min-h-[36px]"
+            className={`${SMALL_CAPS} min-h-[36px]`}
             aria-label="Refresh knowledge graph"
           >
             Refresh
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -768,13 +915,13 @@ export default function KnowledgeGraphPage() {
           <span>{graphData.stats.topicCount} topics</span>
           <span>{graphData.stats.conceptCount} concepts</span>
           {(graphData.stats.personalityNodeCount || 0) > 0 && (
-            <span className="text-pink-600 dark:text-pink-400">{graphData.stats.personalityNodeCount} personality</span>
+            <span>{graphData.stats.personalityNodeCount} personality</span>
           )}
           <span>{graphData.stats.insightCount} insights</span>
-          <span className="text-green-600 dark:text-green-400">{graphData.stats.verifiedInsightCount} verified</span>
+          <span className="text-primary-600 dark:text-primary-400">{graphData.stats.verifiedInsightCount} verified</span>
           <span>{graphData.stats.edgeCount} connections</span>
           {(graphData.stats.unexploredCategories || 0) > 0 && (
-            <span className="text-amber-600 dark:text-amber-400">
+            <span className="text-primary-600 dark:text-primary-400">
               {graphData.stats.unexploredCategories} unexplored {graphData.stats.unexploredCategories === 1 ? 'area' : 'areas'}
             </span>
           )}
@@ -804,7 +951,7 @@ export default function KnowledgeGraphPage() {
       {!loading && graphData && graphData.nodes.length > 0 && (
         <div
           ref={containerRef}
-          className="relative bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+          className="relative bg-paper dark:bg-dark-bg rounded-md border border-rule dark:border-dark-border overflow-hidden"
           style={{ height: 'calc(100vh - 220px)', minHeight: '300px', touchAction: 'none' }}
         >
           <svg
@@ -818,7 +965,7 @@ export default function KnowledgeGraphPage() {
           {/* Tooltip */}
           {hoveredNode && (
             <div
-              className="absolute z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg p-3 pointer-events-none max-w-xs"
+              className="absolute z-50 bg-panel dark:bg-dark-card border border-rule dark:border-dark-border rounded-md shadow-sm p-3 pointer-events-none max-w-xs"
               style={{
                 left: tooltipPos.x,
                 top: tooltipPos.y,
@@ -830,8 +977,8 @@ export default function KnowledgeGraphPage() {
                   className={`w-3 h-3 inline-block ${hoveredNode.type === 'personality_domain' ? 'rotate-45' : 'rounded-full'}`}
                   style={{
                     backgroundColor: hoveredNode.type === 'gap'
-                      ? (CATEGORY_COLORS[hoveredNode.category || 'default'] || CATEGORY_COLORS.default)
-                      : getNodeColor(hoveredNode),
+                      ? (pal.categories[hoveredNode.category || 'default'] || pal.categories.default)
+                      : getNodeColor(hoveredNode, pal),
                     opacity: hoveredNode.type === 'gap' ? 0.5 : 1,
                     borderRadius: hoveredNode.type === 'personality_domain' ? '2px' : undefined,
                   }}
@@ -839,7 +986,7 @@ export default function KnowledgeGraphPage() {
                 <span className="font-semibold text-sm text-gray-900 dark:text-white">
                   {hoveredNode.label}
                 </span>
-                <span className="text-xs text-gray-500 capitalize">
+                <span className={`${SMALL_CAPS} text-[10px] text-gray-500 dark:text-gray-400`}>
                   ({hoveredNode.type === 'gap' ? 'unexplored'
                     : hoveredNode.type === 'personality_domain' ? 'Big Five domain'
                     : hoveredNode.type === 'personality_facet' ? 'personality facet'
@@ -854,7 +1001,7 @@ export default function KnowledgeGraphPage() {
                       {hoveredNode.description}
                     </p>
                   )}
-                  <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                  <div className="mt-2 flex items-center gap-1.5 text-xs text-primary-600 dark:text-primary-400">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>
@@ -872,14 +1019,14 @@ export default function KnowledgeGraphPage() {
                   )}
                   <div className="mt-2 flex gap-3 text-xs text-gray-500 dark:text-gray-300">
                     <span>{hoveredNode.insightCount || 0} insights</span>
-                    <span className="text-green-600">{hoveredNode.verifiedInsightCount || 0} verified</span>
+                    <span className="text-primary-600 dark:text-primary-400">{hoveredNode.verifiedInsightCount || 0} verified</span>
                     <span>{hoveredNode.sessionCount || 0} sessions</span>
                   </div>
                   {hoveredNode.status && (
                     <div className="mt-1 flex items-center gap-1">
                       <span
                         className="w-2 h-2 rounded-full"
-                        style={{ backgroundColor: STATUS_COLORS[hoveredNode.status] || '#9ca3af' }}
+                        style={{ backgroundColor: pal.status[hoveredNode.status] || pal.status.backlog }}
                       />
                       <span className="text-xs text-gray-500 dark:text-gray-300 capitalize">
                         {hoveredNode.status.replace('_', ' ')}
@@ -914,7 +1061,7 @@ export default function KnowledgeGraphPage() {
                   {hoveredNode.verificationStatus && (
                     <div className="flex items-center gap-1">
                       {hoveredNode.verificationStatus === 'verified' ? (
-                        <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                        <span className="flex items-center gap-1 text-xs text-primary-600 dark:text-primary-400">
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                           </svg>
@@ -936,7 +1083,7 @@ export default function KnowledgeGraphPage() {
                   <div className="flex items-center gap-2">
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium text-gray-600 dark:text-gray-300">Score</span>
+                        <span className={`${SMALL_CAPS} text-[10px] text-gray-600 dark:text-gray-300`}>Score</span>
                         <span className="text-sm font-bold text-gray-900 dark:text-white">
                           {hoveredNode.domainScore?.toFixed(1)}<span className="text-xs text-gray-400 font-normal">/5</span>
                         </span>
@@ -946,19 +1093,14 @@ export default function KnowledgeGraphPage() {
                           className="h-1.5 rounded-full"
                           style={{
                             width: `${((hoveredNode.domainScore || 0) / 5) * 100}%`,
-                            backgroundColor: getNodeColor(hoveredNode),
+                            backgroundColor: getNodeColor(hoveredNode, pal),
                           }}
                         />
                       </div>
                     </div>
                   </div>
                   {hoveredNode.scoreLevel && (
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                      hoveredNode.scoreLevel === 'High' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
-                      hoveredNode.scoreLevel === 'Above Average' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' :
-                      hoveredNode.scoreLevel === 'Average' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' :
-                      'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-                    }`}>
+                    <span className={`inline-flex ${SMALL_CAPS} text-[10px] ${SCORE_LEVEL_CLASS[hoveredNode.scoreLevel] || SCORE_LEVEL_FAINT_CLASS}`}>
                       {hoveredNode.scoreLevel}
                     </span>
                   )}
@@ -970,7 +1112,7 @@ export default function KnowledgeGraphPage() {
                       Assessed: {formatShortDate(hoveredNode.completedAt)}
                     </p>
                   )}
-                  <div className="mt-1 flex items-center gap-1.5 text-xs text-pink-600 dark:text-pink-400">
+                  <div className="mt-1 flex items-center gap-1.5 text-xs text-primary-600 dark:text-primary-400">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
@@ -984,7 +1126,7 @@ export default function KnowledgeGraphPage() {
               {hoveredNode.type === 'personality_facet' && (
                 <div className="mt-1 space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-gray-600 dark:text-gray-300">Score</span>
+                    <span className={`${SMALL_CAPS} text-[10px] text-gray-600 dark:text-gray-300`}>Score</span>
                     <span className="text-sm font-bold text-gray-900 dark:text-white">
                       {hoveredNode.facetScore?.toFixed(1)}<span className="text-xs text-gray-400 font-normal">/5</span>
                     </span>
@@ -994,17 +1136,12 @@ export default function KnowledgeGraphPage() {
                       className="h-1.5 rounded-full"
                       style={{
                         width: `${((hoveredNode.facetScore || 0) / 5) * 100}%`,
-                        backgroundColor: PERSONALITY_DOMAIN_COLORS[hoveredNode.domainKey || 'default'] || PERSONALITY_DOMAIN_COLORS.default,
+                        backgroundColor: pal.personalityDomain[hoveredNode.domainKey || 'default'] || pal.personalityDomain.default,
                       }}
                     />
                   </div>
                   {hoveredNode.scoreLevel && (
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                      hoveredNode.scoreLevel === 'High' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
-                      hoveredNode.scoreLevel === 'Moderate-High' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' :
-                      hoveredNode.scoreLevel === 'Average' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' :
-                      'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-                    }`}>
+                    <span className={`inline-flex ${SMALL_CAPS} text-[10px] ${SCORE_LEVEL_CLASS[hoveredNode.scoreLevel] || SCORE_LEVEL_FAINT_CLASS}`}>
                       {hoveredNode.scoreLevel}
                     </span>
                   )}
@@ -1017,47 +1154,55 @@ export default function KnowledgeGraphPage() {
           )}
 
           {/* Legend - collapsible on mobile */}
-          <div className="absolute bottom-3 left-3 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-lg border border-gray-200 dark:border-gray-700 p-2 text-xs max-w-[160px] sm:max-w-none">
-            <div className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Legend</div>
+          <div className="absolute bottom-3 left-3 bg-panel/90 dark:bg-dark-card/90 backdrop-blur-sm rounded-md border border-rule dark:border-dark-border p-2 text-xs max-w-[160px] sm:max-w-none">
+            <SectionHeading className="mb-1.5">Legend</SectionHeading>
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-full bg-blue-500" />
+                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: pal.categories.default }} />
                 <span className="text-gray-600 dark:text-gray-300">Topic (explored)</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-full border-2 border-dashed border-amber-400 opacity-50" style={{ backgroundColor: '#fcd34d' }} />
+                <span
+                  className="w-3 h-3 rounded-full border-2 border-dashed opacity-50"
+                  style={{ borderColor: pal.gapAccent, backgroundColor: pal.gapAccent }}
+                />
                 <span className="text-gray-600 dark:text-gray-300">Unexplored area</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-violet-400" />
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: pal.concept.unverified }} />
                 <span className="text-gray-600 dark:text-gray-300">Concept</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 14 14">
-                  <polygon points="7,1 13,5.5 10.7,12.5 3.3,12.5 1,5.5" fill="#ec4899" stroke="#fff" strokeWidth="1" />
+                  <polygon points="7,1 13,5.5 10.7,12.5 3.3,12.5 1,5.5" fill={pal.personalityDomain.default} stroke={pal.canvasBg} strokeWidth="1" />
                 </svg>
                 <span className="text-gray-600 dark:text-gray-300">Personality domain</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 12 12">
-                  <polygon points="6,1 11,6 6,11 1,6" fill="#f9a8d4" stroke="#ec4899" strokeWidth="1" />
+                  <polygon points="6,1 11,6 6,11 1,6" fill={pal.personalityFacet.default} stroke={pal.personalityDomain.default} strokeWidth="1" />
                 </svg>
                 <span className="text-gray-600 dark:text-gray-300">Personality facet</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-full bg-green-500 text-white flex items-center justify-center text-[7px] font-bold">3</span>
+                <span
+                  className="w-3 h-3 rounded-full flex items-center justify-center text-[7px] font-bold"
+                  style={{ backgroundColor: pal.accent, color: pal.canvasBg }}
+                >
+                  3
+                </span>
                 <span className="text-gray-600 dark:text-gray-300">Verified insights</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-4 border-t border-gray-400" />
+                <span className="w-4 border-t" style={{ borderColor: pal.edge.default }} />
                 <span className="text-gray-600 dark:text-gray-300">Connection</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-4 border-t border-dashed border-blue-300" />
+                <span className="w-4 border-t border-dashed" style={{ borderColor: pal.edge.tagShared }} />
                 <span className="text-gray-600 dark:text-gray-300">Shared tag</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-4 border-t border-pink-300" />
+                <span className="w-4 border-t" style={{ borderColor: pal.edge.personalityContains }} />
                 <span className="text-gray-600 dark:text-gray-300">Personality link</span>
               </div>
             </div>
@@ -1073,7 +1218,7 @@ export default function KnowledgeGraphPage() {
                   1.3
                 );
               }}
-              className="w-11 h-11 sm:w-8 sm:h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-lg font-bold shadow-sm"
+              className="w-11 h-11 sm:w-8 sm:h-8 bg-paper dark:bg-dark-card border border-rule dark:border-dark-border rounded-md flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-panel dark:hover:bg-gray-700 text-lg font-bold"
               aria-label="Zoom in"
             >
               +
@@ -1086,7 +1231,7 @@ export default function KnowledgeGraphPage() {
                   0.7
                 );
               }}
-              className="w-11 h-11 sm:w-8 sm:h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-lg font-bold shadow-sm"
+              className="w-11 h-11 sm:w-8 sm:h-8 bg-paper dark:bg-dark-card border border-rule dark:border-dark-border rounded-md flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-panel dark:hover:bg-gray-700 text-lg font-bold"
               aria-label="Zoom out"
             >
               -
@@ -1103,7 +1248,7 @@ export default function KnowledgeGraphPage() {
                   d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8)
                 );
               }}
-              className="w-11 h-11 sm:w-8 sm:h-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm shadow-sm"
+              className="w-11 h-11 sm:w-8 sm:h-8 bg-paper dark:bg-dark-card border border-rule dark:border-dark-border rounded-md flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-panel dark:hover:bg-gray-700 text-sm"
               title="Reset view"
               aria-label="Reset graph view"
             >
