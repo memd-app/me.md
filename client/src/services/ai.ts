@@ -4,7 +4,7 @@ import { callAnthropic, streamAnthropic, isApiKeyConfigured } from './anthropic'
 // AI Service Layer - Claude API Integration
 // ============================================
 // Client-side AI service for me.md interview sessions.
-// All API calls route through the Vite proxy via anthropic.ts.
+// All API calls go directly from the browser to api.anthropic.com via anthropic.ts.
 // Falls back to template-based responses when API key is not configured
 // or when API calls fail.
 
@@ -441,7 +441,7 @@ export async function generateClaudeResponse(options: AIResponseOptions): Promis
 
 /**
  * Generate an AI response with streaming.
- * Uses Claude's streaming API via Vite proxy for real-time responses.
+ * Uses Claude's streaming API directly from the browser for real-time responses.
  * Returns an async generator of text chunks, or null if unavailable.
  */
 export async function* streamClaudeResponse(options: AIResponseOptions): AsyncGenerator<string, string | null, undefined> {

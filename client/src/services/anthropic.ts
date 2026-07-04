@@ -38,18 +38,23 @@ function buildHeaders(apiKey: string): Record<string, string> {
     'x-api-key': apiKey,
     'anthropic-version': API_VERSION,
     // Opts into CORS on api.anthropic.com — required for direct browser
-    // calls; the key is user-supplied and stored locally, so this is safe.
+    // calls. The key is user-supplied and stored in localStorage, so the
+    // usual shared-secret concern doesn't apply, but it is still readable
+    // by anything with access to this origin (extensions, DevTools).
     'anthropic-dangerous-direct-browser-access': 'true',
   }
 }
 
 function buildBody(options: CallOptions, stream = false): string {
+  const model = options.model ?? DEFAULT_MODEL
+  // Sonnet 5 runs adaptive thinking by default, which would eat into the
+  // small max_tokens budgets used here; keep the pre-migration behavior.
+  // Fable/Mythos-class models reject an explicit "disabled", so omit it there.
+  const supportsDisabledThinking = !/fable|mythos/.test(model)
   return JSON.stringify({
-    model: options.model ?? DEFAULT_MODEL,
+    model,
     max_tokens: options.maxTokens ?? 1024,
-    // Sonnet 5 runs adaptive thinking by default, which would eat into the
-    // small max_tokens budgets used here; keep the pre-migration behavior.
-    thinking: { type: 'disabled' },
+    ...(supportsDisabledThinking ? { thinking: { type: 'disabled' } } : {}),
     system: options.system,
     messages: options.messages,
     stream,
@@ -123,8 +128,17 @@ export async function* streamAnthropic(
           const chunk = event.delta.text
           fullText += chunk
           yield chunk
+        } else if (event.type === 'error') {
+          // Mid-stream API errors (e.g. overloaded_error) must not be
+          // silently swallowed as a successful-but-truncated response.
+          throw new AnthropicError(
+            event.error?.message ?? 'Stream error',
+            undefined,
+            event.error?.type,
+          )
         }
-      } catch {
+      } catch (err) {
+        if (err instanceof AnthropicError) throw err
         // Skip non-JSON lines
       }
     }

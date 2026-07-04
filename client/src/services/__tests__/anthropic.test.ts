@@ -30,8 +30,12 @@ describe('anthropic client', () => {
       headers: expect.objectContaining({
         'x-api-key': 'test-api-key',
         'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
       }),
     }))
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body)
+    expect(body.model).toBe('claude-sonnet-5')
+    expect(body.thinking).toEqual({ type: 'disabled' })
   })
 
   it('throws AnthropicError when API key is missing', async () => {
