@@ -312,6 +312,12 @@ export default function ProfilePage() {
               'Export as me.md'
             )}
           </button>
+          <Link
+            to="/app/export"
+            className="text-sm text-primary-600 dark:text-primary-400 hover:underline whitespace-nowrap"
+          >
+            More export options →
+          </Link>
         </div>
       </div>
 
@@ -350,7 +356,7 @@ export default function ProfilePage() {
               </h2>
             </div>
             <Link
-              to={`/app/assessment/${assessmentData.attemptId}/results`}
+              to={`/app/personality/${assessmentData.attemptId}/results`}
               className="text-sm text-primary-600 dark:text-primary-400 hover:underline"
             >
               View Full Results
@@ -393,7 +399,7 @@ export default function ProfilePage() {
                 Take the Big Five test to add personality insights to your profile
               </p>
             </div>
-            <Link to="/app/assessment" className="btn-primary text-sm whitespace-nowrap">
+            <Link to="/app/personality" className="btn-primary text-sm whitespace-nowrap">
               Take Test
             </Link>
           </div>
@@ -415,7 +421,7 @@ export default function ProfilePage() {
             <a href="/app/topics" className="btn-primary">
               Browse Topics
             </a>
-            <a href="/app/verify" className="btn-secondary">
+            <a href="/app/review" className="btn-secondary">
               Verify Insights
             </a>
           </div>

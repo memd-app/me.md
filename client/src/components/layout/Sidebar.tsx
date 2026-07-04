@@ -9,26 +9,23 @@ import { LOCAL_USER_ID } from '@/contexts/UserContext';
 interface NavItem {
   to: string;
   label: string;
-  icon: string;
   end?: boolean;
   badge?: boolean;
 }
 
 const navItems: NavItem[] = [
-  { to: '/app', label: 'Dashboard', icon: '📊', end: true },
-  { to: '/app/topics', label: 'Topics', icon: '📋' },
-  { to: '/app/session/new', label: 'New Session', icon: '💬' },
-  { to: '/app/notes', label: 'Notes', icon: '📝' },
-  { to: '/app/graph', label: 'Knowledge Graph', icon: '🔗' },
-  { to: '/app/profile', label: 'Profile', icon: '👤' },
-  { to: '/app/assessment', label: 'Personality Test', icon: '🧠' },
-  { to: '/app/verify', label: 'Verification', icon: '✅' },
-  { to: '/app/sandbox', label: 'Sandbox', icon: '🧪' },
-  { to: '/app/bookmarks', label: 'Bookmarks', icon: '⭐' },
-  { to: '/app/search', label: 'Search', icon: '🔍' },
-  { to: '/app/import', label: 'Import', icon: '📥' },
-  { to: '/app/export', label: 'Export', icon: '📤' },
-  { to: '/app/settings', label: 'Settings', icon: '⚙️' },
+  { to: '/app/dashboard', label: 'Desk' },
+  { to: '/app/topics', label: 'Topics' },
+  { to: '/app/session/new', label: 'Interview' },
+  { to: '/app/review', label: 'Review' },
+  { to: '/app/graph', label: 'Graph' },
+  { to: '/app/notes', label: 'Notes' },
+  // Temporary until the Notes/Bookmarks merge slice — must stay reachable
+  { to: '/app/bookmarks', label: 'Bookmarks' },
+  { to: '/app/personality', label: 'Personality' },
+  { to: '/app/search', label: 'Search' },
+  { to: '/app/sandbox', label: 'Sandbox' },
+  { to: '/app/settings', label: 'Settings' },
 ];
 
 interface SidebarProps {
@@ -59,7 +56,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   // Compute nav items with badge info
   const navItemsWithBadge = navItems.map(item => ({
     ...item,
-    badge: item.to === '/app/assessment' && hasNeverTakenTest,
+    badge: item.to === '/app/personality' && hasNeverTakenTest,
   }));
 
   // Trap focus in sidebar when open on mobile + handle Escape key
@@ -95,23 +92,25 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         role="complementary"
         aria-label="Application sidebar"
         className={`
-          fixed top-0 left-0 z-50 h-full w-64
-          bg-white dark:bg-dark-surface border-r border-gray-200 dark:border-dark-border
+          fixed top-0 left-0 z-50 h-full w-60
+          bg-paper dark:bg-dark-bg border-r border-rule dark:border-dark-border
           transform transition-transform duration-200 ease-in-out
           lg:translate-x-0 lg:static lg:z-auto
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
       >
         <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-dark-border">
-            <NavLink to="/app" className="flex items-center gap-2" onClick={onClose} aria-label="me.md - Go to dashboard">
-              <span className="text-xl font-bold text-primary-600">me.md</span>
+          {/* Wordmark */}
+          <div className="flex items-center justify-between px-6 py-5 border-b border-rule dark:border-dark-border">
+            <NavLink to="/app/dashboard" className="flex items-center" onClick={onClose} aria-label="me.md - Go to your desk">
+              <span className="font-serif italic text-2xl font-semibold text-ink dark:text-gray-100">
+                me<span className="text-primary-500 not-italic">.</span>md
+              </span>
             </NavLink>
             <button
               ref={closeButtonRef}
               onClick={onClose}
-              className="lg:hidden p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+              className="lg:hidden p-1 rounded-md hover:bg-panel dark:hover:bg-dark-card"
               aria-label="Close navigation menu"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -121,29 +120,39 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto py-4 px-3" role="navigation" aria-label="Main navigation">
-            <ul className="space-y-1" role="list">
+          <nav className="flex-1 overflow-y-auto py-5 px-3" role="navigation" aria-label="Main navigation">
+            <ul className="space-y-0.5" role="list">
               {navItemsWithBadge.map((item) => (
                 <li key={item.to} role="listitem">
                   <NavLink
                     to={item.to}
                     end={item.end}
                     onClick={onClose}
-                    aria-label={item.badge ? `${item.label} (new)` : item.label}
+                    aria-label={item.badge ? `${item.label} (not taken yet)` : item.label}
                     className={({ isActive }) =>
-                      `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-150 ${
+                      `group flex items-center gap-3 px-3 py-2 rounded-md font-sans text-[12px] font-medium uppercase tracking-[0.08em] transition-colors duration-150 ${
                         isActive
-                          ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-gray-100'
+                          ? 'bg-panel dark:bg-dark-card text-ink dark:text-gray-100'
+                          : 'text-gray-600 dark:text-gray-400 hover:bg-panel/60 dark:hover:bg-dark-card/60 hover:text-ink dark:hover:text-gray-100'
                       }`
                     }
                   >
-                    <span className="text-base" aria-hidden="true">{item.icon}</span>
-                    <span className="flex-1">{item.label}</span>
-                    {item.badge && (
-                      <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold leading-none text-white bg-rose-500 rounded-full" aria-label="Not taken yet">
-                        NEW
-                      </span>
+                    {({ isActive }) => (
+                      <>
+                        <span
+                          aria-hidden="true"
+                          className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors ${
+                            isActive ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-700 group-hover:bg-primary-300'
+                          }`}
+                        />
+                        <span className="flex-1">{item.label}</span>
+                        {item.badge && (
+                          <span
+                            className="w-1.5 h-1.5 rounded-full bg-primary-500 animate-pulse"
+                            aria-label="Not taken yet"
+                          />
+                        )}
+                      </>
                     )}
                   </NavLink>
                 </li>
@@ -151,24 +160,33 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             </ul>
           </nav>
 
-          {/* User section */}
-          <div className="border-t border-gray-200 dark:border-dark-border p-4" role="region" aria-label="User account">
-            <div className="flex items-center gap-3">
+          {/* User section — links to the profile reading surface */}
+          <div className="border-t border-rule dark:border-dark-border p-4" role="region" aria-label="User account">
+            <NavLink
+              to="/app/profile"
+              onClick={onClose}
+              aria-label="Open your profile"
+              className={({ isActive }) =>
+                `flex items-center gap-3 rounded-md px-2 py-1.5 transition-colors ${
+                  isActive ? 'bg-panel dark:bg-dark-card' : 'hover:bg-panel/60 dark:hover:bg-dark-card/60'
+                }`
+              }
+            >
               <div
-                className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center text-sm font-medium text-primary-700 dark:text-primary-300"
+                className="w-8 h-8 rounded-full bg-ink dark:bg-gray-100 flex items-center justify-center font-serif text-sm text-paper dark:text-dark-bg"
                 aria-hidden="true"
               >
                 {user?.name?.charAt(0).toUpperCase() || '?'}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                <p className="text-sm font-medium text-ink dark:text-gray-100 truncate">
                   {user?.name || 'User'}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-300 truncate">
-                  Local user
+                <p className="text-[11px] uppercase tracking-[0.08em] text-gray-500 dark:text-gray-400 truncate">
+                  Your profile
                 </p>
               </div>
-            </div>
+            </NavLink>
           </div>
         </div>
       </aside>

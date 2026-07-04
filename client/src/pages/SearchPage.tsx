@@ -282,11 +282,11 @@ export default function SearchPage() {
         navigate(`/app/topics/${result.id}`);
         break;
       case 'session':
-        navigate(`/app/session/${result.sessionId || result.id}`);
+        navigate(`/app/sessions/${result.sessionId || result.id}`);
         break;
       case 'insight':
         // Navigate to verification page where insights can be reviewed
-        navigate('/app/verify');
+        navigate('/app/review');
         break;
       case 'note':
         // Navigate to the notes page with the note selected

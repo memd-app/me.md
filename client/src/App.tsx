@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { UserProvider, useUser } from '@/contexts/UserContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { ToastProvider } from '@/contexts/ToastContext';
@@ -27,6 +27,17 @@ import ImportPage from '@/pages/ImportPage';
 import AssessmentPage from '@/pages/AssessmentPage';
 import AssessmentResultsPage from '@/pages/AssessmentResultsPage';
 import AssessmentHistoryPage from '@/pages/AssessmentHistoryPage';
+
+// Param-preserving redirects for renamed routes (old deep links keep working)
+function LegacySessionRedirect() {
+  const { id } = useParams()
+  return <Navigate to={`/app/sessions/${id}`} replace />
+}
+
+function LegacyResultsRedirect() {
+  const { attemptId } = useParams()
+  return <Navigate to={`/app/personality/${attemptId}/results`} replace />
+}
 
 function RootRedirect() {
   const { user, isLoading } = useUser()
@@ -57,28 +68,34 @@ function App() {
               </OnboardingGuard>
             }
           >
-            <Route index element={<DashboardPage />} />
+            <Route index element={<Navigate to="/app/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="topics" element={<TopicsPage />} />
             <Route path="topics/new" element={<CreateTopicPage />} />
             <Route path="topics/:id" element={<TopicDetailPage />} />
             <Route path="templates" element={<TemplatesPage />} />
             <Route path="session/new" element={<NewSessionPage />} />
-            <Route path="session/:id" element={<SessionPage />} />
             <Route path="sessions/:id" element={<SessionPage />} />
+            {/* Legacy singular form — canonicalized to /app/sessions/:id */}
+            <Route path="session/:id" element={<LegacySessionRedirect />} />
             <Route path="notes" element={<NotesPage />} />
             <Route path="graph" element={<KnowledgeGraphPage />} />
             <Route path="profile" element={<ProfilePage />} />
-            <Route path="verify" element={<VerificationPage />} />
+            <Route path="review" element={<VerificationPage />} />
+            <Route path="verify" element={<Navigate to="/app/review" replace />} />
             <Route path="sandbox" element={<SandboxPage />} />
             <Route path="bookmarks" element={<BookmarksPage />} />
             <Route path="search" element={<SearchPage />} />
             <Route path="import" element={<ImportPage />} />
             <Route path="export" element={<ExportPage />} />
             <Route path="settings" element={<SettingsPage />} />
-            <Route path="assessment" element={<AssessmentPage />} />
-            <Route path="assessment/history" element={<AssessmentHistoryPage />} />
-            <Route path="assessment/:attemptId/results" element={<AssessmentResultsPage />} />
+            <Route path="personality" element={<AssessmentPage />} />
+            <Route path="personality/history" element={<AssessmentHistoryPage />} />
+            <Route path="personality/:attemptId/results" element={<AssessmentResultsPage />} />
+            {/* Legacy assessment routes */}
+            <Route path="assessment" element={<Navigate to="/app/personality" replace />} />
+            <Route path="assessment/history" element={<Navigate to="/app/personality/history" replace />} />
+            <Route path="assessment/:attemptId/results" element={<LegacyResultsRedirect />} />
             {/* Catch-all for unknown /app/* routes */}
             <Route path="*" element={<NotFoundPage />} />
           </Route>

@@ -458,7 +458,7 @@ export default function AssessmentHistoryPage() {
           </p>
         </div>
         <Link
-          to="/app/assessment"
+          to="/app/personality"
           className="btn-primary text-sm flex items-center gap-1.5"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -478,7 +478,7 @@ export default function AssessmentHistoryPage() {
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
             Complete a Big Five personality assessment to start tracking your personality over time.
           </p>
-          <Link to="/app/assessment" className="btn-primary">
+          <Link to="/app/personality" className="btn-primary">
             Take Your First Assessment
           </Link>
         </div>
@@ -511,7 +511,7 @@ export default function AssessmentHistoryPage() {
                     </p>
                   </div>
                   {canRetest && (
-                    <Link to="/app/assessment" className="btn-primary text-xs whitespace-nowrap">
+                    <Link to="/app/personality" className="btn-primary text-xs whitespace-nowrap">
                       Retake Now
                     </Link>
                   )}
@@ -623,7 +623,7 @@ export default function AssessmentHistoryPage() {
                           {isCompleted && (
                             <div className="flex gap-2 mt-3">
                               <Link
-                                to={`/app/assessment/${attempt.attemptId}/results`}
+                                to={`/app/personality/${attempt.attemptId}/results`}
                                 className="text-xs text-primary-600 dark:text-primary-400 hover:underline"
                               >
                                 View Full Results

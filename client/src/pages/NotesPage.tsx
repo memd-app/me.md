@@ -369,7 +369,7 @@ export default function NotesPage() {
         {/* Link to session */}
         <div className="flex justify-center pb-4">
           <Link
-            to={`/app/session/${selectedNote.sessionId}`}
+            to={`/app/sessions/${selectedNote.sessionId}`}
             className="text-sm text-primary-600 dark:text-primary-400 hover:underline"
           >
             View original session &rarr;

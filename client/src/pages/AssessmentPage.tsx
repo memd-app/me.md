@@ -311,7 +311,7 @@ export default function AssessmentPage() {
       setCompletionResults(data.scores || []);
 
       // Navigate to the dedicated results page
-      navigate(`/app/assessment/${attemptId}/results`);
+      navigate(`/app/personality/${attemptId}/results`);
     } catch (err: any) {
       setError(err.message);
       setPhase('test');
@@ -456,7 +456,7 @@ export default function AssessmentPage() {
               {completedAttempts.slice(0, 5).map((attempt) => (
                 <Link
                   key={attempt.attemptId}
-                  to={`/app/assessment/${attempt.attemptId}/results`}
+                  to={`/app/personality/${attempt.attemptId}/results`}
                   className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group"
                 >
                   <div className="flex items-center gap-3">

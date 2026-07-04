@@ -805,7 +805,7 @@ export default function ImportPage() {
                         </Link>
                       )}
                       <Link
-                        to="/app/verify"
+                        to="/app/review"
                         className="text-xs px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors"
                       >
                         Go to Verification Queue
@@ -847,7 +847,7 @@ export default function ImportPage() {
                   <div className="mt-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
                     <p className="text-xs text-amber-800 dark:text-amber-200">
                       <strong>Next step:</strong> These insights are now in your{' '}
-                      <Link to="/app/verify" className="underline hover:text-amber-900 dark:hover:text-amber-100">
+                      <Link to="/app/review" className="underline hover:text-amber-900 dark:hover:text-amber-100">
                         verification queue
                       </Link>
                       . Review each one to confirm, edit, or reject it. Only verified insights will appear in your profile export.

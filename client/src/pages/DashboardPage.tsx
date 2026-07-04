@@ -339,7 +339,7 @@ export default function DashboardPage() {
                 Review AI-extracted insights about you. Approve, edit, or reject each one to build your verified profile.
               </p>
               <Link
-                to="/app/verify"
+                to="/app/review"
                 className="inline-flex items-center gap-1.5 text-sm font-medium text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -384,7 +384,7 @@ export default function DashboardPage() {
             </div>
             {assessmentStatus.hasTaken && assessmentStatus.attemptId && (
               <Link
-                to={`/app/assessment/${assessmentStatus.attemptId}/results`}
+                to={`/app/personality/${assessmentStatus.attemptId}/results`}
                 className="text-sm text-primary-600 dark:text-primary-400 hover:underline"
               >
                 View Details
@@ -423,13 +423,13 @@ export default function DashboardPage() {
                 </p>
                 <div className="flex items-center gap-3">
                   <Link
-                    to="/app/assessment/history"
+                    to="/app/personality/history"
                     className="text-xs text-primary-600 dark:text-primary-400 hover:underline"
                   >
                     View History
                   </Link>
                   <Link
-                    to="/app/assessment"
+                    to="/app/personality"
                     className="text-xs text-primary-600 dark:text-primary-400 hover:underline"
                   >
                     Take again
@@ -454,7 +454,7 @@ export default function DashboardPage() {
                         </p>
                       </div>
                       <Link
-                        to="/app/assessment"
+                        to="/app/personality"
                         className="text-xs px-2.5 py-1 rounded-md bg-primary-600 text-white hover:bg-primary-700 font-medium whitespace-nowrap flex-shrink-0"
                       >
                         Retake
@@ -483,7 +483,7 @@ export default function DashboardPage() {
                 </p>
               </div>
               <Link
-                to="/app/assessment"
+                to="/app/personality"
                 className="btn-primary text-sm whitespace-nowrap flex-shrink-0"
               >
                 Take Test

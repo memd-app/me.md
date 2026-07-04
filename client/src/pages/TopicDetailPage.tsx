@@ -166,7 +166,7 @@ export default function TopicDetailPage() {
     setError(null);
     try {
       const data = await createSession(db, topic.id);
-      navigate(`/app/session/${data.session.id}`);
+      navigate(`/app/sessions/${data.session.id}`);
     } catch (err) {
       if (!topicNotFound) {
         setError(err instanceof Error ? err.message : 'Failed to start session');
@@ -850,7 +850,7 @@ export default function TopicDetailPage() {
                 {activeSessions.map((session) => (
                   <Link
                     key={session.id}
-                    to={`/app/session/${session.id}`}
+                    to={`/app/sessions/${session.id}`}
                     className="block p-4 rounded-lg border border-primary-200 dark:border-primary-800 bg-primary-50/30 dark:bg-primary-900/10 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors mb-2"
                   >
                     <div className="flex items-center justify-between">
@@ -877,7 +877,7 @@ export default function TopicDetailPage() {
                 {pausedSessions.map((session) => (
                   <Link
                     key={session.id}
-                    to={`/app/session/${session.id}`}
+                    to={`/app/sessions/${session.id}`}
                     className="block p-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-900/10 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors mb-2"
                   >
                     <div className="flex items-center justify-between">
@@ -907,7 +907,7 @@ export default function TopicDetailPage() {
                 {completedSessions.map((session) => (
                   <Link
                     key={session.id}
-                    to={`/app/session/${session.id}`}
+                    to={`/app/sessions/${session.id}`}
                     className="block p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors mb-2"
                   >
                     <div className="flex items-center justify-between">

@@ -75,9 +75,6 @@ export default function NotFoundPage() {
           <Link to="/" className="btn-primary text-center">
             Go to Home
           </Link>
-          <Link to="/login" className="btn-secondary text-center">
-            Sign In
-          </Link>
         </div>
       </div>
     </div>

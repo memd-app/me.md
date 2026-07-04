@@ -1224,7 +1224,7 @@ export default function OnboardingPage() {
 
               <div className="space-y-3">
                 <button
-                  onClick={() => navigate('/app/assessment', { replace: true })}
+                  onClick={() => navigate('/app/personality', { replace: true })}
                   className="btn-primary w-full py-3 text-base font-semibold"
                 >
                   Take the Big Five Test

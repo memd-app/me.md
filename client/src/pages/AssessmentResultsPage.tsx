@@ -546,7 +546,7 @@ export default function AssessmentResultsPage() {
           </p>
           <div className="flex items-center justify-center gap-3">
             <Link
-              to="/app/assessment"
+              to="/app/personality"
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl transition-colors"
             >
               Go to Assessment
@@ -603,7 +603,7 @@ export default function AssessmentResultsPage() {
       <div className="mb-8 print:mb-4">
         <div className="flex items-center justify-between mb-4 print:hidden">
           <Link
-            to="/app/assessment"
+            to="/app/personality"
             className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -798,7 +798,7 @@ export default function AssessmentResultsPage() {
             {data.aiAnalysis.insights.some(i => i.verificationStatus === 'unverified') && (
               <div className="flex justify-center print:hidden">
                 <Link
-                  to="/app/verify"
+                  to="/app/review"
                   className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -831,7 +831,7 @@ export default function AssessmentResultsPage() {
       {/* Footer Actions */}
       <div className="flex flex-col sm:flex-row items-center justify-center gap-3 print:hidden">
         <Link
-          to="/app/assessment"
+          to="/app/personality"
           className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-xl transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

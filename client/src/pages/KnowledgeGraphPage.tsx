@@ -655,7 +655,7 @@ export default function KnowledgeGraphPage() {
         navigate(`/app/topics?explore=${d.entityId}`);
       } else if (d.type === 'personality_domain' || d.type === 'personality_facet') {
         // Clicking a personality node navigates to the assessment page
-        navigate('/app/assessment');
+        navigate('/app/personality');
       }
     });
 

@@ -213,7 +213,7 @@ export default function ExportPage() {
                   <Link to="/app/topics" className="underline hover:text-amber-900 dark:hover:text-amber-100">Create topics</Link> and complete interview sessions
                 </li>
                 <li>
-                  <Link to="/app/verify" className="underline hover:text-amber-900 dark:hover:text-amber-100">Verify your insights</Link> on the Verification page
+                  <Link to="/app/review" className="underline hover:text-amber-900 dark:hover:text-amber-100">Verify your insights</Link> on the Verification page
                 </li>
                 <li>Ensure verified insights have the &quot;exportable&quot; privacy tier</li>
               </ol>
