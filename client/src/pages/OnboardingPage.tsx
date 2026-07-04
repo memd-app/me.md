@@ -5,6 +5,7 @@ import { useDatabase } from '@/contexts/DatabaseContext';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 import { getPresetTopics, selectPresetTopics } from '@/services/topics';
 import { importUrls, importText, importFile } from '@/services/import';
+import { Card, Badge } from '@/components/ui';
 
 type OnboardingStep = 'welcome' | 'profile' | 'context' | 'topics';
 type ImportTab = 'url' | 'text' | 'file';
@@ -60,13 +61,66 @@ const STEPS: { key: OnboardingStep; label: string }[] = [
   { key: 'topics', label: 'Topics' },
 ];
 
-const CATEGORY_INFO: Record<string, { label: string; icon: string; color: string }> = {
-  identity: { label: 'Identity', icon: '🪪', color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' },
-  skills: { label: 'Skills', icon: '🛠️', color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' },
-  experiences: { label: 'Experiences', icon: '📖', color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' },
-  perspectives: { label: 'Perspectives', icon: '💡', color: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' },
-  goals: { label: 'Goals', icon: '🎯', color: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300' },
+// Status is shown typographically (small caps + accent/muting) — no colored
+// pills or category icons, per DESIGN.md.
+const CATEGORY_INFO: Record<string, { label: string }> = {
+  identity: { label: 'Identity' },
+  skills: { label: 'Skills' },
+  experiences: { label: 'Experiences' },
+  perspectives: { label: 'Perspectives' },
+  goals: { label: 'Goals' },
 };
+
+const PILLARS: { title: string; description: string }[] = [
+  {
+    title: 'Create',
+    description:
+      'AI-guided conversations extract your personal knowledge through proven questioning methods.',
+  },
+  {
+    title: 'Verify',
+    description:
+      "You're in full control. Review and verify every insight before it becomes part of your profile.",
+  },
+  {
+    title: 'Manage',
+    description: 'Build a living knowledge graph and export your context for any AI tool.',
+  },
+];
+
+const IMPORT_TABS: { key: ImportTab; label: string }[] = [
+  { key: 'url', label: 'URL' },
+  { key: 'text', label: 'Paste text' },
+  { key: 'file', label: 'Upload file' },
+];
+
+function Spinner({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={`animate-spin ${className}`} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+      />
+    </svg>
+  );
+}
+
+/** Centered editorial step header: amber small-caps kicker, serif italic title, italic deck. */
+function StepHeading({ kicker, title, subtitle }: { kicker: string; title: string; subtitle?: string }) {
+  return (
+    <div className="text-center mb-10">
+      <p className="text-[11px] tracking-[0.16em] uppercase font-sans font-bold text-primary-600 dark:text-primary-400 mb-3">
+        {kicker}
+      </p>
+      <h2 className="font-serif italic text-3xl sm:text-4xl text-ink dark:text-gray-100 mb-3">{title}</h2>
+      {subtitle && (
+        <p className="font-serif italic text-gray-600 dark:text-gray-300 max-w-md mx-auto">{subtitle}</p>
+      )}
+    </div>
+  );
+}
 
 export default function OnboardingPage() {
   const { user, updateUser, createUser } = useUser();
@@ -122,7 +176,6 @@ export default function OnboardingPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
 
   const currentStepIndex = STEPS.findIndex((s) => s.key === currentStep);
-  const progressPercent = ((Math.max(currentStepIndex, highestStepReached) + 1) / STEPS.length) * 100;
 
   // Track unsaved changes during onboarding flow
   const isOnboardingDirty = useMemo(() => {
@@ -447,7 +500,7 @@ export default function OnboardingPage() {
       // Show assessment suggestion instead of navigating directly
       setShowAssessmentSuggestion(true);
     } catch {
-      navigate('/app', { replace: true });
+      navigate('/app/dashboard', { replace: true });
     } finally {
       setIsSubmitting(false);
     }
@@ -457,9 +510,9 @@ export default function OnboardingPage() {
     setIsSubmitting(true);
     try {
       updateUser({ onboardingCompleted: true });
-      navigate('/app', { replace: true });
+      navigate('/app/dashboard', { replace: true });
     } catch {
-      navigate('/app', { replace: true });
+      navigate('/app/dashboard', { replace: true });
     } finally {
       setIsSubmitting(false);
     }
@@ -472,128 +525,112 @@ export default function OnboardingPage() {
     : presetTopics;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-dark-bg flex flex-col">
-      {/* Progress bar */}
-      <div className="w-full bg-gray-200 dark:bg-gray-700 h-1.5">
-        <div
-          className="bg-primary-600 h-1.5 transition-all duration-500 ease-out"
-          style={{ width: `${progressPercent}%` }}
-          role="progressbar"
-          aria-valuenow={progressPercent}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label="Onboarding progress"
-        />
-      </div>
-
-      {/* Step counter text */}
-      <div className="text-center pt-4 pb-1">
-        <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
-          Step {currentStepIndex + 1} of {STEPS.length}
+    <div className="min-h-screen bg-paper dark:bg-dark-bg flex flex-col">
+      {/* Masthead — quiet running wordmark, present through every step */}
+      <div className="pt-12 pb-2 text-center" aria-hidden="true">
+        <span className="font-serif italic text-xl text-ink dark:text-gray-100">
+          me<span className="text-primary-500 not-italic">.</span>md
         </span>
       </div>
 
-      {/* Step indicators */}
-      <div className="flex justify-center gap-4 sm:gap-6 pt-2 pb-4">
-        {STEPS.map((step, index) => {
-          // A step is completed if it's been visited (index <= highestStepReached) and is not the current step
-          const isCompleted = index <= highestStepReached && index !== currentStepIndex;
-          const isCurrent = index === currentStepIndex;
-          return (
-            <div key={step.key} className="flex items-center gap-2">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
-                  isCompleted
-                    ? 'bg-green-500 text-white'
-                    : isCurrent
-                      ? 'bg-primary-600 text-white ring-2 ring-primary-300 dark:ring-primary-700 ring-offset-2 dark:ring-offset-gray-900'
-                      : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
-                }`}
-                aria-label={`Step ${index + 1}: ${step.label}${isCompleted ? ' (completed)' : isCurrent ? ' (current)' : ' (pending)'}`}
+      {/* Step indicator — numbered editorial markers, hairline connectors, no progress pills */}
+      <nav aria-label="Onboarding progress" className="w-full max-w-[680px] mx-auto px-6 pt-6 pb-10">
+        <ol className="flex items-center">
+          {STEPS.map((step, index) => {
+            const isCompleted = index <= highestStepReached && index !== currentStepIndex;
+            const isCurrent = index === currentStepIndex;
+            return (
+              <li
+                key={step.key}
                 aria-current={isCurrent ? 'step' : undefined}
+                className={`flex items-center ${index < STEPS.length - 1 ? 'flex-1' : ''}`}
               >
-                {isCompleted ? (
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : (
-                  index + 1
+                <span className="sr-only">
+                  {`Step ${index + 1}: ${step.label}${isCompleted ? ' (completed)' : isCurrent ? ' (current)' : ' (upcoming)'}`}
+                </span>
+                <div className="flex items-center gap-2 shrink-0" aria-hidden="true">
+                  <span
+                    className={`flex items-center justify-center font-sans text-[11px] font-semibold tabular-nums ${
+                      isCurrent
+                        ? 'text-ink dark:text-gray-100'
+                        : isCompleted
+                          ? 'text-primary-500 dark:text-primary-400'
+                          : 'text-ink/40 dark:text-[#7A7264]'
+                    }`}
+                  >
+                    {isCompleted ? (
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      String(index + 1).padStart(2, '0')
+                    )}
+                  </span>
+                  {isCurrent && <span className="w-1 h-1 rounded-full bg-primary-500" />}
+                  <span
+                    className={`hidden sm:inline text-[11px] uppercase tracking-[0.08em] font-sans font-medium ${
+                      isCurrent
+                        ? 'text-ink dark:text-gray-100'
+                        : isCompleted
+                          ? 'text-gray-500 dark:text-gray-400'
+                          : 'text-ink/40 dark:text-[#7A7264]'
+                    }`}
+                  >
+                    {step.label}
+                  </span>
+                </div>
+                {index < STEPS.length - 1 && (
+                  <span className="flex-1 h-px bg-rule dark:bg-dark-border mx-3 sm:mx-4" />
                 )}
-              </div>
-              <span
-                className={`text-sm font-medium hidden sm:inline ${
-                  isCompleted
-                    ? 'text-green-600 dark:text-green-400'
-                    : isCurrent
-                      ? 'text-primary-600 dark:text-primary-400 font-semibold'
-                      : 'text-gray-400 dark:text-gray-500'
-                }`}
-              >
-                {step.label}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
 
       {/* Content */}
-      <div className="flex-1 flex items-start justify-center px-4 pt-4 pb-12">
-        <div className={`w-full ${currentStep === 'topics' ? 'max-w-2xl' : 'max-w-lg'}`}>
+      <main className="flex-1 flex items-start justify-center px-6 pb-16">
+        <div className="w-full max-w-[680px]">
 
           {/* STEP 1: Welcome */}
           {currentStep === 'welcome' && (
             <div className="text-center">
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-                Welcome to me.md
+              <h1 className="font-serif italic text-4xl sm:text-5xl leading-[1.1] text-ink dark:text-gray-100 mb-5">
+                Welcome to your book of record.
               </h1>
-              <p className="text-lg text-gray-600 dark:text-gray-300 mb-8">
-                Your personal knowledge system. Let&apos;s get you set up in just a few steps.
+              <p className="text-gray-600 dark:text-gray-300 max-w-md mx-auto mb-12">
+                A few short steps, and we&apos;ll begin gathering the story only you can tell.
               </p>
 
-              {/* Three Pillars */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-                <div className="bg-white dark:bg-dark-card rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-                  <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <span className="text-2xl" role="img" aria-label="Create">💬</span>
+              {/* Three pillars — numbered editorial rows, not colored cards */}
+              <div className="border-t border-rule dark:border-dark-border text-left mb-12">
+                {PILLARS.map((pillar, i) => (
+                  <div
+                    key={pillar.title}
+                    className="flex gap-5 py-6 border-b border-rule dark:border-dark-border"
+                  >
+                    <span className="font-sans text-[11px] tracking-[0.08em] text-ink/40 dark:text-[#7A7264] tabular-nums pt-1 shrink-0">
+                      {String(i + 1).padStart(2, '0')}
+                    </span>
+                    <div>
+                      <h3 className="font-serif text-lg text-ink dark:text-gray-100 mb-1">{pillar.title}</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">{pillar.description}</p>
+                    </div>
                   </div>
-                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Create</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">
-                    AI-guided conversations extract your personal knowledge through proven questioning methods.
-                  </p>
-                </div>
-
-                <div className="bg-white dark:bg-dark-card rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-                  <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <span className="text-2xl" role="img" aria-label="Verify">✅</span>
-                  </div>
-                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Verify</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">
-                    You&apos;re in full control. Review and verify every insight before it becomes part of your profile.
-                  </p>
-                </div>
-
-                <div className="bg-white dark:bg-dark-card rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-                  <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <span className="text-2xl" role="img" aria-label="Manage">🧠</span>
-                  </div>
-                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Manage</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">
-                    Build a living knowledge graph and export your context for any AI tool.
-                  </p>
-                </div>
+                ))}
               </div>
 
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col items-center gap-4">
                 <button
                   onClick={() => setCurrentStep('profile')}
-                  className="btn-primary w-full py-3 text-base"
+                  className="btn-primary px-10 py-3 text-base"
                 >
                   Get Started
                 </button>
                 <button
                   onClick={handleSkipOnboarding}
                   disabled={isSubmitting}
-                  className="text-sm text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                  className="text-[11px] uppercase tracking-[0.08em] font-sans font-medium text-ink/40 dark:text-[#7A7264] hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
                 >
                   Skip for now
                 </button>
@@ -604,117 +641,121 @@ export default function OnboardingPage() {
           {/* STEP 2: Profile Fields */}
           {currentStep === 'profile' && (
             <div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 text-center">
-                Tell us about yourself
-              </h2>
-              <p className="text-gray-600 dark:text-gray-300 mb-6 text-center">
-                This helps personalize your AI interviews and knowledge extraction.
-              </p>
+              <StepHeading
+                kicker="Step 02 · Profile"
+                title="Tell us about yourself"
+                subtitle="This helps personalize your AI interviews and knowledge extraction."
+              />
 
-              <form onSubmit={handleProfileSubmit} className="space-y-5">
+              <form onSubmit={handleProfileSubmit} className="space-y-6">
                 {serverError && (
-                  <div id="onboarding-server-error" className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm" role="alert" aria-live="assertive">
+                  <p
+                    id="onboarding-server-error"
+                    className="text-sm text-red-600 dark:text-red-400 border-l-2 border-red-400 dark:border-red-500 pl-3"
+                    role="alert"
+                    aria-live="assertive"
+                  >
                     {serverError}
-                  </div>
+                  </p>
                 )}
 
                 {/* Name */}
                 <div>
-                  <label htmlFor="ob-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Full Name <span className="text-red-500">*</span>
+                  <label htmlFor="ob-name" className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+                    Full Name <span className="text-primary-500">*</span>
                   </label>
                   <input
                     id="ob-name"
                     type="text"
                     value={profileFields.name}
                     onChange={(e) => handleFieldChange('name', e.target.value)}
-                    className={`input-field ${fieldErrors.name ? 'border-red-500 dark:border-red-500' : ''}`}
+                    className={`input-field ${fieldErrors.name ? 'border-red-400 dark:border-red-500' : ''}`}
                     placeholder="Your full name"
                     autoComplete="name"
                     aria-describedby={fieldErrors.name ? 'ob-name-error' : undefined}
                     aria-invalid={fieldErrors.name ? true : undefined}
                   />
                   {fieldErrors.name && (
-                    <p id="ob-name-error" className="mt-1 text-xs text-red-500" role="alert">{fieldErrors.name}</p>
+                    <p id="ob-name-error" className="mt-1.5 text-xs text-red-600 dark:text-red-400" role="alert">{fieldErrors.name}</p>
                   )}
                 </div>
 
                 {/* Date of Birth */}
                 <div>
-                  <label htmlFor="ob-dob" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Date of Birth <span className="text-red-500">*</span>
+                  <label htmlFor="ob-dob" className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+                    Date of Birth <span className="text-primary-500">*</span>
                   </label>
                   <input
                     id="ob-dob"
                     type="date"
                     value={profileFields.dateOfBirth}
                     onChange={(e) => handleFieldChange('dateOfBirth', e.target.value)}
-                    className={`input-field ${fieldErrors.dateOfBirth ? 'border-red-500 dark:border-red-500' : ''}`}
+                    className={`input-field ${fieldErrors.dateOfBirth ? 'border-red-400 dark:border-red-500' : ''}`}
                     min="1900-01-01"
                     max={new Date().toISOString().split('T')[0]}
                     aria-describedby={fieldErrors.dateOfBirth ? 'ob-dob-error' : 'ob-dob-hint'}
                     aria-invalid={fieldErrors.dateOfBirth ? true : undefined}
                   />
-                  <p id="ob-dob-hint" className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  <p id="ob-dob-hint" className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                     Must be between 1900 and today
                   </p>
                   {fieldErrors.dateOfBirth && (
-                    <p id="ob-dob-error" className="mt-1 text-xs text-red-500" role="alert">{fieldErrors.dateOfBirth}</p>
+                    <p id="ob-dob-error" className="mt-1.5 text-xs text-red-600 dark:text-red-400" role="alert">{fieldErrors.dateOfBirth}</p>
                   )}
                 </div>
 
                 {/* Location */}
                 <div>
-                  <label htmlFor="ob-location" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Location <span className="text-red-500">*</span>
+                  <label htmlFor="ob-location" className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+                    Location <span className="text-primary-500">*</span>
                   </label>
                   <input
                     id="ob-location"
                     type="text"
                     value={profileFields.location}
                     onChange={(e) => handleFieldChange('location', e.target.value)}
-                    className={`input-field ${fieldErrors.location ? 'border-red-500 dark:border-red-500' : ''}`}
+                    className={`input-field ${fieldErrors.location ? 'border-red-400 dark:border-red-500' : ''}`}
                     placeholder="City, Country"
                     autoComplete="address-level2"
                     aria-describedby={fieldErrors.location ? 'ob-location-error' : undefined}
                     aria-invalid={fieldErrors.location ? true : undefined}
                   />
                   {fieldErrors.location && (
-                    <p id="ob-location-error" className="mt-1 text-xs text-red-500" role="alert">{fieldErrors.location}</p>
+                    <p id="ob-location-error" className="mt-1.5 text-xs text-red-600 dark:text-red-400" role="alert">{fieldErrors.location}</p>
                   )}
                 </div>
 
                 {/* Occupation */}
                 <div>
-                  <label htmlFor="ob-occupation" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Occupation <span className="text-red-500">*</span>
+                  <label htmlFor="ob-occupation" className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+                    Occupation <span className="text-primary-500">*</span>
                   </label>
                   <input
                     id="ob-occupation"
                     type="text"
                     value={profileFields.occupation}
                     onChange={(e) => handleFieldChange('occupation', e.target.value)}
-                    className={`input-field ${fieldErrors.occupation ? 'border-red-500 dark:border-red-500' : ''}`}
+                    className={`input-field ${fieldErrors.occupation ? 'border-red-400 dark:border-red-500' : ''}`}
                     placeholder="Your job title or role"
                     autoComplete="organization-title"
                     aria-describedby={fieldErrors.occupation ? 'ob-occupation-error' : undefined}
                     aria-invalid={fieldErrors.occupation ? true : undefined}
                   />
                   {fieldErrors.occupation && (
-                    <p id="ob-occupation-error" className="mt-1 text-xs text-red-500" role="alert">{fieldErrors.occupation}</p>
+                    <p id="ob-occupation-error" className="mt-1.5 text-xs text-red-600 dark:text-red-400" role="alert">{fieldErrors.occupation}</p>
                   )}
                 </div>
 
                 {/* Gender */}
                 <div>
-                  <label htmlFor="ob-gender" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Gender <span className="text-red-500">*</span>
+                  <label htmlFor="ob-gender" className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+                    Gender <span className="text-primary-500">*</span>
                   </label>
                   <select
                     id="ob-gender"
                     value={profileFields.gender}
                     onChange={(e) => handleFieldChange('gender', e.target.value)}
-                    className={`input-field ${fieldErrors.gender ? 'border-red-500 dark:border-red-500' : ''}`}
+                    className={`input-field ${fieldErrors.gender ? 'border-red-400 dark:border-red-500' : ''}`}
                     aria-describedby={fieldErrors.gender ? 'ob-gender-error' : undefined}
                     aria-invalid={fieldErrors.gender ? true : undefined}
                   >
@@ -726,7 +767,7 @@ export default function OnboardingPage() {
                     ))}
                   </select>
                   {fieldErrors.gender && (
-                    <p id="ob-gender-error" className="mt-1 text-xs text-red-500" role="alert">{fieldErrors.gender}</p>
+                    <p id="ob-gender-error" className="mt-1.5 text-xs text-red-600 dark:text-red-400" role="alert">{fieldErrors.gender}</p>
                   )}
                 </div>
 
@@ -734,16 +775,16 @@ export default function OnboardingPage() {
                   <button
                     type="button"
                     onClick={() => setCurrentStep('welcome')}
-                    className="flex-1 py-2.5 px-4 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium"
+                    className="btn-secondary flex-1"
                   >
                     Back
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="btn-primary flex-[2] py-2.5"
+                    className="btn-primary flex-[2]"
                   >
-                    {isSubmitting ? 'Saving...' : 'Next'}
+                    {isSubmitting ? 'Saving…' : 'Continue'}
                   </button>
                 </div>
 
@@ -751,7 +792,7 @@ export default function OnboardingPage() {
                   type="button"
                   onClick={handleSkipOnboarding}
                   disabled={isSubmitting}
-                  className="w-full text-sm text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300 transition-colors mt-2"
+                  className="w-full text-[11px] uppercase tracking-[0.08em] font-sans font-medium text-ink/40 dark:text-[#7A7264] hover:text-primary-600 dark:hover:text-primary-400 transition-colors mt-1"
                 >
                   Skip for now
                 </button>
@@ -762,277 +803,241 @@ export default function OnboardingPage() {
           {/* STEP 3: Context Import */}
           {currentStep === 'context' && (
             <div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 text-center">
-                Import existing context
-              </h2>
-              <p className="text-gray-600 dark:text-gray-300 mb-6 text-center">
-                Optionally import content to give the AI more context about you. This step is optional.
-              </p>
+              <StepHeading
+                kicker="Step 03 · Context (optional)"
+                title="Import existing context"
+                subtitle="Give the interviewer a head start with things you've already written about yourself."
+              />
 
               {/* Import Method Tabs */}
-              <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6">
-                <button
-                  type="button"
-                  onClick={() => setActiveImportTab('url')}
-                  className={`flex-1 py-2.5 px-3 text-sm font-medium border-b-2 transition-colors ${
-                    activeImportTab === 'url'
-                      ? 'border-primary-600 text-primary-600 dark:text-primary-400'
-                      : 'border-transparent text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300'
-                  }`}
-                >
-                  <span className="flex items-center justify-center gap-1.5">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                    </svg>
-                    URL
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveImportTab('text')}
-                  className={`flex-1 py-2.5 px-3 text-sm font-medium border-b-2 transition-colors ${
-                    activeImportTab === 'text'
-                      ? 'border-primary-600 text-primary-600 dark:text-primary-400'
-                      : 'border-transparent text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300'
-                  }`}
-                >
-                  <span className="flex items-center justify-center gap-1.5">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Paste Text
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveImportTab('file')}
-                  className={`flex-1 py-2.5 px-3 text-sm font-medium border-b-2 transition-colors ${
-                    activeImportTab === 'file'
-                      ? 'border-primary-600 text-primary-600 dark:text-primary-400'
-                      : 'border-transparent text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300'
-                  }`}
-                >
-                  <span className="flex items-center justify-center gap-1.5">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                    </svg>
-                    Upload File
-                  </span>
-                </button>
+              <div className="flex border-b border-rule dark:border-dark-border mb-8" role="tablist" aria-label="Import method">
+                {IMPORT_TABS.map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeImportTab === tab.key}
+                    aria-controls={`import-panel-${tab.key}`}
+                    id={`import-tab-${tab.key}`}
+                    onClick={() => setActiveImportTab(tab.key)}
+                    className={`flex-1 pb-3 pt-1 text-[11px] uppercase tracking-[0.08em] font-sans font-semibold border-b-2 transition-colors ${
+                      activeImportTab === tab.key
+                        ? 'border-primary-500 text-ink dark:text-gray-100'
+                        : 'border-transparent text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
 
               {/* URL Import Tab */}
               {activeImportTab === 'url' && (
-                <div className="bg-white dark:bg-dark-card rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
-                  <p className="text-xs text-gray-500 dark:text-gray-300 mb-4">
-                    Add links to your blog, portfolio, LinkedIn, or any page about you
-                  </p>
+                <div id="import-panel-url" role="tabpanel" aria-labelledby="import-tab-url">
+                  <Card className="mb-8">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                      Add links to your blog, portfolio, LinkedIn, or any page about you
+                    </p>
 
-                  <form onSubmit={handleUrlSubmit} className="flex gap-2">
-                    <input
-                      type="text"
-                      value={urlInput}
-                      onChange={(e) => {
-                        setUrlInput(e.target.value);
-                        setUrlError('');
-                      }}
-                      className="input-field flex-1"
-                      placeholder="https://example.com/about-me"
-                      disabled={isProcessingUrl}
-                    />
-                    <button
-                      type="submit"
-                      disabled={isProcessingUrl || !urlInput.trim()}
-                      className="btn-primary px-4 py-2 whitespace-nowrap"
-                    >
-                      {isProcessingUrl ? (
-                        <span className="flex items-center gap-2">
-                          <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                          </svg>
-                          Processing...
-                        </span>
-                      ) : (
-                        'Add URL'
-                      )}
-                    </button>
-                  </form>
+                    <form onSubmit={handleUrlSubmit} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={urlInput}
+                        onChange={(e) => {
+                          setUrlInput(e.target.value);
+                          setUrlError('');
+                        }}
+                        className="input-field flex-1"
+                        placeholder="https://example.com/about-me"
+                        disabled={isProcessingUrl}
+                      />
+                      <button
+                        type="submit"
+                        disabled={isProcessingUrl || !urlInput.trim()}
+                        className="btn-primary px-4 py-2 whitespace-nowrap"
+                      >
+                        {isProcessingUrl ? (
+                          <span className="flex items-center gap-2">
+                            <Spinner />
+                            Processing…
+                          </span>
+                        ) : (
+                          'Add URL'
+                        )}
+                      </button>
+                    </form>
 
-                  {urlError && (
-                    <p className="mt-2 text-xs text-red-500" role="alert">{urlError}</p>
-                  )}
+                    {urlError && (
+                      <p className="mt-2 text-xs text-red-600 dark:text-red-400" role="alert">{urlError}</p>
+                    )}
+                  </Card>
                 </div>
               )}
 
               {/* Paste Text Tab */}
               {activeImportTab === 'text' && (
-                <div className="bg-white dark:bg-dark-card rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
-                  <p className="text-xs text-gray-500 dark:text-gray-300 mb-4">
-                    Paste text about yourself - a bio, interests, resume excerpt, or anything that describes you
-                  </p>
+                <div id="import-panel-text" role="tabpanel" aria-labelledby="import-tab-text">
+                  <Card className="mb-8">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                      Paste text about yourself — a bio, interests, resume excerpt, or anything that describes you
+                    </p>
 
-                  <form onSubmit={handleTextSubmit} className="space-y-3">
-                    <input
-                      type="text"
-                      value={pasteTitle}
-                      onChange={(e) => setPasteTitle(e.target.value)}
-                      className="input-field w-full"
-                      placeholder="Title (optional) - e.g., My Bio, Personal Interests"
-                      disabled={isProcessingText}
-                    />
-                    <textarea
-                      value={pasteText}
-                      onChange={(e) => {
-                        setPasteText(e.target.value);
-                        setPasteError('');
-                      }}
-                      className="input-field w-full min-h-[120px] resize-y"
-                      placeholder="Paste your text here... For example, a paragraph about your interests, career, hobbies, or anything you'd like the AI to know about you."
-                      disabled={isProcessingText}
-                      rows={5}
-                    />
-                    {pasteText.trim().length > 0 && (
-                      <p className="text-xs text-gray-500 dark:text-gray-300">
-                        {pasteText.trim().length} characters
-                      </p>
-                    )}
-                    <button
-                      type="submit"
-                      disabled={isProcessingText || !pasteText.trim()}
-                      className="btn-primary w-full py-2"
-                    >
-                      {isProcessingText ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                          </svg>
-                          Processing...
-                        </span>
-                      ) : (
-                        'Import Text'
+                    <form onSubmit={handleTextSubmit} className="space-y-3">
+                      <input
+                        type="text"
+                        value={pasteTitle}
+                        onChange={(e) => setPasteTitle(e.target.value)}
+                        className="input-field w-full"
+                        placeholder="Title (optional) — e.g., My Bio, Personal Interests"
+                        disabled={isProcessingText}
+                      />
+                      <textarea
+                        value={pasteText}
+                        onChange={(e) => {
+                          setPasteText(e.target.value);
+                          setPasteError('');
+                        }}
+                        className="input-field w-full min-h-[120px] resize-y"
+                        placeholder="Paste your text here… For example, a paragraph about your interests, career, hobbies, or anything you'd like the AI to know about you."
+                        disabled={isProcessingText}
+                        rows={5}
+                      />
+                      {pasteText.trim().length > 0 && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {pasteText.trim().length} characters
+                        </p>
                       )}
-                    </button>
-                  </form>
+                      <button
+                        type="submit"
+                        disabled={isProcessingText || !pasteText.trim()}
+                        className="btn-primary w-full py-2"
+                      >
+                        {isProcessingText ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <Spinner />
+                            Processing…
+                          </span>
+                        ) : (
+                          'Import Text'
+                        )}
+                      </button>
+                    </form>
 
-                  {pasteError && (
-                    <p className="mt-2 text-xs text-red-500" role="alert">{pasteError}</p>
-                  )}
+                    {pasteError && (
+                      <p className="mt-2 text-xs text-red-600 dark:text-red-400" role="alert">{pasteError}</p>
+                    )}
+                  </Card>
                 </div>
               )}
 
               {/* File Upload Tab */}
               {activeImportTab === 'file' && (
-                <div className="bg-white dark:bg-dark-card rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
-                  <p className="text-xs text-gray-500 dark:text-gray-300 mb-4">
-                    Upload a text file, markdown, CSV, JSON, or PDF (max 5MB)
-                  </p>
+                <div id="import-panel-file" role="tabpanel" aria-labelledby="import-tab-file">
+                  <Card className="mb-8">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                      Upload a text file, markdown, CSV, JSON, or PDF (max 5MB)
+                    </p>
 
-                  <div className="space-y-3">
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".txt,.md,.csv,.json,.pdf,text/plain,text/markdown,text/csv,application/json,application/pdf"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                      id="onboarding-file-upload"
-                      disabled={isUploadingFile}
-                    />
-                    <label
-                      htmlFor="onboarding-file-upload"
-                      className={`flex flex-col items-center justify-center w-full h-36 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
-                        isUploadingFile
-                          ? 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 cursor-wait'
-                          : 'border-gray-300 dark:border-gray-600 hover:border-primary-400 dark:hover:border-primary-500 hover:bg-gray-50 dark:hover:bg-gray-800/50'
-                      }`}
-                    >
-                      {isUploadingFile ? (
-                        <div className="flex flex-col items-center gap-2">
-                          <svg className="animate-spin w-8 h-8 text-primary-600" viewBox="0 0 24 24" fill="none">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                          </svg>
-                          <span className="text-sm text-gray-600 dark:text-gray-300">Uploading and processing...</span>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center gap-2">
-                          <svg className="w-8 h-8 text-gray-500 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                          </svg>
-                          <span className="text-sm text-gray-600 dark:text-gray-300">
-                            Click to select a file
-                          </span>
-                          <span className="text-xs text-gray-500 dark:text-gray-300">
-                            .txt, .md, .csv, .json, .pdf
-                          </span>
-                        </div>
-                      )}
-                    </label>
-                  </div>
+                    <div className="space-y-3">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".txt,.md,.csv,.json,.pdf,text/plain,text/markdown,text/csv,application/json,application/pdf"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                        id="onboarding-file-upload"
+                        disabled={isUploadingFile}
+                      />
+                      <label
+                        htmlFor="onboarding-file-upload"
+                        className={`flex flex-col items-center justify-center w-full h-36 border border-dashed rounded-md cursor-pointer transition-colors ${
+                          isUploadingFile
+                            ? 'border-rule dark:border-dark-border cursor-wait'
+                            : 'border-rule dark:border-dark-border hover:border-primary-400 dark:hover:border-primary-500 hover:bg-panel/60 dark:hover:bg-dark-card/60'
+                        }`}
+                      >
+                        {isUploadingFile ? (
+                          <div className="flex flex-col items-center gap-2">
+                            <Spinner className="w-6 h-6 text-primary-500" />
+                            <span className="text-sm text-gray-500 dark:text-gray-400">Uploading and processing…</span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center gap-2">
+                            <svg className="w-6 h-6 text-gray-400 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                            </svg>
+                            <span className="text-sm text-gray-600 dark:text-gray-300">
+                              Click to select a file
+                            </span>
+                            <span className="text-[11px] uppercase tracking-[0.08em] font-sans text-gray-400 dark:text-gray-600">
+                              .txt · .md · .csv · .json · .pdf
+                            </span>
+                          </div>
+                        )}
+                      </label>
+                    </div>
 
-                  {fileError && (
-                    <p className="mt-2 text-xs text-red-500" role="alert">{fileError}</p>
-                  )}
+                    {fileError && (
+                      <p className="mt-2 text-xs text-red-600 dark:text-red-400" role="alert">{fileError}</p>
+                    )}
+                  </Card>
                 </div>
               )}
 
               {/* Import Results */}
               {importResults.length > 0 && (
-                <div className="space-y-3 mb-6">
-                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Imported Content ({importResults.length})
-                  </h4>
-                  {importResults.map((result, idx) => (
-                    <div
-                      key={result.id || idx}
-                      className={`rounded-lg p-4 border ${
-                        result.status === 'success'
-                          ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800'
-                          : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800'
-                      }`}
-                    >
-                      {result.status === 'success' ? (
-                        <>
-                          <div className="flex items-center gap-2 mb-1">
-                            <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                            <span className="font-medium text-sm text-gray-900 dark:text-white">
-                              {result.title || 'Untitled'}
-                            </span>
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300">
-                              {result.source === 'url' ? 'URL' : result.source === 'text' ? 'Text' : 'File'}
-                            </span>
-                          </div>
-                          {result.url && (
-                            <p className="text-xs text-gray-500 dark:text-gray-300 mb-2 truncate">
-                              {result.url}
-                            </p>
-                          )}
-                          {result.summary && (
-                            <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-3">
-                              {result.summary}
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
+                <div className="mb-8">
+                  <p className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-3">
+                    Imported ({importResults.length})
+                  </p>
+                  <div className="border-t border-rule dark:border-dark-border">
+                    {importResults.map((result, idx) => (
+                      <div
+                        key={result.id || idx}
+                        className="border-b border-rule dark:border-dark-border py-4"
+                      >
+                        {result.status === 'success' ? (
+                          <>
+                            <div className="flex items-center justify-between gap-3 mb-1">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Badge variant="verified" label="Imported" />
+                                <span className="font-serif text-ink dark:text-gray-100 truncate">
+                                  {result.title || 'Untitled'}
+                                </span>
+                              </div>
+                              <span className="text-[11px] uppercase tracking-[0.08em] font-sans font-medium text-gray-400 dark:text-gray-600 shrink-0">
+                                {result.source === 'url' ? 'URL' : result.source === 'text' ? 'Text' : 'File'}
+                              </span>
+                            </div>
+                            {result.url && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 truncate">
+                                {result.url}
+                              </p>
+                            )}
+                            {result.summary && (
+                              <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-3">
+                                {result.summary}
+                              </p>
+                            )}
+                          </>
+                        ) : (
                           <div>
-                            <span className="text-sm text-red-700 dark:text-red-400">
-                              Failed to process: {result.title || result.url || 'Unknown'}
-                            </span>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-red-600 dark:text-red-400">
+                                Failed
+                              </span>
+                              <span className="text-sm text-gray-600 dark:text-gray-300 truncate">
+                                {result.title || result.url || 'Unknown'}
+                              </span>
+                            </div>
                             {result.error && (
-                              <p className="text-xs text-red-500 mt-0.5">{result.error}</p>
+                              <p className="text-xs text-red-600 dark:text-red-400">{result.error}</p>
                             )}
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -1041,16 +1046,16 @@ export default function OnboardingPage() {
                 <button
                   type="button"
                   onClick={() => setCurrentStep('profile')}
-                  className="flex-1 py-2.5 px-4 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium"
+                  className="btn-secondary flex-1"
                 >
                   Back
                 </button>
                 <button
                   onClick={() => setCurrentStep('topics')}
                   disabled={isSubmitting}
-                  className="btn-primary flex-[2] py-2.5"
+                  className="btn-primary flex-[2]"
                 >
-                  {importResults.length > 0 ? 'Next: Choose Topics' : 'Skip & Choose Topics'}
+                  Continue
                 </button>
               </div>
 
@@ -1058,7 +1063,7 @@ export default function OnboardingPage() {
                 type="button"
                 onClick={handleSkipOnboarding}
                 disabled={isSubmitting}
-                className="w-full text-sm text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300 transition-colors mt-4"
+                className="w-full text-[11px] uppercase tracking-[0.08em] font-sans font-medium text-ink/40 dark:text-[#7A7264] hover:text-primary-600 dark:hover:text-primary-400 transition-colors mt-4"
               >
                 Skip for now
               </button>
@@ -1068,40 +1073,51 @@ export default function OnboardingPage() {
           {/* STEP 4: Preset Topic Selection */}
           {currentStep === 'topics' && (
             <div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 text-center">
-                Choose your starter topics
-              </h2>
-              <p className="text-gray-600 dark:text-gray-300 mb-2 text-center">
-                Select 3-5 topics to explore first. These will guide your initial AI interviews.
-              </p>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 text-center">
-                {selectedTopicTitles.size} selected {selectedTopicTitles.size >= 3 && selectedTopicTitles.size <= 5 ? '✓' : selectedTopicTitles.size > 5 ? '(consider narrowing down)' : `(select at least ${3 - selectedTopicTitles.size} more)`}
+              <StepHeading
+                kicker="Step 04 · Topics"
+                title="Choose where to begin"
+                subtitle="Select 3–5 topics to explore first. These will guide your initial AI interviews."
+              />
+
+              <p
+                className={`text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-center mb-8 ${
+                  selectedTopicTitles.size >= 3 && selectedTopicTitles.size <= 5
+                    ? 'text-primary-600 dark:text-primary-400'
+                    : 'text-gray-400 dark:text-gray-600'
+                }`}
+              >
+                {selectedTopicTitles.size} selected
+                {selectedTopicTitles.size > 5 && ' — consider narrowing down'}
+                {selectedTopicTitles.size > 0 && selectedTopicTitles.size < 3 &&
+                  ` — choose at least ${3 - selectedTopicTitles.size} more`}
+                {selectedTopicTitles.size === 0 && ' — choose at least 3'}
               </p>
 
               {presetError && (
-                <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm mb-4" role="alert" aria-live="assertive">
+                <p
+                  className="text-sm text-red-600 dark:text-red-400 border-l-2 border-red-400 dark:border-red-500 pl-3 mb-6"
+                  role="alert"
+                  aria-live="assertive"
+                >
                   {presetError}
-                </div>
+                </p>
               )}
 
               {isLoadingPresets ? (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <svg className="animate-spin w-8 h-8 text-primary-600 mb-3" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  <p className="text-sm text-gray-500 dark:text-gray-300">Loading topics...</p>
+                <div className="flex flex-col items-center justify-center py-16">
+                  <Spinner className="w-6 h-6 text-primary-500 mb-3" />
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Loading topics…</p>
                 </div>
               ) : (
                 <>
                   {/* Category Filter Tabs */}
-                  <div className="flex flex-wrap gap-2 mb-6">
+                  <div className="flex flex-wrap gap-x-6 gap-y-2 mb-8 pb-3 border-b border-rule dark:border-dark-border">
                     <button
                       onClick={() => setActiveCategory(null)}
-                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                      className={`text-[11px] uppercase tracking-[0.08em] font-sans font-semibold pb-1 border-b-2 transition-colors ${
                         activeCategory === null
-                          ? 'bg-primary-600 text-white'
-                          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                          ? 'border-primary-500 text-ink dark:text-gray-100'
+                          : 'border-transparent text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400'
                       }`}
                     >
                       All ({presetTopics.length})
@@ -1114,20 +1130,20 @@ export default function OnboardingPage() {
                         <button
                           key={cat}
                           onClick={() => setActiveCategory(cat === activeCategory ? null : cat)}
-                          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                          className={`text-[11px] uppercase tracking-[0.08em] font-sans font-semibold pb-1 border-b-2 transition-colors ${
                             activeCategory === cat
-                              ? 'bg-primary-600 text-white'
-                              : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                              ? 'border-primary-500 text-ink dark:text-gray-100'
+                              : 'border-transparent text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400'
                           }`}
                         >
-                          {info.icon} {info.label} ({count})
+                          {info.label} ({count})
                         </button>
                       );
                     })}
                   </div>
 
-                  {/* Topic Cards Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+                  {/* Topic cards — quiet editorial cards, amber ring/check for selection */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
                     {filteredPresets.map((preset) => {
                       const isSelected = selectedTopicTitles.has(preset.title);
                       const catInfo = CATEGORY_INFO[preset.category];
@@ -1136,36 +1152,36 @@ export default function OnboardingPage() {
                           key={preset.title}
                           type="button"
                           onClick={() => toggleTopicSelection(preset.title)}
-                          className={`text-left p-4 rounded-xl border-2 transition-all duration-200 ${
+                          aria-pressed={isSelected}
+                          className={`text-left p-5 rounded-md border bg-transparent transition-colors ${
                             isSelected
-                              ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 shadow-sm'
-                              : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-dark-card hover:border-gray-300 dark:hover:border-gray-600'
+                              ? 'border-primary-500 dark:border-primary-400 ring-1 ring-primary-500/30'
+                              : 'border-rule dark:border-dark-border hover:border-gray-300 dark:hover:border-gray-600'
                           }`}
                         >
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${catInfo.color}`}>
-                                {catInfo.icon} {catInfo.label}
-                              </span>
-                            </div>
-                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                              isSelected
-                                ? 'border-primary-500 bg-primary-500'
-                                : 'border-gray-300 dark:border-gray-600'
-                            }`}>
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <span className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-primary-600 dark:text-primary-400">
+                              {catInfo?.label}
+                            </span>
+                            <span
+                              className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                                isSelected
+                                  ? 'border-primary-500 bg-primary-500'
+                                  : 'border-gray-300 dark:border-gray-600'
+                              }`}
+                              aria-hidden="true"
+                            >
                               {isSelected && (
-                                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                                 </svg>
                               )}
-                            </div>
+                            </span>
                           </div>
-                          <h4 className={`font-semibold text-sm mb-1 ${
-                            isSelected ? 'text-primary-700 dark:text-primary-300' : 'text-gray-900 dark:text-white'
-                          }`}>
+                          <h4 className="font-serif text-base text-ink dark:text-gray-100 mb-1">
                             {preset.title}
                           </h4>
-                          <p className="text-xs text-gray-500 dark:text-gray-300 line-clamp-2">
+                          <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
                             {preset.description}
                           </p>
                         </button>
@@ -1180,16 +1196,16 @@ export default function OnboardingPage() {
                 <button
                   type="button"
                   onClick={() => setCurrentStep('context')}
-                  className="flex-1 py-2.5 px-4 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium"
+                  className="btn-secondary flex-1"
                 >
                   Back
                 </button>
                 <button
                   onClick={handleSavePresetTopics}
                   disabled={isSavingTopics || isSubmitting}
-                  className="btn-primary flex-[2] py-2.5"
+                  className="btn-primary flex-[2]"
                 >
-                  {isSavingTopics || isSubmitting ? 'Finishing...' : selectedTopicTitles.size > 0 ? `Complete Setup (${selectedTopicTitles.size} topics)` : 'Skip & Complete Setup'}
+                  {isSavingTopics || isSubmitting ? 'Finishing…' : 'Finish'}
                 </button>
               </div>
 
@@ -1197,47 +1213,49 @@ export default function OnboardingPage() {
                 type="button"
                 onClick={handleSkipOnboarding}
                 disabled={isSubmitting || isSavingTopics}
-                className="w-full text-sm text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-300 transition-colors mt-4"
+                className="w-full text-[11px] uppercase tracking-[0.08em] font-sans font-medium text-ink/40 dark:text-[#7A7264] hover:text-primary-600 dark:hover:text-primary-400 transition-colors mt-4"
               >
                 Skip for now
               </button>
             </div>
           )}
         </div>
-      </div>
+      </main>
 
       {/* Assessment Suggestion Overlay - shown after onboarding completion */}
       {showAssessmentSuggestion && (
-        <div className="fixed inset-0 z-50 bg-gray-50 dark:bg-dark-bg flex items-center justify-center px-4">
+        <div className="fixed inset-0 z-50 bg-paper dark:bg-dark-bg flex items-center justify-center px-4">
           <div className="max-w-md w-full text-center">
-            <div className="bg-white dark:bg-dark-card rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-8">
-              <span className="text-5xl block mb-4">🧠</span>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
-                Discover Your Personality
+            <div className="bg-white dark:bg-dark-card border border-rule dark:border-dark-border rounded-lg p-8">
+              <p className="text-[11px] tracking-[0.16em] uppercase font-sans font-bold text-primary-600 dark:text-primary-400 mb-4">
+                The Big Five
+              </p>
+              <h2 className="font-serif italic text-2xl sm:text-3xl text-ink dark:text-gray-100 mb-3">
+                Discover your personality
               </h2>
               <p className="text-gray-600 dark:text-gray-300 mb-2">
                 Take the Big Five personality assessment to add scientifically-validated personality insights to your profile.
               </p>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">
                 120 questions &middot; ~15 minutes &middot; Based on the IPIP-NEO model
               </p>
 
               <div className="space-y-3">
                 <button
                   onClick={() => navigate('/app/personality', { replace: true })}
-                  className="btn-primary w-full py-3 text-base font-semibold"
+                  className="btn-primary w-full py-3 text-base"
                 >
                   Take the Big Five Test
                 </button>
                 <button
-                  onClick={() => navigate('/app', { replace: true })}
-                  className="w-full py-2.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                  onClick={() => navigate('/app/dashboard', { replace: true })}
+                  className="btn-secondary w-full py-2.5"
                 >
                   Skip for now &mdash; I&apos;ll do it later
                 </button>
               </div>
 
-              <p className="mt-4 text-xs text-gray-400 dark:text-gray-500">
+              <p className="mt-4 text-[11px] uppercase tracking-[0.08em] font-sans text-ink/40 dark:text-[#7A7264]">
                 You can always take the test from the sidebar menu
               </p>
             </div>
