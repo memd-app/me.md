@@ -24,16 +24,16 @@ const navItems: NavItem[] = [
   { to: '/app/bookmarks', label: 'Bookmarks' },
   { to: '/app/personality', label: 'Personality' },
   { to: '/app/search', label: 'Search' },
-  { to: '/app/sandbox', label: 'Sandbox' },
-  { to: '/app/settings', label: 'Settings' },
 ];
 
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
-export default function Sidebar({ isOpen, onClose }: SidebarProps) {
+export default function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }: SidebarProps) {
   const { user } = useUser();
   const db = useDatabase();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -95,7 +95,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           fixed top-0 left-0 z-50 h-full w-60
           bg-paper dark:bg-dark-bg border-r border-rule dark:border-dark-border
           transform transition-transform duration-200 ease-in-out
-          lg:translate-x-0 lg:static lg:z-auto
+          ${collapsed ? 'lg:hidden' : 'lg:translate-x-0 lg:static lg:z-auto'}
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
       >
@@ -107,6 +107,21 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                 me<span className="text-primary-500 not-italic">.</span>md
               </span>
             </NavLink>
+            {onToggleCollapse && (
+              <button
+                onClick={onToggleCollapse}
+                className="hidden lg:flex items-center justify-center w-8 h-8 rounded-md text-gray-400 dark:text-gray-600 hover:text-ink dark:hover:text-gray-100 hover:bg-panel dark:hover:bg-dark-card transition-colors"
+                aria-label="Collapse sidebar"
+                aria-expanded={!collapsed}
+                aria-controls="sidebar-nav"
+                title="Collapse sidebar (⌘B)"
+              >
+                <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <path d="M9 4v16" />
+                </svg>
+              </button>
+            )}
             <button
               ref={closeButtonRef}
               onClick={onClose}
@@ -160,14 +175,14 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             </ul>
           </nav>
 
-          {/* User section — links to the profile reading surface */}
-          <div className="border-t border-rule dark:border-dark-border p-4" role="region" aria-label="User account">
+          {/* User section — profile link + settings, side by side */}
+          <div className="border-t border-rule dark:border-dark-border p-4 flex items-center gap-1" role="region" aria-label="User account">
             <NavLink
               to="/app/profile"
               onClick={onClose}
               aria-label="Open your profile"
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-md px-2 py-1.5 transition-colors ${
+                `flex flex-1 min-w-0 items-center gap-3 rounded-md px-2 py-1.5 transition-colors ${
                   isActive ? 'bg-panel dark:bg-dark-card' : 'hover:bg-panel/60 dark:hover:bg-dark-card/60'
                 }`
               }
@@ -186,6 +201,24 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                   Your profile
                 </p>
               </div>
+            </NavLink>
+            <NavLink
+              to="/app/settings"
+              onClick={onClose}
+              aria-label="Settings"
+              title="Settings"
+              className={({ isActive }) =>
+                `flex items-center justify-center w-9 h-9 shrink-0 rounded-md transition-colors ${
+                  isActive
+                    ? 'bg-panel dark:bg-dark-card text-ink dark:text-gray-100'
+                    : 'text-gray-400 dark:text-gray-600 hover:text-ink dark:hover:text-gray-100 hover:bg-panel/60 dark:hover:bg-dark-card/60'
+                }`
+              }
+            >
+              <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
             </NavLink>
           </div>
         </div>
