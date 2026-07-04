@@ -1738,7 +1738,7 @@ export default function SessionPage() {
                     </span>
                     <div className="min-w-0">
                       {source.url ? (
-                        <a href={source.url} target="_blank" rel="noopener noreferrer" className="text-purple-700 dark:text-purple-300 hover:underline font-medium">
+                        <a href={/^https?:\/\//i.test(source.url) ? source.url : '#'} target="_blank" rel="noopener noreferrer" className="text-purple-700 dark:text-purple-300 hover:underline font-medium">
                           {source.title}
                         </a>
                       ) : (

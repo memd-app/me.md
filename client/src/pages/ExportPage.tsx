@@ -25,7 +25,6 @@ export default function ExportPage() {
   // Authentication verification state
   const [isVerified, setIsVerified] = useState(false);
   const [showVerifyDialog, setShowVerifyDialog] = useState(false);
-  const [verifyPassword, setVerifyPassword] = useState('');
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [verifying, _setVerifying] = useState(false);
   const [pendingAction, setPendingAction] = useState<ExportAction | null>(null);
@@ -136,7 +135,6 @@ export default function ExportPage() {
     }
     setPendingAction(action);
     setShowVerifyDialog(true);
-    setVerifyPassword('');
     setVerifyError(null);
   };
 
@@ -144,10 +142,9 @@ export default function ExportPage() {
     e.preventDefault();
     if (!user) return;
 
-    // Local-only app: no server auth, auto-verify
+    // Local-only app: this dialog is an informed-consent confirmation, not authentication
     setIsVerified(true);
     setShowVerifyDialog(false);
-    setVerifyPassword('');
 
     // Execute the pending action
     if (pendingAction === 'download') {
@@ -160,7 +157,6 @@ export default function ExportPage() {
 
   const handleCancelVerify = () => {
     setShowVerifyDialog(false);
-    setVerifyPassword('');
     setVerifyError(null);
     setPendingAction(null);
   };
@@ -393,7 +389,7 @@ export default function ExportPage() {
       <Modal
         open={showVerifyDialog}
         onClose={handleCancelVerify}
-        title="Verify Your Identity"
+        title="Confirm Export"
         labelledBy="verify-dialog-title"
         icon={
           <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
@@ -415,20 +411,18 @@ export default function ExportPage() {
             <button
               type="button"
               onClick={(e) => handleVerify(e as unknown as FormEvent)}
-              disabled={verifying || !verifyPassword}
+              disabled={verifying}
               className="btn-primary"
             >
-              {verifying ? 'Verifying...' : 'Verify & Export'}
+              {verifying ? 'Exporting...' : 'Export'}
             </button>
           </>
         }
       >
-        <p className="text-sm text-gray-500 dark:text-gray-300 mb-3">
-          Export requires authentication confirmation
-        </p>
-
         <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-          To protect your data, please enter your password to confirm your identity before exporting.
+          The exported file contains your personal knowledge base in unencrypted form.
+          This app has no password protection &mdash; anyone with access to the file can read it,
+          so store and share it carefully.
         </p>
 
         {verifyError && (
@@ -437,24 +431,6 @@ export default function ExportPage() {
           </div>
         )}
 
-        <form onSubmit={handleVerify}>
-          <div>
-            <label htmlFor="verify-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Password
-            </label>
-            <input
-              id="verify-password"
-              type="password"
-              required
-              value={verifyPassword}
-              onChange={(e) => { setVerifyPassword(e.target.value); if (verifyError) setVerifyError(null); }}
-              className="input-field"
-              placeholder="Enter your password"
-              autoComplete="current-password"
-              autoFocus
-            />
-          </div>
-        </form>
       </Modal>
     </div>
   );
