@@ -47,7 +47,7 @@ async function saveToIDB(data: Uint8Array): Promise<void> {
 
 // ---- Schema creation SQL ----
 
-const CREATE_TABLES_SQL = `
+export const CREATE_TABLES_SQL = `
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     email TEXT,
