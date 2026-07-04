@@ -130,14 +130,24 @@ function getVerifiedExportableInsights(): InsightRow[] {
       AND i.verification_status = 'verified'
       AND i.privacy_tier = 'exportable'
     ORDER BY i.confidence_score DESC
+    LIMIT 500
   `).all(userId) as InsightRow[];
 }
 
+// Topics are only exposed once they contain at least one verified,
+// exportable insight — topic titles/descriptions are personal data too.
 function getUserTopics(): TopicRow[] {
   return sqlite.prepare(`
     SELECT id, title, description, status, tags, intent
     FROM topics
     WHERE user_id = ?
+      AND EXISTS (
+        SELECT 1 FROM insights i
+        WHERE i.topic_id = topics.id
+          AND i.verification_status = 'verified'
+          AND i.privacy_tier = 'exportable'
+      )
+    LIMIT 200
   `).all(userId) as TopicRow[];
 }
 
@@ -146,6 +156,12 @@ function getTopicById(topicId: string): TopicRow | undefined {
     SELECT id, title, description, status, tags, intent
     FROM topics
     WHERE id = ? AND user_id = ?
+      AND EXISTS (
+        SELECT 1 FROM insights i
+        WHERE i.topic_id = topics.id
+          AND i.verification_status = 'verified'
+          AND i.privacy_tier = 'exportable'
+      )
   `).get(topicId, userId) as TopicRow | undefined;
 }
 
@@ -167,10 +183,17 @@ function getTopicInsights(topicId: string): InsightRow[] {
 
 function getTopicNotes(topicId: string): NoteRow[] {
   return sqlite.prepare(`
-    SELECT id, title, selected_format as selectedFormat, created_at as createdAt
-    FROM notes
-    WHERE topic_id = ? AND user_id = ?
-    ORDER BY created_at DESC
+    SELECT n.id, n.title, n.selected_format as selectedFormat, n.created_at as createdAt
+    FROM notes n
+    WHERE n.topic_id = ? AND n.user_id = ?
+      AND EXISTS (
+        SELECT 1 FROM insights i
+        WHERE i.topic_id = n.topic_id
+          AND i.verification_status = 'verified'
+          AND i.privacy_tier = 'exportable'
+      )
+    ORDER BY n.created_at DESC
+    LIMIT 100
   `).all(topicId, userId) as NoteRow[];
 }
 
@@ -244,6 +267,24 @@ function getPersonalityData(): {
     domainScores: Array<{ domain: string; domainLabel: string; score: number }>;
   }>;
 } {
+  // Raw Big Five scores are only exposed once the user has verified at least
+  // one personality insight as exportable — the scores themselves are
+  // sensitive personal data and follow the same consent gate.
+  const exportConsent = sqlite.prepare(`
+    SELECT 1
+    FROM insights i
+    JOIN topics t ON i.topic_id = t.id
+    WHERE i.user_id = ?
+      AND t.title = 'Big Five Personality Assessment'
+      AND i.verification_status = 'verified'
+      AND i.privacy_tier = 'exportable'
+    LIMIT 1
+  `).get(userId);
+
+  if (!exportConsent) {
+    return { hasAssessment: false, latestAttempt: null, domainScores: [], verifiedInsights: [], changeTrends: [] };
+  }
+
   // Get completed attempts
   const completedAttempts = sqlite.prepare(`
     SELECT id, completed_at as completedAt, status
