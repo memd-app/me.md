@@ -65,3 +65,4 @@ BACKLOG.md
 *.d.ts.map
 test-results/
 .collab/
+.design/
