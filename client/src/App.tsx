@@ -8,7 +8,6 @@ import AppLayout from '@/components/layout/AppLayout';
 import OnboardingPage from '@/pages/OnboardingPage';
 import DashboardPage from '@/pages/DashboardPage';
 import TopicsPage from '@/pages/TopicsPage';
-import NewSessionPage from '@/pages/NewSessionPage';
 import KnowledgeGraphPage from '@/pages/KnowledgeGraphPage';
 import ProfilePage from '@/pages/ProfilePage';
 import VerificationPage from '@/pages/VerificationPage';
@@ -74,7 +73,7 @@ function App() {
             <Route path="topics/new" element={<CreateTopicPage />} />
             <Route path="topics/:id" element={<TopicDetailPage />} />
             <Route path="templates" element={<TemplatesPage />} />
-            <Route path="session/new" element={<NewSessionPage />} />
+            <Route path="session/new" element={<Navigate to="/app/topics" replace />} />
             <Route path="sessions/:id" element={<SessionPage />} />
             {/* Legacy singular form — canonicalized to /app/sessions/:id */}
             <Route path="session/:id" element={<LegacySessionRedirect />} />

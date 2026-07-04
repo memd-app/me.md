@@ -42,7 +42,6 @@ interface Session {
   id: string;
   topicId: string;
   status: string;
-  isMiniSession?: boolean;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
@@ -697,13 +696,12 @@ export default function TopicDetailPage() {
                 {orderedSessions.map((session) => {
                   const isActive = session.status === 'active';
                   const isPaused = session.status === 'paused';
-                  const typeLabel = session.isMiniSession ? 'Quick' : 'Standard';
                   const statusLabel = isActive ? 'Active' : isPaused ? 'Paused' : 'Completed';
                   const metaLine = isActive
-                    ? `${typeLabel} · Started ${formatDateTime(session.createdAt)}`
+                    ? `Started ${formatDateTime(session.createdAt)}`
                     : isPaused
-                    ? `${typeLabel} · Paused ${formatDateTime(session.updatedAt)}`
-                    : `${typeLabel} · ${formatShortDate(session.completedAt || session.updatedAt)}`;
+                    ? `Paused ${formatDateTime(session.updatedAt)}`
+                    : formatShortDate(session.completedAt || session.updatedAt);
                   const actionLabel = isActive ? 'Continue session' : isPaused ? 'Resume session' : 'View transcript';
 
                   return (

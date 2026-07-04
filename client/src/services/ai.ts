@@ -36,71 +36,13 @@ export interface InterviewMapAngle {
 }
 
 export interface InterviewMap {
-  type: 'default' | 'research-driven'
+  type: 'default'
   angles: InterviewMapAngle[]
   currentAngleIndex: number
   breadthFirstComplete: boolean
 }
 
 type Methodology = 'clean_language' | 'socratic' | 'five_whys' | 'appreciative_inquiry' | 'micro_phenomenology'
-
-// ============================================
-// Research Types (will be imported from ./research when ported)
-// ============================================
-
-export interface ResearchResult {
-  topicTitle: string
-  summary: string
-  keyFindings: string[]
-  frameworks: Array<{ name: string; description: string }>
-  questionAngles: Array<{ angle: string; questions: string[] }>
-  expertPerspectives: string[]
-  suggestedExplorationAreas: string[]
-}
-
-/**
- * Build a research-aware system prompt section.
- * Placeholder — will be replaced by import from ./research when ported (Task 8).
- */
-function buildResearchPromptSection(researchData: ResearchResult): string {
-  const parts: string[] = []
-
-  parts.push(`\n## Research Context (Research-Driven Mode)`)
-  parts.push(`The user is exploring "${researchData.topicTitle}" with research-backed context. Use this research to ask more informed, expert-level questions.`)
-
-  if (researchData.summary) {
-    parts.push(`\n### Research Summary\n${researchData.summary}`)
-  }
-
-  if (researchData.keyFindings.length > 0) {
-    parts.push(`\n### Key Findings`)
-    for (const finding of researchData.keyFindings) {
-      parts.push(`- ${finding}`)
-    }
-  }
-
-  if (researchData.frameworks.length > 0) {
-    parts.push(`\n### Relevant Frameworks`)
-    for (const fw of researchData.frameworks) {
-      parts.push(`- **${fw.name}**: ${fw.description}`)
-    }
-  }
-
-  if (researchData.questionAngles.length > 0) {
-    parts.push(`\n### Suggested Question Angles`)
-    for (const angle of researchData.questionAngles) {
-      parts.push(`- **${angle.angle}**: ${angle.questions.join('; ')}`)
-    }
-  }
-
-  parts.push(`\nUse the research context to:`)
-  parts.push(`1. Ask questions that connect the user's personal experience to established frameworks`)
-  parts.push(`2. Introduce relevant concepts the user may not have considered`)
-  parts.push(`3. Help the user position their personal knowledge within broader expert understanding`)
-  parts.push(`4. Still prioritize the user's own experience — research provides scaffolding, not answers`)
-
-  return parts.join('\n')
-}
 
 // ============================================
 // System Prompt Construction
@@ -133,11 +75,9 @@ function buildSystemPrompt(
   topicDescription: string,
   topicIntent: string,
   methodology: Methodology,
-  hasResearchContext: boolean,
   profileContext: ProfileContext | undefined,
   interviewMap: InterviewMap | null,
   userMessageCount: number,
-  researchData?: ResearchResult | null,
 ): string {
   const parts: string[] = []
 
@@ -164,7 +104,7 @@ function buildSystemPrompt(
   parts.push(`\n## Current Questioning Methodology\n${METHODOLOGY_DESCRIPTIONS[methodology]}`)
 
   // Interview map angle guidance
-  if (interviewMap && interviewMap.type === 'default' && !hasResearchContext) {
+  if (interviewMap && interviewMap.type === 'default') {
     const angleIndex = userMessageCount % interviewMap.angles.length
     const currentAngle = interviewMap.angles[angleIndex]
     parts.push(`\n## Interview Map - Current Angle: ${currentAngle.label}`)
@@ -176,11 +116,6 @@ function buildSystemPrompt(
     if (userMessageCount >= 3 && userMessageCount % 3 === 0) {
       parts.push(`This is a good moment to transition angles. Explicitly acknowledge the shift to the "${currentAngle.label}" perspective.`)
     }
-  }
-
-  // Research context injection (for research-driven sessions)
-  if (hasResearchContext && researchData) {
-    parts.push(buildResearchPromptSection(researchData))
   }
 
   // Profile context
@@ -235,77 +170,6 @@ function buildSystemPrompt(
   return parts.join('\n')
 }
 
-/**
- * Build the system prompt for a mini (quick-win) session.
- * Includes conversation history context so Claude can generate contextual follow-up questions
- * that adapt to what the user has already shared.
- */
-function buildMiniSessionSystemPrompt(
-  userMessageCount: number,
-  conversationHistory?: Array<{ role: string; content: string }>,
-): string {
-  const MINI_AREAS = [
-    'Career/Work Identity',
-    'Core Values',
-    'Communication Style',
-    'Decision-Making',
-    'Strengths & Uniqueness',
-    'Goals & Aspirations',
-    'Relationships & Community',
-  ]
-
-  // Determine which areas have already been covered based on conversation progress
-  const coveredAreas = MINI_AREAS.slice(0, Math.min(userMessageCount, MINI_AREAS.length))
-  const currentArea = MINI_AREAS[Math.min(userMessageCount, MINI_AREAS.length - 1)]
-  const remainingAreas = MINI_AREAS.slice(Math.min(userMessageCount + 1, MINI_AREAS.length))
-
-  const parts: string[] = []
-  parts.push(`You are conducting a Quick Win session for me.md — a short 5-minute interview to build a starter profile.`)
-  parts.push(`You are asking high-impact questions across key life areas to quickly establish the user's personal context.`)
-  parts.push(`\nCurrent focus area: ${currentArea} (question ${userMessageCount + 1} of ~7).`)
-
-  if (coveredAreas.length > 0 && userMessageCount > 0) {
-    parts.push(`\nAreas already explored: ${coveredAreas.join(', ')}.`)
-  }
-  if (remainingAreas.length > 0) {
-    parts.push(`Areas still to cover: ${remainingAreas.join(', ')}.`)
-  }
-
-  // Include summary of what the user has shared so far for contextual follow-ups
-  if (conversationHistory && conversationHistory.length > 0) {
-    const userMessages = conversationHistory.filter(m => m.role === 'user')
-    if (userMessages.length > 0) {
-      parts.push(`\n## What the User Has Shared So Far`)
-      parts.push(`Use these previous answers to ask CONTEXTUAL follow-up questions that build on what the user has already revealed. Reference their specific words and themes. Do NOT repeat questions about topics they've already answered.`)
-      userMessages.forEach((msg, idx) => {
-        const area = idx < MINI_AREAS.length ? MINI_AREAS[idx] : 'General'
-        // Truncate very long messages to keep prompt size manageable
-        const truncated = msg.content.length > 300 ? msg.content.substring(0, 300) + '...' : msg.content
-        parts.push(`\n**${area}:** "${truncated}"`)
-      })
-      parts.push(`\nBased on these answers, your next question about "${currentArea}" should connect to themes, values, or patterns already expressed. For example, if the user mentioned valuing collaboration in their career answer, ask about how that collaborative nature shows up in their ${currentArea.toLowerCase()}.`)
-    }
-  }
-
-  parts.push(`\n## Response Guidelines`)
-  parts.push(`1. Start with a brief, energetic acknowledgment of what they shared (1-2 sentences). Reference their SPECIFIC words — quote them or paraphrase closely.`)
-  parts.push(`2. Create a brief connection to something they mentioned earlier if relevant (optional, 1 sentence).`)
-  parts.push(`3. Ask ONE clear, bold question about the current focus area that is CONTEXTUAL — it should feel like a natural follow-up to what they've shared, not a generic question from a list.`)
-  parts.push(`4. Keep it quick and focused — this is a rapid-fire session, 3-5 sentences total.`)
-  parts.push(`5. Use **bold** for the main question.`)
-  parts.push(`6. Be warm and encouraging — help them feel good about sharing.`)
-  parts.push(`7. NEVER ask a question they've already answered. If they already covered an area, skip to the next or go deeper.`)
-
-  if (userMessageCount >= 5) {
-    parts.push(`\nNote: We're near the end of the quick win session. Start wrapping up warmly. Weave together themes from their earlier answers.`)
-  }
-  if (userMessageCount >= 7) {
-    parts.push(`\nThe session is complete. Thank the user warmly, summarize 2-3 key themes you noticed across their answers, and encourage them to click "Finish & Distill" to generate their starter profile.`)
-  }
-
-  return parts.join('\n')
-}
-
 // ============================================
 // Main AI Response Generation
 // ============================================
@@ -315,11 +179,8 @@ export interface AIResponseOptions {
   topicDescription: string
   topicIntent: string
   conversationHistory: Array<{ role: string; content: string }>
-  hasResearchContext: boolean
   profileContext?: ProfileContext
   interviewMap?: InterviewMap | null
-  isMiniSession?: boolean
-  researchData?: ResearchResult | null
 }
 
 /**
@@ -336,34 +197,23 @@ function prepareRequest(options: AIResponseOptions): {
     topicDescription,
     topicIntent,
     conversationHistory,
-    hasResearchContext,
     profileContext,
     interviewMap,
-    isMiniSession,
-    researchData,
   } = options
 
   const userMessages = conversationHistory.filter(m => m.role === 'user')
   const userMessageCount = userMessages.length
 
-  // Build the system prompt
-  let systemPrompt: string
-  if (isMiniSession) {
-    systemPrompt = buildMiniSessionSystemPrompt(userMessageCount, conversationHistory)
-  } else {
-    const methodology = selectMethodology(userMessageCount, topicIntent || 'explore')
-    systemPrompt = buildSystemPrompt(
-      topicTitle,
-      topicDescription,
-      topicIntent,
-      methodology,
-      hasResearchContext,
-      profileContext,
-      interviewMap || null,
-      userMessageCount,
-      researchData,
-    )
-  }
+  const methodology = selectMethodology(userMessageCount, topicIntent || 'explore')
+  const systemPrompt = buildSystemPrompt(
+    topicTitle,
+    topicDescription,
+    topicIntent,
+    methodology,
+    profileContext,
+    interviewMap || null,
+    userMessageCount,
+  )
 
   // Build the messages array from conversation history
   // The Anthropic API expects alternating user/assistant messages
@@ -404,7 +254,7 @@ export async function generateClaudeResponse(options: AIResponseOptions): Promis
   const { systemPrompt, apiMessages, userMessageCount } = prepared
 
   try {
-    console.log(`[me.md:ai] Calling Claude API for ${options.isMiniSession ? 'mini' : 'standard'} session (${userMessageCount} user messages)`)
+    console.log(`[me.md:ai] Calling Claude API for session (${userMessageCount} user messages)`)
 
     const responseText = await callAnthropic({
       messages: apiMessages,
@@ -455,7 +305,7 @@ export async function* streamClaudeResponse(options: AIResponseOptions): AsyncGe
   const { systemPrompt, apiMessages, userMessageCount } = prepared
 
   try {
-    console.log(`[me.md:ai] Streaming Claude API for ${options.isMiniSession ? 'mini' : 'standard'} session (${userMessageCount} user messages)`)
+    console.log(`[me.md:ai] Streaming Claude API for session (${userMessageCount} user messages)`)
 
     let fullText = ''
 
@@ -576,7 +426,6 @@ export interface DistillationContext {
   assistantMessages: Array<{ role: string; content: string }>
   userName?: string
   occupation?: string
-  isMiniSession?: boolean
 }
 
 /**
@@ -739,8 +588,6 @@ Extract meaningful, specific content from the actual conversation. Do NOT use ge
  */
 export async function extractInsightsAI(ctx: DistillationContext): Promise<Array<{ content: string; confidenceScore: number }> | null> {
   const transcript = formatConversationTranscript(ctx.userMessages, ctx.assistantMessages)
-  const isMini = ctx.isMiniSession || false
-  const insightRange = isMini ? '2-5' : '3-10'
 
   const systemPrompt = `You are a personal knowledge analyst for me.md, a system that builds verified personal context from AI-guided interviews. Your job is to semantically identify genuine personal insights from conversation — not keyword-match, but deeply understand what the user is revealing about themselves.
 
@@ -749,14 +596,13 @@ Output ONLY a valid JSON array with no markdown code fences, no explanation, and
 ${ctx.userName ? `The user's name is ${ctx.userName}${ctx.occupation ? `, occupation: ${ctx.occupation}` : ''}.` : ''}`
 
   const userPrompt = `Extract self-knowledge insights from the following interview session about "${ctx.topicTitle}"${ctx.topicDescription ? ` (${ctx.topicDescription})` : ''}.
-${isMini ? '\nNote: This was a quick mini-session with shorter, more direct answers. Adjust expectations accordingly — even brief self-descriptions can be meaningful insights.\n' : ''}
 ## Conversation Transcript
 
 ${transcript}
 
 ## Instructions
 
-Extract ${insightRange} distinct, genuine self-knowledge insights — statements that capture something true and specific about the user. Each insight should be:
+Extract 3-10 distinct, genuine self-knowledge insights — statements that capture something true and specific about the user. Each insight should be:
 - A clear, declarative statement about the user (e.g., "Values autonomy over stability when making career decisions")
 - Specific and grounded in what the user actually said (not generic truisms)
 - Semantically meaningful — capturing genuine personal knowledge, not surface-level keywords

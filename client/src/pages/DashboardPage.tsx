@@ -63,7 +63,6 @@ interface SessionRow {
   id: string;
   topicId: string;
   status: string;
-  isMiniSession?: boolean;
   createdAt?: string | null;
   updatedAt?: string | null;
 }
@@ -211,7 +210,7 @@ export default function DashboardPage() {
   ];
 
   const quickActions = [
-    { label: 'Start an interview', to: '/app/session/new' },
+    { label: 'Start an interview', to: '/app/topics' },
     { label: 'Add a topic', to: '/app/topics/new' },
     { label: 'Explore the graph', to: '/app/graph' },
   ];
@@ -273,7 +272,7 @@ export default function DashboardPage() {
                   {resumableTopicTitle}
                 </h2>
                 <p className="flex flex-wrap items-center gap-2 text-xs tracking-wide font-medium text-gray-500 dark:text-gray-400 mb-6">
-                  <span>{resumableSession.isMiniSession ? 'Quick session' : 'Standard session'}</span>
+                  <span>Interview session</span>
                   <span aria-hidden="true" className="text-gray-300 dark:text-gray-700">&middot;</span>
                   <span>{resumableWhenLabel}</span>
                   <span aria-hidden="true" className="text-gray-300 dark:text-gray-700">&middot;</span>
@@ -305,7 +304,7 @@ export default function DashboardPage() {
                     ? 'Your first conversation is a few minutes away.'
                     : `${stats?.topicsExplored ?? 0} topics explored so far.`}
                 </p>
-                <Link to="/app/session/new" className="btn-primary inline-flex items-center gap-2">
+                <Link to="/app/topics" className="btn-primary inline-flex items-center gap-2">
                   Start an interview
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
@@ -387,7 +386,7 @@ export default function DashboardPage() {
               <EmptyState
                 message="Nothing yet — your first conversation will appear here."
                 action={
-                  <Link to="/app/session/new" className="btn-secondary text-sm">
+                  <Link to="/app/topics" className="btn-secondary text-sm">
                     Start an interview
                   </Link>
                 }

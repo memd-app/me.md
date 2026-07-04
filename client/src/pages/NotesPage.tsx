@@ -547,7 +547,7 @@ export default function NotesPage() {
           kicker="No notes yet"
           message="Notes are created when you finish and distill a session. Start a session to begin building your knowledge base."
           action={
-            <Link to="/app/session/new" className="btn-primary inline-block">
+            <Link to="/app/topics" className="btn-primary inline-block">
               Start a session
             </Link>
           }

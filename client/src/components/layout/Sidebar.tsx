@@ -25,7 +25,6 @@ const navGroups: NavGroup[] = [
     label: null,
     items: [
       { to: '/app/dashboard', label: 'Desk' },
-      { to: '/app/session/new', label: 'Interview' },
       { to: '/app/review', label: 'Review' },
       { to: '/app/chat', label: 'Converse' },
     ],

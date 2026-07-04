@@ -16,10 +16,7 @@ import type {
   ProfileContext,
   InterviewMap,
   InterviewMapAngle,
-  ResearchResult,
 } from './ai'
-import { researchTopic } from './research'
-import type { ResearchResult as ResearchServiceResult } from './research'
 
 // ============================================
 // Types
@@ -97,19 +94,6 @@ function parseJsonArray(jsonStr: string | null): string[] {
     return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
-  }
-}
-
-function parseResearchData(researchDataStr: string | null): ResearchResult | null {
-  if (!researchDataStr) return null
-  try {
-    const parsed = JSON.parse(researchDataStr)
-    if (parsed && typeof parsed.summary === 'string' && parsed.topicTitle) {
-      return parsed as ResearchResult
-    }
-    return null
-  } catch {
-    return null
   }
 }
 
@@ -232,7 +216,6 @@ function generateOpeningMessage(
   intent: string | null,
   referenceUrls: string[] = [],
   profileContext?: ProfileContext,
-  researchResult?: ResearchServiceResult | null,
 ): string {
   const intentPhrases: Record<string, string> = {
     articulate: 'help you articulate your thoughts on',
@@ -310,33 +293,7 @@ function generateOpeningMessage(
     }
   }
 
-  // Research-driven mode
-  if (researchResult && researchResult.summary) {
-    message += `\n\n**Research-Driven Mode** — I've researched **"${title}"** to help guide our conversation with more informed questions.`
-
-    if (researchResult.relevantConcepts && researchResult.relevantConcepts.length > 0) {
-      const conceptList = researchResult.relevantConcepts.slice(0, 5).join(', ')
-      message += `\n\n**Key concepts I'll draw on:** ${conceptList}`
-    }
-
-    if (researchResult.sources && researchResult.sources.length > 0) {
-      message += `\n\n**Research sources:**`
-      for (const source of researchResult.sources.slice(0, 5)) {
-        if (source.url) {
-          message += `\n- [${source.title}](${source.url})`
-        } else {
-          message += `\n- ${source.title}: ${source.snippet.substring(0, 100)}`
-        }
-      }
-    }
-
-    if (researchResult.suggestedAngles && researchResult.suggestedAngles.length > 0) {
-      message += `\n\nBased on my research, I have several angles we can explore. Let me start with an informed question:`
-      message += `\n\n**${researchResult.suggestedAngles[0]}** — How does this connect to your personal experience?`
-    } else {
-      message += `\n\n**Based on what I've researched, what aspect of "${title}" resonates most with your personal experience?**`
-    }
-  } else if (referenceUrls.length > 0) {
+  if (referenceUrls.length > 0) {
     message += `\n\n**Pre-interview context:** I see you've provided ${referenceUrls.length} reference${referenceUrls.length > 1 ? 's' : ''} to help guide our conversation:`
     referenceUrls.forEach((url, index) => {
       message += `\n- [Reference ${index + 1}](${url})`
@@ -667,7 +624,6 @@ function generateAIResponse(
   _topicDescription: string,
   topicIntent: string,
   conversationHistory: Array<{ role: string; content: string }>,
-  hasResearchContext: boolean = false,
   profileContext?: ProfileContext,
   interviewMap?: InterviewMap | null,
 ): string {
@@ -689,7 +645,7 @@ function generateAIResponse(
   let question: string
   let angleLabel = ''
 
-  if (interviewMap && interviewMap.type === 'default' && !hasResearchContext) {
+  if (interviewMap && interviewMap.type === 'default') {
     const currentAngle = getCurrentInterviewAngle(interviewMap, messageCount)
     angleLabel = currentAngle.label
 
@@ -761,187 +717,6 @@ function generateAIResponse(
   }
 
   return `${reflection}\n\n${question}`
-}
-
-// ============================================
-// Mini Session Fallback Responses
-// ============================================
-
-const MINI_SESSION_AREAS = [
-  'Career/Work Identity',
-  'Core Values',
-  'Communication Style',
-  'Decision-Making',
-  'Strengths & Uniqueness',
-  'Goals & Aspirations',
-  'Relationships & Community',
-]
-
-const MINI_SESSION_BASE_QUESTIONS: Array<{ area: string; questions: string[]; quickReplies: string[] }> = [
-  {
-    area: 'Career/Work Identity',
-    questions: ['**What do you do for work, and what\'s the most interesting aspect of it?**'],
-    quickReplies: ["I'll share my work story", "I'd rather talk about my passions first", 'Ask me about what drives me'],
-  },
-  {
-    area: 'Core Values',
-    questions: ['**What matters most to you in life right now, and why?**'],
-    quickReplies: ['Family and relationships come first', 'Growth and learning drive me', 'Making an impact is what counts'],
-  },
-  {
-    area: 'Communication Style',
-    questions: ['**How do you prefer to communicate with others -- are you more direct, collaborative, or reflective?**'],
-    quickReplies: ["I'm pretty direct and to the point", 'I like to collaborate and brainstorm', 'I tend to listen first, then respond'],
-  },
-  {
-    area: 'Decision-Making',
-    questions: ['**When you face a tough decision, what\'s your go-to approach?**'],
-    quickReplies: ['I go with my gut instinct', 'I research and analyze thoroughly', 'I talk it through with people I trust'],
-  },
-  {
-    area: 'Strengths & Uniqueness',
-    questions: ['**What do people most often come to you for -- what\'s your superpower?**'],
-    quickReplies: ["I'm great at solving problems", 'People come to me for advice', 'I bring energy and ideas to the table'],
-  },
-  {
-    area: 'Goals & Aspirations',
-    questions: ['**What\'s one goal or aspiration that excites you right now?**'],
-    quickReplies: ['I want to grow in my career', "I'm focused on personal development", 'I have a creative project in mind'],
-  },
-  {
-    area: 'Relationships & Community',
-    questions: ['**Who are the most important people in your life, and what role do they play?**'],
-    quickReplies: ['My family is everything', 'I have a tight circle of close friends', 'My professional network shapes me a lot'],
-  },
-]
-
-function buildContextualBridge(
-  previousAnswers: Array<{ area: string; keyPhrase: string }>,
-  nextArea: string,
-): string | null {
-  if (previousAnswers.length === 0) return null
-
-  const lastAnswer = previousAnswers[previousAnswers.length - 1]
-  if (!lastAnswer.keyPhrase) return null
-
-  const bridges: Record<string, string[]> = {
-    'Core Values': [
-      `You mentioned **${lastAnswer.keyPhrase}** in your work — I'm curious how that connects to`,
-      `That's interesting about **${lastAnswer.keyPhrase}**. Building on that,`,
-    ],
-    'Communication Style': [
-      `Given what you shared about **${lastAnswer.keyPhrase}**, I'd love to know about`,
-      `**${lastAnswer.keyPhrase}** tells me a lot. Now thinking about`,
-    ],
-    'Decision-Making': [
-      `It sounds like **${lastAnswer.keyPhrase}** matters to you. When it comes to`,
-      `With **${lastAnswer.keyPhrase}** as a core part of who you are,`,
-    ],
-    'Strengths & Uniqueness': [
-      `Your perspective on **${lastAnswer.keyPhrase}** is really clear. Speaking of strengths,`,
-      `**${lastAnswer.keyPhrase}** shapes how you see things. On the topic of strengths,`,
-    ],
-    'Goals & Aspirations': [
-      `I can see **${lastAnswer.keyPhrase}** drives you. Looking forward,`,
-      `With **${lastAnswer.keyPhrase}** as a foundation,`,
-    ],
-    'Relationships & Community': [
-      `**${lastAnswer.keyPhrase}** clearly matters to you. Thinking about the people in your life,`,
-      `Your take on **${lastAnswer.keyPhrase}** is illuminating. When it comes to relationships,`,
-    ],
-  }
-
-  const areaOptions = bridges[nextArea]
-  if (!areaOptions) return null
-
-  return areaOptions[previousAnswers.length % areaOptions.length]
-}
-
-function generateContextualQuickReplies(
-  _area: string,
-  previousAnswers: Array<{ area: string; keyPhrase: string }>,
-  baseReplies: string[],
-): string[] {
-  if (previousAnswers.length >= 2) {
-    const themes = previousAnswers.map(a => a.keyPhrase).filter(Boolean)
-    if (themes.length > 0) {
-      const theme = themes[themes.length - 1]
-      const contextualReply = `It connects to ${theme}`
-      return [baseReplies[0], contextualReply, baseReplies[baseReplies.length - 1]]
-    }
-  }
-  return baseReplies
-}
-
-function generateMiniSessionAIResponse(
-  userMessageCount: number,
-  lastUserMessage: string,
-  conversationHistory: Array<{ role: string; content: string }>,
-): { content: string; quickReplies: string[] } {
-  const questionIndex = Math.min(userMessageCount, MINI_SESSION_BASE_QUESTIONS.length - 1)
-  const nextQ = MINI_SESSION_BASE_QUESTIONS[questionIndex]
-
-  const userMessages = conversationHistory.filter(m => m.role === 'user')
-  const previousAnswers: Array<{ area: string; keyPhrase: string }> = userMessages.map((msg, idx) => {
-    const area = idx < MINI_SESSION_AREAS.length ? MINI_SESSION_AREAS[idx] : 'General'
-    const phrases = extractKeyPhrases(msg.content)
-    return { area, keyPhrase: phrases.length > 0 ? phrases[0] : '' }
-  })
-
-  const keyPhrases = extractKeyPhrases(lastUserMessage)
-  const keyPhrase = keyPhrases.length > 0 ? keyPhrases[0] : ''
-
-  let reflection: string
-  if (userMessageCount === 0) {
-    reflection = `Thanks for sharing that!`
-  } else if (keyPhrase) {
-    const previousThemes = previousAnswers
-      .slice(0, -1)
-      .filter(a => a.keyPhrase)
-      .map(a => a.keyPhrase)
-
-    if (previousThemes.length > 0 && userMessageCount >= 2) {
-      const pastTheme = previousThemes[previousThemes.length - 1]
-      const crossRefReflections = [
-        `That's a great insight about **${keyPhrase}** — and I notice it connects to what you said about **${pastTheme}** earlier. There's a clear thread here.`,
-        `Interesting — **${keyPhrase}** clearly shapes how you see things. I can see echoes of **${pastTheme}** in this too.`,
-        `Love that perspective on **${keyPhrase}**. Combined with **${pastTheme}**, I'm getting a really rich picture of who you are.`,
-        `**${keyPhrase}** stands out as significant. Together with **${pastTheme}**, it reveals a consistent pattern in your thinking.`,
-      ]
-      reflection = crossRefReflections[userMessageCount % crossRefReflections.length]
-    } else {
-      const reflections = [
-        `That's a great insight about **${keyPhrase}** — it says a lot about what drives you.`,
-        `I can see **${keyPhrase}** is meaningful to you. That's really helpful context.`,
-        `Interesting — **${keyPhrase}** clearly shapes how you see things. Noted!`,
-        `Love that perspective on **${keyPhrase}**. It paints a clear picture.`,
-        `**${keyPhrase}** stands out as significant for you. That's valuable.`,
-      ]
-      reflection = reflections[userMessageCount % reflections.length]
-    }
-  } else {
-    const genericReflections = [
-      `Thanks for sharing that — it gives me a clearer picture of who you are.`,
-      `That's really insightful. I can see how that shapes your perspective.`,
-      `Great answer! That tells me a lot about how you think.`,
-      `I appreciate the honesty there. It's really helpful for your profile.`,
-      `That's a strong perspective. Let me keep building on this.`,
-    ]
-    reflection = genericReflections[userMessageCount % genericReflections.length]
-  }
-
-  let question: string
-  const bridge = buildContextualBridge(previousAnswers, nextQ.area)
-  if (bridge && userMessageCount >= 1) {
-    question = `${bridge} ${nextQ.questions[0].replace(/^\*\*/, '**').toLowerCase()}`
-  } else {
-    question = nextQ.questions[0]
-  }
-
-  const quickReplies = generateContextualQuickReplies(nextQ.area, previousAnswers, nextQ.quickReplies)
-
-  const content = `${reflection}\n\n${question}`
-  return { content, quickReplies }
 }
 
 // Template quick replies
@@ -1046,20 +821,15 @@ async function getAIQuickReplies(
 
 /**
  * Create a new interview session for a topic.
- * Optionally performs AI-powered research before starting.
  */
 export async function createSession(
   db: Db,
   topicId: string,
-  opts?: { isMiniSession?: boolean; enableResearch?: boolean },
 ): Promise<{
   session: any
   topic: any
   messages: any[]
 }> {
-  const isMiniSession = opts?.isMiniSession || false
-  const enableResearch = opts?.enableResearch || false
-
   // Verify the topic belongs to the user
   const topic = (db as any).select().from(topics).where(
     and(eq(topics.id, topicId), eq(topics.userId, LOCAL_USER_ID))
@@ -1079,24 +849,8 @@ export async function createSession(
   const referenceUrls = parseJsonArray(topic.referenceUrls)
   const contextItems = parseJsonArray(topic.contextItems)
 
-  // Build research data
-  let researchData: Record<string, unknown> | null = null
-
-  if (enableResearch) {
-    console.log(`[me.md:sessions] Research mode enabled for topic "${topic.title}"`)
-    const researchResult = await researchTopic(
-      topic.title,
-      topic.description,
-      referenceUrls,
-      contextItems,
-    )
-
-    if (researchResult) {
-      researchData = researchResult as unknown as Record<string, unknown>
-      console.log(`[me.md:sessions] Research completed: ${researchResult.suggestedAngles.length} angles`)
-    }
-  } else if (referenceUrls.length > 0 || contextItems.length > 0) {
-    researchData = {
+  const sessionContextData = referenceUrls.length > 0 || contextItems.length > 0
+    ? {
       referenceUrls,
       contextItems,
       processedAt: new Date().toISOString(),
@@ -1104,11 +858,6 @@ export async function createSession(
       contextItemCount: contextItems.length,
       summary: buildContextSummary(referenceUrls, contextItems),
     }
-  }
-
-  // Default interview map when no research context
-  const interviewMap = (!researchData && !isMiniSession)
-    ? createDefaultInterviewMap()
     : null
 
   const newSession = (db as any).insert(sessions).values({
@@ -1116,11 +865,11 @@ export async function createSession(
     topicId,
     userId: LOCAL_USER_ID,
     status: 'active',
-    isMiniSession,
+    isMiniSession: false,
     suggestedDurationMinutes: suggestedDuration,
     timeSpentSeconds: 0,
-    researchData: researchData ? JSON.stringify(researchData) : null,
-    interviewMap: interviewMap ? JSON.stringify(interviewMap) : null,
+    researchData: sessionContextData ? JSON.stringify(sessionContextData) : null,
+    interviewMap: JSON.stringify(createDefaultInterviewMap()),
   }).returning().get()
 
   // Update topic status
@@ -1141,7 +890,6 @@ export async function createSession(
     topic.intent,
     referenceUrls,
     profileContext,
-    researchData as ResearchServiceResult | null,
   )
 
   const openingMessageId = crypto.randomUUID()
@@ -1165,68 +913,6 @@ export async function createSession(
   return {
     session: newSession,
     topic,
-    messages: [openingMessage],
-  }
-}
-
-/**
- * Create a mini (quick-win) session with auto-created topic.
- */
-export async function createMiniSession(
-  db: Db,
-): Promise<{
-  session: any
-  topic: any
-  messages: any[]
-}> {
-  // Auto-create a topic for the mini session
-  const topicId = crypto.randomUUID()
-  const newTopic = (db as any).insert(topics).values({
-    id: topicId,
-    userId: LOCAL_USER_ID,
-    title: 'Quick Win: Getting to Know You',
-    description: 'A quick 5-minute session to establish your initial personal profile.',
-    intent: 'explore',
-    status: 'in_progress',
-    tags: JSON.stringify(['quick-win', 'starter-profile', 'onboarding']),
-    priority: 'high',
-  }).returning().get()
-
-  const sessionId = crypto.randomUUID()
-  const newSession = (db as any).insert(sessions).values({
-    id: sessionId,
-    topicId,
-    userId: LOCAL_USER_ID,
-    status: 'active',
-    isMiniSession: true,
-    suggestedDurationMinutes: 5,
-    timeSpentSeconds: 0,
-    researchData: null,
-  }).returning().get()
-
-  const openingContent = `Welcome to your **Quick Win session**! In the next few minutes, I'll ask you 5-7 high-impact questions to build your starter profile. Let's dive right in!\n\n**What do you do for work, and what's the most interesting aspect of it?**`
-
-  const openingMessageId = crypto.randomUUID()
-  const openingMessage = (db as any).insert(messages).values({
-    id: openingMessageId,
-    sessionId,
-    role: 'assistant',
-    content: openingContent,
-    quickReplies: JSON.stringify([
-      "I'll share my work story",
-      "I'd rather talk about my passions first",
-      'Ask me about what drives me',
-    ]),
-    suggestsCompletion: false,
-    isBookmarked: false,
-    isVoiceInput: false,
-  }).returning().get()
-
-  scheduleSave()
-
-  return {
-    session: newSession,
-    topic: newTopic,
     messages: [openingMessage],
   }
 }
@@ -1565,10 +1251,12 @@ export async function* sendMessage(
     .orderBy(messages.createdAt)
     .all()
 
-  const hasResearchContext = !!session.researchData
-  const sessionResearchData = parseResearchData(session.researchData as string | null)
   const historyForAI = conversationHistory.map((m: any) => ({ role: m.role, content: m.content }))
   const userMessageCount = conversationHistory.filter((m: any) => m.role === 'user').length
+  const msgProfileContext = gatherProfileContext(db, session.topicId)
+  const sessionInterviewMap: InterviewMap | null = session.interviewMap
+    ? JSON.parse(session.interviewMap as string)
+    : null
 
   // Build AI options
   const aiOptions: AIResponseOptions = {
@@ -1576,18 +1264,8 @@ export async function* sendMessage(
     topicDescription: topic?.description || '',
     topicIntent: topic?.intent || '',
     conversationHistory: historyForAI,
-    hasResearchContext,
-    isMiniSession: !!session.isMiniSession,
-    researchData: sessionResearchData,
-  }
-
-  if (!session.isMiniSession) {
-    const msgProfileContext = gatherProfileContext(db, session.topicId)
-    const sessionInterviewMap: InterviewMap | null = session.interviewMap
-      ? JSON.parse(session.interviewMap as string)
-      : null
-    aiOptions.profileContext = msgProfileContext
-    aiOptions.interviewMap = sessionInterviewMap
+    profileContext: msgProfileContext,
+    interviewMap: sessionInterviewMap,
   }
 
   let fullResponseText = ''
@@ -1612,50 +1290,28 @@ export async function* sendMessage(
 
   // FALLBACK: Template-based response
   if (!usedRealStreaming) {
-    if (session.isMiniSession) {
-      const miniResponse = generateMiniSessionAIResponse(userMessageCount, content, historyForAI)
-      fullResponseText = miniResponse.content
-    } else {
-      fullResponseText = generateAIResponse(
-        topic?.title || 'Unknown Topic',
-        topic?.description || '',
-        topic?.intent || '',
-        historyForAI,
-        hasResearchContext,
-        aiOptions.profileContext,
-        aiOptions.interviewMap,
-      )
-    }
+    fullResponseText = generateAIResponse(
+      topic?.title || 'Unknown Topic',
+      topic?.description || '',
+      topic?.intent || '',
+      historyForAI,
+      aiOptions.profileContext,
+      aiOptions.interviewMap,
+    )
     // Yield the fallback as a single chunk
     yield fullResponseText
   }
 
   // Append completion suggestion if enough messages
-  let shouldSuggestCompletion: boolean
-  if (session.isMiniSession) {
-    shouldSuggestCompletion = userMessageCount >= 5
-    if (userMessageCount >= 7) {
-      const wrapUp = '\n\n---\n\n*Great work! We\'ve gathered enough for your **starter profile**. Click **Finish & Distill** to generate your initial insights and knowledge graph.*'
-      fullResponseText += wrapUp
-      yield wrapUp
-    }
-  } else {
-    shouldSuggestCompletion = userMessageCount >= 10
-    if (shouldSuggestCompletion) {
-      const completionNote = '\n\n---\n\n*We\'ve explored many angles together. Feel free to **continue exploring** if there\'s more to uncover, or **finish and distill** to capture your insights.*'
-      fullResponseText += completionNote
-      yield completionNote
-    }
+  const shouldSuggestCompletion = userMessageCount >= 10
+  if (shouldSuggestCompletion) {
+    const completionNote = '\n\n---\n\n*We\'ve explored many angles together. Feel free to **continue exploring** if there\'s more to uncover, or **finish and distill** to capture your insights.*'
+    fullResponseText += completionNote
+    yield completionNote
   }
 
   // Generate quick replies
-  let quickRepliesArr: string[]
-  if (session.isMiniSession && !usedRealStreaming) {
-    const miniResponse = generateMiniSessionAIResponse(userMessageCount, content, historyForAI)
-    quickRepliesArr = miniResponse.quickReplies
-  } else {
-    quickRepliesArr = await getAIQuickReplies(userMessageCount, fullResponseText, historyForAI)
-  }
+  const quickRepliesArr = await getAIQuickReplies(userMessageCount, fullResponseText, historyForAI)
 
   // Save the complete AI message
   const aiMessageId = crypto.randomUUID()
@@ -1708,8 +1364,6 @@ export async function* retryMessage(
 
   const topic = (db as any).select().from(topics).where(eq(topics.id, session.topicId)).get()
 
-  const hasResearchContext = !!session.researchData
-  const retryResearchData = parseResearchData(session.researchData as string | null)
   const historyForAI = conversationHistory.map((m: any) => ({ role: m.role, content: m.content }))
   const userMessageCount = conversationHistory.filter((m: any) => m.role === 'user').length
 
@@ -1729,10 +1383,8 @@ export async function* retryMessage(
         topicDescription: topic?.description || '',
         topicIntent: topic?.intent || '',
         conversationHistory: historyForAI,
-        hasResearchContext,
         profileContext: retryProfileContext,
         interviewMap: retryInterviewMap,
-        researchData: retryResearchData,
       }
 
       const streamGen = streamClaudeResponse(aiOptions)
@@ -1755,7 +1407,6 @@ export async function* retryMessage(
       topic?.description || '',
       topic?.intent || '',
       historyForAI,
-      hasResearchContext,
       retryProfileContext,
       retryInterviewMap,
     )

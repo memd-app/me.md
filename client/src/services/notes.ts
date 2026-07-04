@@ -1,7 +1,7 @@
 import { eq, and, desc, ne } from 'drizzle-orm'
 import { scheduleSave } from '@/db/persistence'
 import { LOCAL_USER_ID } from '@/contexts/UserContext'
-import { notes, sessions, topics, messages, insights, conceptNodes, users } from '@/db/schema'
+import { notes, sessions, topics, messages, insights, users } from '@/db/schema'
 import {
   generateFullAnalysisAI,
   generateJsonContentAI,
@@ -224,7 +224,7 @@ function extractTags(userMessages: MessageData[]): string[] {
 
 /**
  * Distill a session into a note with AI-powered analysis.
- * Extracts insights and creates concept nodes for mini sessions.
+ * Extracts insights and creates cross-topic suggestions.
  */
 export async function distillSession(
   db: Db,
@@ -294,7 +294,6 @@ export async function distillSession(
     assistantMessages: assistantMsgs,
     userName: userProfile?.name || undefined,
     occupation: userProfile?.occupation || undefined,
-    isMiniSession: !!session.isMiniSession,
   }
 
   const [aiFullAnalysis, aiJsonContent] = await Promise.all([
@@ -341,7 +340,6 @@ export async function distillSession(
     topicDescription: topic.description || undefined,
     userName: userProfile?.name || undefined,
     occupation: userProfile?.occupation || undefined,
-    isMiniSession: !!session.isMiniSession,
     existingVerifiedInsights: existingVerified,
   }
 
@@ -362,21 +360,6 @@ export async function distillSession(
       sourceSessionId: sessionId,
     }).returning().get()
     savedInsights.push(saved)
-  }
-
-  // For mini sessions, also create concept nodes in the knowledge graph for each insight
-  if (session.isMiniSession) {
-    for (const saved of savedInsights) {
-      const nodeId = crypto.randomUUID()
-      db.insert(conceptNodes).values({
-        id: nodeId,
-        userId,
-        topicId: session.topicId,
-        insightId: saved.id,
-        label: saved.content.substring(0, 60),
-        weight: (saved.confidenceScore ?? 50) / 100,
-      }).run()
-    }
   }
 
   // Multi-bucket cross-topic extraction: score relevance to other topics

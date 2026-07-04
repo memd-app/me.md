@@ -33,8 +33,6 @@ export interface ExtractionContext {
   userName?: string
   /** User's occupation for personalization */
   occupation?: string
-  /** Whether this is a mini session (interview only) */
-  isMiniSession?: boolean
   /** Existing verified insights for deduplication */
   existingVerifiedInsights?: Array<{ content: string; confidenceScore: number }>
 }
@@ -141,9 +139,8 @@ ${ctx.existingVerifiedInsights.map(i => `- "${i.content}" (confidence: ${i.confi
 
   switch (ctx.sourceType) {
     case 'interview':
-      insightRange = ctx.isMiniSession ? '2-5' : '3-10'
+      insightRange = '3-10'
       sourceInstructions = `Extract self-knowledge insights from the following interview session${topicContext}.
-${ctx.isMiniSession ? '\nNote: This was a quick mini-session with shorter, more direct answers. Adjust expectations accordingly — even brief self-descriptions can be meaningful insights.\n' : ''}
 ## Conversation Transcript
 
 ${contentChunk}`
@@ -372,10 +369,10 @@ function categorizeStatement(statement: string): string {
 /**
  * Get score threshold based on source type.
  */
-function getScoreThreshold(sourceType: SourceType, isMiniSession?: boolean): number {
+function getScoreThreshold(sourceType: SourceType): number {
   switch (sourceType) {
     case 'interview':
-      return isMiniSession ? 45 : 55
+      return 55
     case 'import_chatgpt':
       return 45
     case 'import_url':
@@ -412,9 +409,9 @@ function getMaxInsights(sourceType: SourceType): number {
  */
 function extractInsightsFallback(ctx: ExtractionContext): ExtractedInsight[] {
   const results: ExtractedInsight[] = []
-  const threshold = getScoreThreshold(ctx.sourceType, ctx.isMiniSession)
+  const threshold = getScoreThreshold(ctx.sourceType)
   const maxInsights = getMaxInsights(ctx.sourceType)
-  const minLength = ctx.sourceType === 'interview' && ctx.isMiniSession ? 15 : 20
+  const minLength = 20
 
   // Special handling for ChatGPT structured sections
   if (ctx.sourceType === 'import_chatgpt') {
@@ -479,14 +476,6 @@ function extractInsightsFallback(ctx: ExtractionContext): ExtractedInsight[] {
     .split(/[.!?\n]+/)
     .map(s => s.replace(/^[-*•]\s*/, '').trim())
     .filter(s => s.length > minLength && s.length < 500)
-
-  // For interview mini sessions, if no sentences found, try whole message chunks
-  if (statements.length === 0 && ctx.sourceType === 'interview' && ctx.isMiniSession) {
-    const paragraphs = ctx.content.split(/\n+/).filter(p => p.trim().length > minLength)
-    for (const p of paragraphs) {
-      statements.push(p.trim())
-    }
-  }
 
   for (const statement of statements) {
     const score = scoreStatement(statement, ctx.sourceType)
