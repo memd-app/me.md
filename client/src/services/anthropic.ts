@@ -1,6 +1,6 @@
-const ANTHROPIC_PROXY = '/anthropic/v1/messages'
+const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
 const API_VERSION = '2023-06-01'
-const DEFAULT_MODEL = 'claude-sonnet-4-20250514'
+const DEFAULT_MODEL = 'claude-sonnet-5'
 
 export class AnthropicError extends Error {
   constructor(
@@ -37,6 +37,9 @@ function buildHeaders(apiKey: string): Record<string, string> {
     'Content-Type': 'application/json',
     'x-api-key': apiKey,
     'anthropic-version': API_VERSION,
+    // Opts into CORS on api.anthropic.com — required for direct browser
+    // calls; the key is user-supplied and stored locally, so this is safe.
+    'anthropic-dangerous-direct-browser-access': 'true',
   }
 }
 
@@ -44,6 +47,9 @@ function buildBody(options: CallOptions, stream = false): string {
   return JSON.stringify({
     model: options.model ?? DEFAULT_MODEL,
     max_tokens: options.maxTokens ?? 1024,
+    // Sonnet 5 runs adaptive thinking by default, which would eat into the
+    // small max_tokens budgets used here; keep the pre-migration behavior.
+    thinking: { type: 'disabled' },
     system: options.system,
     messages: options.messages,
     stream,
@@ -52,7 +58,7 @@ function buildBody(options: CallOptions, stream = false): string {
 
 export async function callAnthropic(options: CallOptions): Promise<string> {
   const apiKey = getApiKey()
-  const res = await fetch(ANTHROPIC_PROXY, {
+  const res = await fetch(ANTHROPIC_API_URL, {
     method: 'POST',
     headers: buildHeaders(apiKey),
     body: buildBody(options),
@@ -77,7 +83,7 @@ export async function* streamAnthropic(
   options: CallOptions
 ): AsyncGenerator<string, string, undefined> {
   const apiKey = getApiKey()
-  const res = await fetch(ANTHROPIC_PROXY, {
+  const res = await fetch(ANTHROPIC_API_URL, {
     method: 'POST',
     headers: buildHeaders(apiKey),
     body: buildBody(options, true),

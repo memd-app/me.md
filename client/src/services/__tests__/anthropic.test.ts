@@ -25,7 +25,7 @@ describe('anthropic client', () => {
     })
 
     expect(result).toBe('Hello!')
-    expect(mockFetch).toHaveBeenCalledWith('/anthropic/v1/messages', expect.objectContaining({
+    expect(mockFetch).toHaveBeenCalledWith('https://api.anthropic.com/v1/messages', expect.objectContaining({
       method: 'POST',
       headers: expect.objectContaining({
         'x-api-key': 'test-api-key',
