@@ -161,6 +161,11 @@ export function toFrontmatter(fields: Array<[string, string | number]>): string 
   return ['---', ...lines, '---'].join('\n')
 }
 
+// Wiki-link aliases cannot contain link/alias delimiters.
+export function sanitizeWikiAlias(title: string): string {
+  return title.replace(/[[\]|]/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
 // FNV-1a over UTF-16 code units. This is non-crypto and only used for cheap change detection.
 export function stableHash(input: string): string {
   let hash = 0x811c9dc5
@@ -181,7 +186,7 @@ function makeTopicNote(group: TopicGroup): ObsidianNote {
     '',
     `# ${group.title}`,
     '',
-    ...group.insights.map(insight => `- [[${insight.slug}|${insight.title}]]`),
+    ...group.insights.map(insight => `- [[${insight.slug}|${sanitizeWikiAlias(insight.title)}]]`),
     '',
     '[[Me - Index]]',
     '',
