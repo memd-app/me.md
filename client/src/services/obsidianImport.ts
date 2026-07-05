@@ -200,7 +200,8 @@ export function isPlaceholderNote(body: string): boolean {
     .replace(/\s+/g, ' ')
     .trim()
 
-  if (meaningfulText.length < 80) return true
+  // Floor kept low so terse atomic/Zettelkasten notes still import; only near-empty bodies skip.
+  if (meaningfulText.length < 40) return true
 
   const nonEmptyLines = body.split(/\r?\n/).filter((line) => line.trim().length > 0)
   if (nonEmptyLines.length === 0) return true
@@ -312,7 +313,7 @@ export async function runObsidianImport(
         importId: id,
         insights: processed.insights || [],
         topicCreated: processed.topicCreated ?? undefined,
-        truncated: body.length > IMPORT_TEXT_CAP,
+        truncated: body.trim().length > IMPORT_TEXT_CAP,
       })
     } catch (error) {
       record({

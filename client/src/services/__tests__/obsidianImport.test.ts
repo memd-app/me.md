@@ -129,7 +129,7 @@ describe('obsidian import service', () => {
       expect(isPlaceholderNote('')).toBe(true)
       expect(isPlaceholderNote(' \n\t ')).toBe(true)
       expect(isPlaceholderNote('# Heading\n## Follow-up\n---')).toBe(true)
-      expect(isPlaceholderNote('a'.repeat(79))).toBe(true)
+      expect(isPlaceholderNote('a'.repeat(39))).toBe(true)
       expect(isPlaceholderNote([
         '- {{date}}',
         '- <% tp.file.title %>',
@@ -140,6 +140,8 @@ describe('obsidian import service', () => {
 
     it('keeps substantive notes even when they contain an occasional template token', () => {
       expect(isPlaceholderNote('I prefer systems that explain tradeoffs clearly. '.repeat(5))).toBe(false)
+      // Terse atomic/Zettelkasten notes above the 40-char floor must survive.
+      expect(isPlaceholderNote('Direct feedback beats diplomatic hedging.')).toBe(false)
       expect(isPlaceholderNote([
         'I use weekly planning notes to track important decisions and tradeoffs.',
         'I prefer concise summaries before detailed execution notes.',
