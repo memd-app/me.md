@@ -84,7 +84,7 @@ describe('topics service', () => {
   it('deletes a topic', () => {
     const topic = createTopic(db, { title: 'Delete Me' })
     const result = deleteTopic(db, topic.id)
-    expect(result.message).toBe('Topic deleted successfully')
+    expect(result.message).toBe('Topic deleted')
     expect(result.topicTitle).toBe('Delete Me')
     const fetched = getTopic(db, topic.id)
     expect(fetched).toBeUndefined()

@@ -124,7 +124,7 @@ export default function AssessmentHistoryPage() {
     <div className="max-w-5xl mx-auto">
       <PageTabs
         tabs={[
-          { to: '/app/personality', label: 'Take the test', end: true },
+          { to: '/app/personality', label: 'Take the assessment', end: true },
           { to: '/app/personality/history', label: 'History' },
         ]}
       />

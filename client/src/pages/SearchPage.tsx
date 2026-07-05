@@ -431,7 +431,7 @@ export default function SearchPage() {
             {/* Verification Status filter */}
             <div>
               <label className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
-                Verification status
+                Review status
               </label>
               <select
                 value={verificationStatus}

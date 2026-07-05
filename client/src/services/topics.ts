@@ -428,7 +428,7 @@ export function deleteTopic(db: Db, id: string) {
 
   scheduleSave()
   return {
-    message: 'Topic deleted successfully',
+    message: 'Topic deleted',
     topicId: id,
     topicTitle: existing.title,
     cascaded,

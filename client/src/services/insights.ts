@@ -277,7 +277,7 @@ export function verifyInsight(db: Db, id: string, data?: { reVerifyInterval?: st
 
   return {
     insight: updated,
-    message: 'Insight verified successfully',
+    message: 'Insight verified',
     conceptNodeCreated: !!newConceptNode,
     conceptNode: newConceptNode,
     topicRefined,

@@ -1306,7 +1306,7 @@ export default function SessionPage() {
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              Note regenerated successfully in {FORMAT_LABELS[selectedFormat]} format. Previous content of other formats is preserved.
+              Note regenerated in {FORMAT_LABELS[selectedFormat]} format. Previous content of other formats is preserved.
             </div>
           )}
           {noteSaveSuccess && (
@@ -1314,7 +1314,7 @@ export default function SessionPage() {
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              Note saved successfully.
+              Note saved.
             </div>
           )}
         </div>
@@ -1384,7 +1384,7 @@ export default function SessionPage() {
                 Extracted Insights ({noteInsights.length})
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-300 mb-4">
-                These insights need to be verified in the Verification queue before being added to your profile.
+                These insights need to be verified in the Review queue before being added to your profile.
               </p>
               <div className="space-y-3">
                 {noteInsights.map((insight) => (
@@ -1435,7 +1435,7 @@ export default function SessionPage() {
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  Cross-topic connections saved successfully.
+                  Cross-topic connections saved.
                 </div>
               ) : (
                 <>

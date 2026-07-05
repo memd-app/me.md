@@ -382,7 +382,7 @@ export default function ProfilePage() {
               </p>
             </div>
             <Link to="/app/personality" className="btn-primary text-sm whitespace-nowrap shrink-0 text-center">
-              Take the test
+              Take the assessment
             </Link>
           </div>
         </section>

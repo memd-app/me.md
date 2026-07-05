@@ -56,7 +56,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
               Something went wrong
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              An unexpected error occurred. Don't worry — your data is safe. You can try again or go back to the dashboard.
+              An unexpected error occurred. Don't worry — your data is safe. You can try again or go back to the Desk.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <button
@@ -72,7 +72,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                 onClick={this.handleGoHome}
                 className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-300 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:focus:ring-offset-gray-900 transition-colors"
               >
-                Go to Dashboard
+                Go to the Desk
               </button>
             </div>
             {process.env.NODE_ENV !== 'production' && this.state.error && (

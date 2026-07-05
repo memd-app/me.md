@@ -372,7 +372,7 @@ export default function SettingsPage() {
     setEditValue('')
 
     const fieldLabel = PROFILE_FIELDS.find(f => f.key === fieldKey)?.label || fieldKey
-    setSaveStatus({ type: 'success', message: `${fieldLabel} updated successfully` })
+    setSaveStatus({ type: 'success', message: `${fieldLabel} updated` })
     setTimeout(() => setSaveStatus(null), 3000)
   }
 
