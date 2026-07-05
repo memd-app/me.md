@@ -4,6 +4,10 @@ import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '@/contexts/ToastContext';
 import { getExportStatus, exportAsMarkdown, exportAsJson } from '@/services/profile';
+import { generateObsidianNotes } from '@/services/obsidianExport';
+import { ensurePermission, isFileSystemAccessSupported, pickVaultDirectory, syncNotesToVault } from '@/services/obsidianSync';
+import { createStoreZip } from '@/services/zipStore';
+import { loadVaultHandle, saveVaultHandle } from '@/services/vaultHandle';
 import { PageHeader } from '@/components/ui';
 
 type ExportFormat = 'markdown' | 'json' | 'both';
@@ -15,7 +19,10 @@ export default function ExportPage() {
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('markdown');
   const [exporting, setExporting] = useState(false);
   const [copying, setCopying] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [zipping, setZipping] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const fsaSupported = isFileSystemAccessSupported();
 
   // Export readiness state
   const [exportStatus, setExportStatus] = useState<{ hasVerifiedData: boolean; verifiedInsightCount: number; topicCount: number } | null>(null);
@@ -46,8 +53,7 @@ export default function ExportPage() {
     return () => controller.abort();
   }, [user]);
 
-  const downloadContent = (content: string, filename: string, mimeType = 'text/plain') => {
-    const blob = new Blob([content], { type: mimeType });
+  const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -56,6 +62,10 @@ export default function ExportPage() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const downloadContent = (content: string, filename: string, mimeType = 'text/plain') => {
+    downloadBlob(new Blob([content], { type: mimeType }), filename);
   };
 
   const performExport = async () => {
@@ -102,6 +112,70 @@ export default function ExportPage() {
       setStatus({ type: 'error', message: err instanceof Error ? err.message : 'Failed to copy. Please try again.' });
     } finally {
       setCopying(false);
+    }
+  };
+
+  const isAbortError = (err: unknown) => (
+    typeof err === 'object' &&
+    err !== null &&
+    'name' in err &&
+    (err as { name: unknown }).name === 'AbortError'
+  );
+
+  const handleSync = async () => {
+    if (!hasExportableData()) return;
+
+    try {
+      setSyncing(true);
+      setStatus(null);
+
+      let handle = await loadVaultHandle();
+      if (!handle) handle = await pickVaultDirectory();
+      if (!handle) return;
+
+      if (!(await ensurePermission(handle))) {
+        setStatus({
+          type: 'error',
+          message: 'Vault permission denied. Pick the folder again to re-grant access.',
+        });
+        return;
+      }
+
+      await saveVaultHandle(handle);
+      const result = generateObsidianNotes(db);
+      const summary = await syncNotesToVault(handle, result);
+      setStatus({
+        type: 'success',
+        message: `Synced to ${summary.folder}: ${summary.created} created, ${summary.updated} updated, ${summary.skipped} unchanged.`,
+      });
+    } catch (err) {
+      if (isAbortError(err)) return;
+      setStatus({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Failed to sync to the vault. Please try again.',
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleZip = () => {
+    if (!hasExportableData()) return;
+
+    try {
+      setZipping(true);
+      setStatus(null);
+      const result = generateObsidianNotes(db);
+      const zip = createStoreZip(result.notes.map(note => ({ path: note.path, content: note.content })));
+      downloadBlob(zip, 'me.md-vault.zip');
+      setStatus({ type: 'success', message: 'Obsidian vault zip downloaded.' });
+    } catch (err) {
+      setStatus({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Failed to prepare the Obsidian vault zip. Please try again.',
+      });
+    } finally {
+      setZipping(false);
     }
   };
 
@@ -302,6 +376,47 @@ export default function ExportPage() {
         >
           {copying ? 'Copying...' : 'Copy Profile'}
         </button>
+      </div>
+
+      {/* Obsidian */}
+      <div>
+        {fsaSupported && (
+          <div className="border-t border-rule dark:border-dark-border py-6 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="font-serif text-lg text-ink dark:text-gray-100">
+                Sync to Obsidian Vault
+              </h2>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Write verified insights as Markdown notes into a folder in your vault. Updates in place; never deletes your files.
+              </p>
+            </div>
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="btn-primary shrink-0"
+            >
+              {syncing ? 'Syncing...' : 'Sync to Vault'}
+            </button>
+          </div>
+        )}
+
+        <div className="border-t border-rule dark:border-dark-border py-6 flex items-center justify-between gap-4">
+          <div>
+            <h2 className="font-serif text-lg text-ink dark:text-gray-100">
+              Download Obsidian Vault
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              A zip of the same Markdown notes — works in any browser. Unzip into your vault.
+            </p>
+          </div>
+          <button
+            onClick={handleZip}
+            disabled={zipping}
+            className="btn-secondary shrink-0"
+          >
+            {zipping ? 'Preparing…' : 'Download .zip'}
+          </button>
+        </div>
       </div>
 
       {/* Privacy note */}

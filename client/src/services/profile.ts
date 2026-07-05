@@ -268,7 +268,7 @@ function generateMarkdown(summary: ProfileSummary): string {
 // Personality export data
 // ============================================
 
-interface PersonalityExportData {
+export interface PersonalityExportData {
   hasAssessment: boolean
   latestAttempt: { attemptId: string; completedAt: string | null } | null
   domainScores: Array<{
@@ -287,7 +287,7 @@ interface PersonalityExportData {
   privacyTier: string
 }
 
-function getPersonalityExportData(db: Db, privacyFilter: 'exportable' | 'all' = 'exportable'): PersonalityExportData {
+export function getPersonalityExportData(db: Db, privacyFilter: 'exportable' | 'all' = 'exportable'): PersonalityExportData {
   const completedAttempts = db.select()
     .from(assessmentAttempts)
     .where(and(eq(assessmentAttempts.userId, LOCAL_USER_ID), eq(assessmentAttempts.status, 'completed')))
@@ -367,7 +367,7 @@ function getPersonalityExportData(db: Db, privacyFilter: 'exportable' | 'all' = 
   }
 }
 
-function generatePersonalityMarkdown(data: PersonalityExportData): string {
+export function generatePersonalityMarkdown(data: PersonalityExportData): string {
   if (!data.hasAssessment) return ''
   const lines: string[] = []
   lines.push('## Personality Profile (Big Five)')
