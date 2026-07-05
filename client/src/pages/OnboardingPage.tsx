@@ -57,7 +57,7 @@ const GENDER_OPTIONS = [
 const STEPS: { key: OnboardingStep; label: string }[] = [
   { key: 'welcome', label: 'Welcome' },
   { key: 'profile', label: 'Profile' },
-  { key: 'context', label: 'Context' },
+  { key: 'context', label: 'Import' },
   { key: 'topics', label: 'Topics' },
 ];
 
@@ -75,16 +75,16 @@ const PILLARS: { title: string; description: string }[] = [
   {
     title: 'Create',
     description:
-      'AI-guided conversations extract your personal knowledge through proven questioning methods.',
+      'Interviews draw out your knowledge, values, and patterns.',
   },
   {
     title: 'Verify',
     description:
-      "You're in full control. Review and verify every insight before it becomes part of your profile.",
+      'Nothing enters your profile until you approve it.',
   },
   {
     title: 'Manage',
-    description: 'Build a living knowledge graph and export your context for any AI tool.',
+    description: 'Export your verified context for any AI tool — it stays local until you do.',
   },
 ];
 
@@ -806,7 +806,7 @@ export default function OnboardingPage() {
               <StepHeading
                 kicker="Step 03 · Context (optional)"
                 title="Import existing context"
-                subtitle="Give the interviewer a head start with things you've already written about yourself."
+                subtitle="Give the interviewer a head start with things you've already written. Two more sources — ChatGPT Memory and Obsidian — live under Import once you're in."
               />
 
               {/* Import Method Tabs */}
@@ -1245,7 +1245,7 @@ export default function OnboardingPage() {
                   onClick={() => navigate('/app/personality', { replace: true })}
                   className="btn-primary w-full py-3 text-base"
                 >
-                  Take the Big Five Test
+                  Take the assessment
                 </button>
                 <button
                   onClick={() => navigate('/app/dashboard', { replace: true })}
@@ -1256,7 +1256,7 @@ export default function OnboardingPage() {
               </div>
 
               <p className="mt-4 text-[11px] uppercase tracking-[0.08em] font-sans text-ink/40 dark:text-[#7A7264]">
-                You can always take the test from the sidebar menu
+                You can always take the assessment later, from Personality in the sidebar
               </p>
             </div>
           </div>

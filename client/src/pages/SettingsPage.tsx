@@ -520,7 +520,7 @@ export default function SettingsPage() {
     <div className="max-w-4xl mx-auto">
       <PageHeader
         title="Settings"
-        subtitle="Manage your profile, API key, database, and preferences."
+        subtitle="Profile, API key, database, and preferences."
       />
 
       <SettingsTabs active={activeTab} onChange={setActiveTab} />

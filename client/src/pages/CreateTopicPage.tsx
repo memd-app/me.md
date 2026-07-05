@@ -197,7 +197,7 @@ export default function CreateTopicPage() {
       setHasSubmitted(true);
 
       // Show success toast (duplicate warning already shown inline during title entry)
-      addToast('Topic created successfully!', 'success', 4000);
+      addToast('Topic created', 'success', 4000);
 
       // Use replace to remove the form page from history, preventing back+resubmit
       navigate('/app/topics', { replace: true });
@@ -229,11 +229,11 @@ export default function CreateTopicPage() {
           Topics
         </Link>
         <span aria-hidden="true">/</span>
-        <span className="text-gray-600 dark:text-gray-400">New Topic</span>
+        <span className="text-gray-600 dark:text-gray-400">New topic</span>
       </nav>
 
       <PageHeader
-        title="Create New Topic"
+        title="New topic"
         subtitle="Define a knowledge area you want to explore through interviews."
       />
 

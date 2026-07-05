@@ -27,7 +27,7 @@ export default function NotFoundPage() {
 
           <h1 className="text-5xl font-bold text-primary-600 dark:text-primary-400 mb-3">404</h1>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-            Page Not Found
+            Page not found
           </h2>
           <p className="text-gray-600 dark:text-gray-300 mb-2">
             The page you&apos;re looking for doesn&apos;t exist or has been moved.
@@ -38,7 +38,7 @@ export default function NotFoundPage() {
 
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link to="/app/dashboard" className="btn-primary text-center">
-              Go to Dashboard
+              Go to the Desk
             </Link>
             <Link to="/" className="btn-secondary text-center">
               Go to Home
@@ -62,7 +62,7 @@ export default function NotFoundPage() {
 
         <h1 className="text-5xl font-bold text-primary-600 dark:text-primary-400 mb-3">404</h1>
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-          Page Not Found
+          Page not found
         </h2>
         <p className="text-gray-600 dark:text-gray-300 mb-2">
           The page you&apos;re looking for doesn&apos;t exist or has been moved.

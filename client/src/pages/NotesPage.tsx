@@ -82,9 +82,9 @@ function getNoteContent(note: NoteListItem, format: NoteFormat): string {
     case 'full_analysis':
       return note.contentFullAnalysis || 'No full analysis available.';
     case 'brief_summary':
-      return note.contentBriefSummary || 'No brief summary available.';
+      return note.contentBriefSummary || 'No brief summary was generated for this session (legacy format).';
     case 'decision_framework':
-      return note.contentDecisionFramework || 'No decision framework available.';
+      return note.contentDecisionFramework || 'No decision framework was generated for this session (legacy format).';
     case 'json':
       return note.contentJson || '{}';
     default:

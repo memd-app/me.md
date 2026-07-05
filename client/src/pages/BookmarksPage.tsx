@@ -123,10 +123,10 @@ export default function BookmarksPage() {
   return (
     <div className="max-w-4xl mx-auto">
       <PageHeader
-        title="Notes"
+        title="Bookmarks"
         subtitle={
           <>
-            Your saved aha moments from interview sessions
+            Moments you starred during interview sessions
             {bookmarks.length > 0 && ` — ${bookmarks.length} bookmark${bookmarks.length !== 1 ? 's' : ''}`}
           </>
         }

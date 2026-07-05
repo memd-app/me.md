@@ -183,7 +183,7 @@ export default function AssessmentHistoryPage() {
                   <div className="flex-1">
                     <p className="text-sm font-medium text-gray-900 dark:text-white">
                       {canRetest
-                        ? 'You can retake the assessment!'
+                        ? 'You can retake the assessment.'
                         : `Recommended wait: ${MIN_RETEST_DAYS - daysSinceLast} more days`}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">

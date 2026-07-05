@@ -439,7 +439,7 @@ export default function TopicsPage() {
         title="Topics"
         subtitle={
           <>
-            Manage your interview topics and knowledge areas
+            The areas of your life the interviewer explores
             {!isLoading && topics.length > 0 && ` — ${topics.length} total`}
           </>
         }

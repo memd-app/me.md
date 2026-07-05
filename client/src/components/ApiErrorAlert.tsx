@@ -26,17 +26,17 @@ function friendlyMessage(raw: string): string {
 
   // Network / connection errors
   if (lower.includes('failed to fetch') || lower.includes('networkerror') || lower.includes('unable to connect')) {
-    return 'Unable to connect to the server. Please check your internet connection and try again.';
+    return 'The network request didn\'t go through. Check your internet connection and try again.';
   }
 
   // Explicit 500 / internal server error
   if (lower.includes('internal server error') || lower.includes('status 500') || lower === '500') {
-    return 'The server encountered an unexpected error. Please try again in a moment. If the problem persists, contact support.';
+    return 'Something unexpected went wrong. Try again in a moment — if it keeps happening, please open an issue on GitHub.';
   }
 
   // Generic "something went wrong" from backend
   if (lower === 'something went wrong') {
-    return 'Something went wrong on our end. Please try again shortly.';
+    return 'Something went wrong. Please try again shortly.';
   }
 
   // Timeout
@@ -54,7 +54,7 @@ function friendlyMessage(raw: string): string {
     lower.includes('referenceerror') ||
     lower.startsWith('error:')
   ) {
-    return 'An unexpected error occurred. Please try again. If the problem persists, contact support.';
+    return 'An unexpected error occurred. Please try again — if it keeps happening, please open an issue on GitHub.';
   }
 
   // Return the original if it already looks human-readable

@@ -109,7 +109,7 @@ function canRegenerateFormat(format: NoteFormat): boolean {
 const DISTILL_STEPS = [
   { label: 'Analyzing conversation...', description: 'Reading through your session messages' },
   { label: 'Extracting key insights...', description: 'Identifying important themes and patterns' },
-  { label: 'Generating notes...', description: 'Creating structured notes in multiple formats' },
+  { label: 'Generating notes...', description: 'Writing the full analysis and structured data' },
   { label: 'Finding connections...', description: 'Discovering links to other topics' },
   { label: 'Finalizing...', description: 'Wrapping up your distilled session' },
 ];

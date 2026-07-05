@@ -87,10 +87,10 @@ export default function ExportPage() {
 
       const formatLabel =
         selectedFormat === 'both'
-          ? 'Markdown and JSON files downloaded successfully!'
+          ? 'Markdown and JSON files downloaded'
           : selectedFormat === 'markdown'
-          ? 'Markdown file downloaded successfully!'
-          : 'JSON file downloaded successfully!';
+          ? 'Markdown file downloaded'
+          : 'JSON file downloaded';
 
       setStatus({ type: 'success', message: formatLabel });
     } catch (err) {
@@ -107,7 +107,7 @@ export default function ExportPage() {
       setStatus(null);
       const text = exportAsMarkdown(db);
       await navigator.clipboard.writeText(text);
-      setStatus({ type: 'success', message: 'Profile copied to clipboard!' });
+      setStatus({ type: 'success', message: 'Profile copied to clipboard' });
     } catch (err) {
       setStatus({ type: 'error', message: err instanceof Error ? err.message : 'Failed to copy. Please try again.' });
     } finally {
@@ -185,7 +185,7 @@ export default function ExportPage() {
       addToast('No verified insights available to export. Complete interview sessions and verify insights first.', 'warning', 5000);
       setStatus({
         type: 'error',
-        message: 'Nothing to export yet. To build your exportable profile: 1) Create topics and complete interview sessions, 2) Review and verify your insights on the Verification page, 3) Ensure verified insights have the "exportable" privacy tier.',
+        message: 'Nothing to export yet — your profile is built from verified insights with the "exportable" privacy tier. The checklist above walks through the three steps.',
       });
       return false;
     }
@@ -226,8 +226,8 @@ export default function ExportPage() {
     <div className="max-w-4xl mx-auto">
       <PageHeader
         kicker="Export"
-        title="Export Profile"
-        subtitle="Export your verified profile as Markdown, JSON, or both formats"
+        title="Export"
+        subtitle="Your verified profile as Markdown or JSON — and Obsidian, if you keep a vault."
       />
 
       {/* No verified data warning — bg-panel note, typographic not colored */}
@@ -244,7 +244,7 @@ export default function ExportPage() {
               <Link to="/app/topics" className="underline hover:text-primary-600 dark:hover:text-primary-400">Create topics</Link> and complete interview sessions
             </li>
             <li>
-              <Link to="/app/review" className="underline hover:text-primary-600 dark:hover:text-primary-400">Verify your insights</Link> on the Verification page
+              <Link to="/app/review" className="underline hover:text-primary-600 dark:hover:text-primary-400">Verify your insights</Link> in Review
             </li>
             <li>Ensure verified insights have the &quot;exportable&quot; privacy tier</li>
           </ol>
@@ -280,7 +280,7 @@ export default function ExportPage() {
       {/* Format selection — quiet selectable cards, amber ring on selection */}
       <div className="mb-8">
         <h2 className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-3">
-          Select Export Format
+          Export format
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {formatOptions.map((option) => {
@@ -363,7 +363,7 @@ export default function ExportPage() {
       <div className="border-t border-rule dark:border-dark-border py-6 flex items-center justify-between gap-4">
         <div>
           <h2 className="font-serif text-lg text-ink dark:text-gray-100">
-            Copy to Clipboard
+            Copy to clipboard
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-300">
             Copy your profile as markdown directly to paste into any AI tool

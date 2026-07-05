@@ -110,7 +110,7 @@ export default function VerificationPage() {
         pending: prev.pending - 1,
         verified: prev.verified + 1,
       }));
-      addToast('Insight approved and verified successfully!', 'success');
+      addToast('Insight verified', 'success');
     } catch (err) {
       console.error('Failed to approve insight:', err);
       setError('Failed to approve insight');
@@ -266,7 +266,7 @@ export default function VerificationPage() {
   if (isLoading) {
     return (
       <div className="max-w-4xl mx-auto">
-        <PageHeader title="Verification queue" subtitle="Review and verify AI-extracted insights." />
+        <PageHeader title="Review" subtitle="Everything the interviewer extracted, awaiting your judgment." />
         <div className="flex gap-8 mb-10" aria-hidden="true">
           {[0, 1, 2, 3].map(i => (
             <div key={i} className="space-y-2">
@@ -290,7 +290,7 @@ export default function VerificationPage() {
 
   const neverExportCount = verifiedInsights.filter(i => i.privacyTier === 'never_export').length;
   const queueStats: Array<{ key: string; value: number; label: string; note?: string }> = [
-    { key: 'pending', value: stats.pending, label: 'Pending review' },
+    { key: 'pending', value: stats.pending, label: 'Awaiting review' },
     { key: 'verified', value: stats.verified, label: 'Verified' },
     { key: 'rejected', value: stats.rejected, label: 'Rejected' },
     { key: 'neverExport', value: neverExportCount, label: 'Never export', note: 'Managed in Settings' },
@@ -299,8 +299,8 @@ export default function VerificationPage() {
   return (
     <div className="max-w-4xl mx-auto">
       <PageHeader
-        title="Verification queue"
-        subtitle="Review and verify AI-extracted insights."
+        title="Review"
+        subtitle="Everything the interviewer extracted, awaiting your judgment."
       />
 
       {/* Error message */}
@@ -339,7 +339,7 @@ export default function VerificationPage() {
 
       {pendingInsights.length === 0 ? (
         <EmptyState
-          message="No insights to verify. Complete interview sessions to generate insights for verification."
+          message="Nothing awaiting review. Finish an interview session and new insights will land here."
           className="py-16"
         />
       ) : (

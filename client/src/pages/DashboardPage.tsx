@@ -519,7 +519,7 @@ export default function DashboardPage() {
             </p>
           </div>
           <Link to="/app/personality" className="btn-primary whitespace-nowrap text-center flex-shrink-0">
-            Take the test
+            Take the assessment
           </Link>
         </section>
       )}

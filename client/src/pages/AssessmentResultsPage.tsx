@@ -825,13 +825,13 @@ export default function AssessmentResultsPage() {
             </svg>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
               {generatingInsights
-                ? 'Generating personalized personality insights...'
+                ? 'Generating personality insights…'
                 : 'AI personality insights have not been generated yet.'}
             </p>
             <p className="text-xs text-gray-400 dark:text-gray-500">
               {generatingInsights
                 ? 'This may take a moment while Claude analyzes your scores.'
-                : 'Click "Generate AI Insights" to get personalized analysis of your Big Five results.'}
+                : 'Choose "Generate AI Insights" for an analysis of your Big Five results.'}
             </p>
           </div>
         )}

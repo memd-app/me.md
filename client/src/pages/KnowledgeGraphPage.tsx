@@ -1067,7 +1067,7 @@ export default function KnowledgeGraphPage() {
                         </span>
                       ) : (
                         <span className="text-xs text-gray-500 dark:text-gray-300">
-                          {hoveredNode.verificationStatus === 'unverified' ? 'Pending verification' : hoveredNode.verificationStatus}
+                          {hoveredNode.verificationStatus === 'unverified' ? 'Awaiting review' : hoveredNode.verificationStatus}
                         </span>
                       )}
                     </div>

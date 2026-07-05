@@ -785,7 +785,7 @@ export default function TopicDetailPage() {
             <SectionHeading className="mb-4">In the graph</SectionHeading>
             {connectedTopics.length === 0 ? (
               <EmptyState
-                message="No connections yet — shared tags and multi-bucket distillation will surface some."
+                message="No connections yet — shared tags and distilled sessions will surface some."
                 className="py-4"
               />
             ) : (

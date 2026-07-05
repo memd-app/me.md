@@ -407,9 +407,9 @@ export default function ImportPage() {
   return (
     <div className="max-w-4xl mx-auto">
       <PageHeader
-        kicker="Context"
-        title="Import Context"
-        subtitle="Import existing personal context to accelerate your knowledge building"
+        kicker="Library"
+        title="Import"
+        subtitle="Bring in what you've already written — it gives the interviewer a head start."
       />
 
       {/* Method tabs — small-caps amber-underline row */}
@@ -830,7 +830,7 @@ export default function ImportPage() {
                           to="/app/review"
                           className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-primary-600 dark:text-primary-400 hover:text-ink dark:hover:text-gray-100 transition-colors"
                         >
-                          Go to Verification Queue
+                          Go to Review
                         </Link>
                       </div>
                     </div>
@@ -859,9 +859,9 @@ export default function ImportPage() {
                         </span>
                         These insights are now in your{' '}
                         <Link to="/app/review" className="underline hover:text-primary-600 dark:hover:text-primary-400">
-                          verification queue
+                          review queue
                         </Link>
-                        . Review each one to confirm, edit, or reject it. Only verified insights will appear in your profile export.
+                        . Confirm, edit, or reject each one. Only verified insights will appear in your profile export.
                       </p>
                     </div>
                   </div>

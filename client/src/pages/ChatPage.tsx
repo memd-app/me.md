@@ -177,7 +177,7 @@ export default function ChatPage() {
         {header}
         <EmptyState
           kicker="Converse"
-          message={<>Add your Claude API key to start a conversation with your verified knowledge.</>}
+          message={<>Add your Anthropic API key to start a conversation with your verified knowledge.</>}
           action={<Link to="/app/settings" className="btn-primary inline-block">Go to Settings</Link>}
         />
       </div>

@@ -365,7 +365,7 @@ export default function AssessmentPage() {
       <div className="max-w-2xl mx-auto px-4 py-8">
       <PageTabs
         tabs={[
-          { to: '/app/personality', label: 'Take the test', end: true },
+          { to: '/app/personality', label: 'Take the assessment', end: true },
           { to: '/app/personality/history', label: 'History' },
         ]}
       />
@@ -376,19 +376,19 @@ export default function AssessmentPage() {
             </svg>
           </div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            Big Five Personality Assessment
+            The Big Five
           </h1>
           <p className="text-lg text-gray-600 dark:text-gray-300">
-            Discover your personality profile across five core dimensions
+            A 120-question assessment of the five broad dimensions of personality.
           </p>
         </div>
 
         {/* Test Description Card */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">About This Test</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">About this assessment</h2>
           <p className="text-gray-600 dark:text-gray-300 mb-4">
-            The Big Five personality test measures five broad dimensions of personality using the
-            scientifically validated IPIP NEO-PI-R questionnaire. You&apos;ll answer 120 questions
+            The Big Five assessment measures five broad dimensions of personality using the
+            validated IPIP NEO-PI-R questionnaire. You&apos;ll answer 120 questions
             about how accurately various statements describe you.
           </p>
 
@@ -397,7 +397,7 @@ export default function AssessmentPage() {
               <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span>~10 minutes</span>
+              <span>~15 minutes</span>
             </div>
             <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
               <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -408,7 +408,7 @@ export default function AssessmentPage() {
           </div>
 
           {/* Five Domains Preview */}
-          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Five Personality Domains</h3>
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">The five domains</h3>
           <div className="flex flex-wrap gap-2">
             {Object.entries(DOMAIN_LABELS).map(([key, label]) => (
               <span key={key} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${DOMAIN_COLORS[key]}`}>
@@ -441,7 +441,7 @@ export default function AssessmentPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  Resume Test
+                  Resume assessment
                 </button>
               </div>
             </div>
@@ -458,7 +458,7 @@ export default function AssessmentPage() {
         {/* Previous Results */}
         {completedAttempts.length > 0 && (
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Previous Results</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Previous results</h2>
             <div className="space-y-2">
               {completedAttempts.slice(0, 5).map((attempt) => (
                 <Link
