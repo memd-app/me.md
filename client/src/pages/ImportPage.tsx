@@ -5,8 +5,10 @@ import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 import { Link } from 'react-router-dom';
 import { importUrls, importText, importFile, importChatGPT, processImport } from '@/services/import';
 import { PageHeader, SectionHeading, Badge } from '@/components/ui';
+import ObsidianImportPanel from '@/components/import/ObsidianImportPanel';
+import type { NoteResult } from '@/services/obsidianImport';
 
-type ImportMethod = 'chatgpt' | 'url' | 'text' | 'file';
+type ImportMethod = 'chatgpt' | 'url' | 'text' | 'file' | 'obsidian';
 
 interface ExtractedInsight {
   id: string;
@@ -105,6 +107,7 @@ export default function ImportPage() {
   // File state
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [fileError, setFileError] = useState('');
+  const [isObsidianBusy, setIsObsidianBusy] = useState(false);
 
   // Track unsaved changes in import forms
   const isImportDirty = useMemo(() => {
@@ -113,9 +116,10 @@ export default function ImportPage() {
       chatgptTitle.trim() !== '' ||
       urlInput.trim() !== '' ||
       pasteText.trim() !== '' ||
-      pasteTitle.trim() !== ''
+      pasteTitle.trim() !== '' ||
+      isObsidianBusy
     );
-  }, [chatgptOutput, chatgptTitle, urlInput, pasteText, pasteTitle]);
+  }, [chatgptOutput, chatgptTitle, urlInput, pasteText, pasteTitle, isObsidianBusy]);
 
   useUnsavedChangesWarning(isImportDirty);
 
@@ -376,11 +380,28 @@ export default function ImportPage() {
     }
   };
 
+  const handleObsidianImported = (results: NoteResult[]) => {
+    setImportResults((prev) => [
+      ...prev,
+      ...results.map((result) => ({
+        id: result.importId || '',
+        source: 'obsidian' as const,
+        status: 'success' as const,
+        title: result.title,
+        summary: `Imported from Obsidian vault: ${result.path}`,
+        isProcessed: true,
+        extractedInsights: result.insights || [],
+        topicCreated: result.topicCreated,
+      })),
+    ]);
+  };
+
   const methods: { key: ImportMethod; label: string; description: string }[] = [
     { key: 'chatgpt', label: 'ChatGPT Memory', description: 'Extract memories from ChatGPT' },
     { key: 'url', label: 'URL', description: 'Import from a web page' },
     { key: 'text', label: 'Paste Text', description: 'Paste text content' },
     { key: 'file', label: 'Upload File', description: 'Upload a document' },
+    { key: 'obsidian', label: 'Obsidian Vault', description: 'Import notes from your Obsidian vault' },
   ];
 
   return (
@@ -707,6 +728,17 @@ export default function ImportPage() {
         </div>
       )}
 
+      {activeMethod === 'obsidian' && (
+        <div id="import-panel-obsidian" role="tabpanel" aria-labelledby="import-tab-obsidian" className="space-y-10">
+          <ObsidianImportPanel
+            db={db}
+            userId={user?.id}
+            onImported={handleObsidianImported}
+            onBusyChange={setIsObsidianBusy}
+          />
+        </div>
+      )}
+
       {/* Import Results — hairline rows, typographic status */}
       {importResults.length > 0 && (
         <div className="mt-10">
@@ -724,7 +756,7 @@ export default function ImportPage() {
                         </span>
                       </div>
                       <span className="text-[11px] uppercase tracking-[0.08em] font-sans font-medium text-gray-400 dark:text-gray-600 shrink-0 whitespace-nowrap">
-                        {result.source === 'chatgpt' ? 'ChatGPT' : result.source === 'url' ? 'URL' : result.source === 'text' ? 'Text' : 'File'}
+                        {result.source === 'chatgpt' ? 'ChatGPT' : result.source === 'url' ? 'URL' : result.source === 'text' ? 'Text' : result.source === 'obsidian' ? 'Obsidian' : 'File'}
                         {result.sectionCount != null && result.sectionCount > 0 && ` · ${result.sectionCount} sections`}
                         {result.isProcessed && ` · ${result.extractedInsights?.length || 0} insights`}
                       </span>
