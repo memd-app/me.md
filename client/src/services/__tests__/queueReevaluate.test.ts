@@ -144,6 +144,31 @@ describe('reevaluatePendingInsights', () => {
     expect(db.select().from(insights).where(eq(insights.id, 'ins-missing-kind')).get()?.verificationStatus).toBe('unverified')
   })
 
+  it('persists AI prior alignment and adjusted confidence for kept rows', async () => {
+    mockIsApiKeyConfigured.mockReturnValue(true)
+    mockCallAnthropic.mockResolvedValue(JSON.stringify([
+      { index: 1, kind: 'preference', self_relevance: 90, prior_alignment: 'corroborated', confidence: 91 },
+      { index: 2, kind: 'trait', self_relevance: 90, prior_alignment: 'tension', confidence: 90 },
+    ]))
+    insertInsight({ id: 'ins-corroborated', content: 'Prefers direct feedback during technical reviews.' })
+    insertInsight({ id: 'ins-tension', content: 'Avoids direct feedback during technical reviews.' })
+
+    const result = await reevaluatePendingInsights(db, {
+      onProgress: vi.fn(),
+      isCancelled: () => false,
+    })
+
+    expect(result).toEqual({ evaluated: 2, filtered: 0, kept: 2, usedAi: true })
+    expect(db.select().from(insights).where(eq(insights.id, 'ins-corroborated')).get()).toMatchObject({
+      priorAlignment: 'corroborated',
+      confidenceScore: 91,
+    })
+    expect(db.select().from(insights).where(eq(insights.id, 'ins-tension')).get()).toMatchObject({
+      priorAlignment: 'tension',
+      confidenceScore: 60,
+    })
+  })
+
   it('uses the offline lexical gate when no API key is configured', async () => {
     mockIsApiKeyConfigured.mockReturnValue(false)
     insertInsight({

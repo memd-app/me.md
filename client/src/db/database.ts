@@ -143,6 +143,7 @@ export const CREATE_TABLES_SQL = `
     source_session_id TEXT REFERENCES sessions(id),
     evidence_count INTEGER DEFAULT 0,
     evidence_sources TEXT,
+    prior_alignment TEXT,
     vault_content_hash TEXT,
     vault_body_hash TEXT,
     vault_synced_at TEXT,
@@ -259,6 +260,7 @@ function columnExists(sqlDb: SqlJsDatabase, table: string, column: string): bool
 const MIGRATIONS: Array<{ table: string; column: string; ddl: string }> = [
   { table: 'insights', column: 'evidence_count', ddl: 'ALTER TABLE insights ADD COLUMN evidence_count INTEGER DEFAULT 0' },
   { table: 'insights', column: 'evidence_sources', ddl: 'ALTER TABLE insights ADD COLUMN evidence_sources TEXT' },
+  { table: 'insights', column: 'prior_alignment', ddl: 'ALTER TABLE insights ADD COLUMN prior_alignment TEXT' },
   { table: 'insights', column: 'vault_content_hash', ddl: 'ALTER TABLE insights ADD COLUMN vault_content_hash TEXT' },
   { table: 'insights', column: 'vault_body_hash', ddl: 'ALTER TABLE insights ADD COLUMN vault_body_hash TEXT' },
   { table: 'insights', column: 'vault_synced_at', ddl: 'ALTER TABLE insights ADD COLUMN vault_synced_at TEXT' },

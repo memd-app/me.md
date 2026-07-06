@@ -37,6 +37,8 @@ export interface ExtractionContext {
   occupation?: string
   /** Existing verified insights for deduplication */
   existingVerifiedInsights?: Array<{ content: string; confidenceScore: number }>
+  /** Pre-formatted Big Five domain line (from profile.getBigFiveSummaryLine), when an assessment exists */
+  bigFiveSummary?: string
 }
 
 export interface ExtractedInsight {
@@ -48,6 +50,8 @@ export interface ExtractedInsight {
   category: string
   /** How the insight was extracted */
   extractionMethod: 'ai' | 'fallback'
+  /** How this insight aligns with already-verified profile context */
+  priorAlignment: PriorAlignment
 }
 
 export interface ExistingInsightRef {
@@ -248,6 +252,73 @@ export const SELF_RELEVANCE_CALIBRATION_LINES = [
   '- 20: about a system, project, tool, or event, not the person.',
 ] as const
 
+export type PriorAlignment = 'corroborated' | 'novel' | 'tension'
+export const PRIOR_ALIGNMENTS: readonly PriorAlignment[] = ['corroborated', 'novel', 'tension'] as const
+
+/** Fail-open coercion: anything not a known label becomes 'novel' (novelty is never penalized). */
+export function normalizePriorAlignment(value: unknown): PriorAlignment {
+  return typeof value === 'string' && (PRIOR_ALIGNMENTS as readonly string[]).includes(value)
+    ? (value as PriorAlignment)
+    : 'novel'
+}
+
+/** Hard safety cap independent of the model's own adjustment. Assumes score already in [50,95]. */
+export function applyAlignmentCap(score: number, alignment: PriorAlignment): number {
+  return alignment === 'tension' ? Math.min(score, 60) : score
+}
+
+/** The 3 alignment rules — reused verbatim by BOTH prompts so extraction and re-eval agree. */
+export const PRIOR_ALIGNMENT_LINES = [
+  '- corroborated: existing verified evidence points the same way. Raise confidence 5-15 within the band rules.',
+  '- novel: nothing known bears on it. No adjustment — novelty is never penalized.',
+  '- tension: it contradicts a listed verified insight. Cap confidence at 60.',
+] as const
+
+export const KNOWN_PROFILE_CAP = 30
+
+/** Rank verified insights by relevance to the current topic, cap the list.
+ *  Relevance = count of shared lowercased word-tokens (len > 3) between topicTitle and the
+ *  insight content; ties broken by confidenceScore desc, then stable input order. */
+export function selectKnownProfileInsights(
+  verified: Array<{ content: string; confidenceScore: number }>,
+  topicTitle: string | undefined,
+  cap: number = KNOWN_PROFILE_CAP,
+): Array<{ content: string; confidenceScore: number }> {
+  const tokens = (s: string) =>
+    new Set(s.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 3))
+  const topicTokens = topicTitle ? tokens(topicTitle) : new Set<string>()
+  const scored = verified.map((v, i) => {
+    let overlap = 0
+    if (topicTokens.size > 0) for (const t of tokens(v.content)) if (topicTokens.has(t)) overlap += 1
+    return { v, i, overlap }
+  })
+  scored.sort((a, b) =>
+    b.overlap - a.overlap || b.v.confidenceScore - a.v.confidenceScore || a.i - b.i)
+  return scored.slice(0, cap).map(s => s.v)
+}
+
+/** Builds the "known profile" block: capped verified list + one Big Five line.
+ *  Returns '' when there is nothing known (fail-open — behaves like today's empty dedup). */
+export function buildKnownProfileSection(args: {
+  verified?: Array<{ content: string; confidenceScore: number }>
+  topicTitle?: string
+  bigFiveSummary?: string
+}): string {
+  const list = args.verified && args.verified.length > 0
+    ? selectKnownProfileInsights(args.verified, args.topicTitle)
+    : []
+  if (list.length === 0 && !args.bigFiveSummary) return ''
+
+  const lines: string[] = ['\n## Known Profile (what is already verified about this person)']
+  if (list.length > 0) {
+    lines.push('Verified insights — do NOT duplicate; use them to judge alignment:')
+    lines.push(...list.map(i => `- "${i.content}" (confidence: ${i.confidenceScore})`))
+  }
+  if (args.bigFiveSummary) lines.push(`Big Five: ${args.bigFiveSummary}`)
+  lines.push('')
+  return lines.join('\n')
+}
+
 /**
  * Split large content into processable chunks, breaking at sentence boundaries.
  */
@@ -350,11 +421,15 @@ Return a JSON array and nothing else — no prose, no code fences. Each element:
 {"content": string (<=300 chars, a full sentence),
  "confidenceScore": integer 50-95,
  "kind": one of "belief"|"value"|"trait"|"habit"|"preference"|"goal"|"motivation"|"relationship_pattern"|"self_assessment",
- "self_relevance": integer 0-100}
+ "self_relevance": integer 0-100,
+ "prior_alignment": one of "corroborated"|"novel"|"tension"}
 self_relevance calibration — how much the statement is about the PERSON:
 - 90-100: directly about who the person is (a belief, value, trait, or pattern they own).
 - 50: an activity fact with weak personal signal ("maintains a personal knowledge vault").
 - 20: about a system, project, tool, or event, not the person.
+prior_alignment — judge each insight against the Known Profile section (if present):
+${PRIOR_ALIGNMENT_LINES.join('\n')}
+When no Known Profile is given, every insight is "novel".
 Items with self_relevance below 60 will be discarded; do not pad scores to survive the cut —
 prefer omitting the item.
 Empty input or no genuine insights -> return exactly: []
@@ -365,11 +440,11 @@ Empty input or no genuine insights -> return exactly: []
  * Build the user prompt adapted to the source type.
  */
 function buildUserPrompt(ctx: ExtractionContext, contentChunk: string): string {
-  const deduplicationSection = ctx.existingVerifiedInsights && ctx.existingVerifiedInsights.length > 0
-    ? `\n## Existing Verified Insights (DO NOT duplicate these)
-${ctx.existingVerifiedInsights.map(i => `- "${i.content}" (confidence: ${i.confidenceScore})`).join('\n')}
-\nAvoid extracting insights that are semantically equivalent to any of the above.\n`
-    : ''
+  const knownProfileSection = buildKnownProfileSection({
+    verified: ctx.existingVerifiedInsights,
+    topicTitle: ctx.topicTitle,
+    bigFiveSummary: ctx.bigFiveSummary,
+  })
 
   const topicContext = ctx.topicTitle
     ? ` about "${ctx.topicTitle}"${ctx.topicDescription ? ` (${ctx.topicDescription})` : ''}`
@@ -426,7 +501,7 @@ ${contentChunk}`
   }
 
   return `${sourceInstructions}
-${deduplicationSection}
+${knownProfileSection}
 <task>
 Extract ${insightRange} insights that are specific and grounded in what the content actually
 reveals. Prefer fewer, sharper insights over padding. Assign each insight a \`kind\` from the
@@ -461,7 +536,7 @@ Return the JSON array only.`
  *  by the personhood filter (invalid/missing kind or self_relevance < 60). */
 export function normalizeAiCandidates(
   parsed: unknown[]
-): { kept: Array<{ content: string; confidenceScore: number; category: string }>; droppedByPersonhood: number } {
+): { kept: Array<{ content: string; confidenceScore: number; category: string; priorAlignment: PriorAlignment }>; droppedByPersonhood: number } {
   let droppedByPersonhood = 0
   const kept = parsed
     .filter((item): item is Record<string, unknown> =>
@@ -476,11 +551,16 @@ export function normalizeAiCandidates(
       droppedByPersonhood += 1
       return false
     })
-    .map(obj => ({
-      content: (obj.content as string).substring(0, 500),
-      confidenceScore: Math.min(Math.max(obj.confidenceScore as number, 50), 95),
-      category: KIND_TO_CATEGORY[obj.kind as string],
-    }))
+    .map(obj => {
+      const priorAlignment = normalizePriorAlignment(obj.prior_alignment)
+      const clamped = Math.min(Math.max(obj.confidenceScore as number, 50), 95)
+      return {
+        content: (obj.content as string).substring(0, 500),
+        confidenceScore: applyAlignmentCap(clamped, priorAlignment),
+        category: KIND_TO_CATEGORY[obj.kind as string],
+        priorAlignment,
+      }
+    })
     .slice(0, MAX_INSIGHTS_PER_CHUNK)
   return { kept, droppedByPersonhood }
 }
@@ -491,7 +571,7 @@ export function normalizeAiCandidates(
 async function callClaudeForInsights(
   systemPrompt: string,
   userPrompt: string
-): Promise<Array<{ content: string; confidenceScore: number; category: string }> | null> {
+): Promise<Array<{ content: string; confidenceScore: number; category: string; priorAlignment: PriorAlignment }> | null> {
   if (!isApiKeyConfigured()) return null
 
   try {
@@ -624,6 +704,7 @@ function extractInsightsFallback(ctx: ExtractionContext): ExtractedInsight[] {
       confidenceScore: ruleBasedConfidence(content, ctx.sourceType, verdict),
       category: category ?? categorizeStatement(content),
       extractionMethod: 'fallback',
+      priorAlignment: 'novel',
     })
   }
 
@@ -729,7 +810,7 @@ const AI_RETRY_ATTEMPTS = 1
 async function callClaudeForInsightsWithRetry(
   systemPrompt: string,
   userPrompt: string
-): Promise<Array<{ content: string; confidenceScore: number; category: string }> | null> {
+): Promise<Array<{ content: string; confidenceScore: number; category: string; priorAlignment: PriorAlignment }> | null> {
   // First attempt
   const firstResult = await callClaudeForInsights(systemPrompt, userPrompt)
   if (firstResult) return firstResult

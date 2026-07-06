@@ -367,6 +367,16 @@ export function getPersonalityExportData(db: Db, privacyFilter: 'exportable' | '
   }
 }
 
+/** One compact line, e.g. "Openness 3.8 (Above Average), Conscientiousness 4.1 (High), ...".
+ *  Returns null when no completed assessment exists. */
+export function getBigFiveSummaryLine(db: Db): string | null {
+  const data = getPersonalityExportData(db, 'all')
+  if (!data.hasAssessment || data.domainScores.length === 0) return null
+  return data.domainScores
+    .map(d => `${d.domainLabel} ${d.score.toFixed(1)} (${d.level})`)
+    .join(', ')
+}
+
 export function generatePersonalityMarkdown(data: PersonalityExportData): string {
   if (!data.hasAssessment) return ''
   const lines: string[] = []

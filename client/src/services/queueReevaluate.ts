@@ -1,15 +1,22 @@
 import { and, eq, or } from 'drizzle-orm'
 import { LOCAL_USER_ID } from '@/contexts/UserContext'
 import { insights } from '@/db/schema'
+import { scheduleSave } from '@/db/persistence'
 import { callAnthropic, isApiKeyConfigured } from './anthropic'
 import {
   KIND_TO_CATEGORY,
   MIN_SELF_RELEVANCE,
   PERSONHOOD_KIND_LINES,
+  PRIOR_ALIGNMENT_LINES,
   SELF_RELEVANCE_CALIBRATION_LINES,
+  applyAlignmentCap,
+  buildKnownProfileSection,
+  normalizePriorAlignment,
+  type PriorAlignment,
   selfReferenceGate,
 } from './insightExtraction'
 import { rejectInsight } from './insights'
+import { getBigFiveSummaryLine } from './profile'
 import { extractJson } from './textCleaning'
 import { enqueueVaultWrite } from './vaultWriteThrough'
 
@@ -33,6 +40,12 @@ interface PendingInsight {
 }
 
 type Decision = 'keep' | 'filter'
+
+interface AiVerdict {
+  decision: Decision
+  priorAlignment: PriorAlignment
+  confidence: number | null
+}
 
 const AI_BATCH_SIZE = 40
 const REJECT_CHUNK_SIZE = 20
@@ -69,7 +82,7 @@ function fetchPendingInsights(db: Db): PendingInsight[] {
     .all()
 }
 
-function buildSystemPrompt(): string {
+function buildSystemPrompt(knownProfile: string): string {
   return `You re-evaluate existing pending me.md insights against the personhood filter.
 An insight must be durable self-knowledge about who this person is, not a system, project,
 tool, event, or logistics fact.
@@ -80,7 +93,12 @@ ${PERSONHOOD_KIND_LINES.join('\n')}
 self_relevance calibration:
 ${SELF_RELEVANCE_CALIBRATION_LINES.join('\n')}
 
-Return only a JSON array of objects: [{"index":number,"kind":string,"self_relevance":number}].
+${knownProfile}
+For each candidate also return prior_alignment and an adjusted confidence (50-95):
+${PRIOR_ALIGNMENT_LINES.join('\n')}
+
+Return only a JSON array of objects:
+[{"index":number,"kind":string,"self_relevance":number,"prior_alignment":string,"confidence":number}].
 Use the 1-based index from the numbered list. Do not include prose.`
 }
 
@@ -102,7 +120,7 @@ function isValidKind(kind: unknown): kind is keyof typeof KIND_TO_CATEGORY {
   return typeof kind === 'string' && kind in KIND_TO_CATEGORY
 }
 
-function parseAiDecisions(responseText: string, batchSize: number): Map<number, Decision> {
+function parseAiDecisions(responseText: string, batchSize: number): Map<number, AiVerdict> {
   let parsed: unknown
   try {
     parsed = extractJson<unknown>(responseText)
@@ -112,7 +130,7 @@ function parseAiDecisions(responseText: string, batchSize: number): Map<number, 
 
   if (!Array.isArray(parsed)) return new Map()
 
-  const decisions = new Map<number, Decision>()
+  const decisions = new Map<number, AiVerdict>()
   for (const item of parsed) {
     if (typeof item !== 'object' || item === null) continue
     const obj = item as Record<string, unknown>
@@ -132,27 +150,38 @@ function parseAiDecisions(responseText: string, batchSize: number): Map<number, 
       continue
     }
 
-    decisions.set(index - 1, relevance >= MIN_SELF_RELEVANCE ? 'keep' : 'filter')
+    const priorAlignment = normalizePriorAlignment(obj.prior_alignment)
+    const confidence = typeof obj.confidence === 'number' && Number.isFinite(obj.confidence)
+      ? applyAlignmentCap(Math.min(Math.max(obj.confidence, 50), 95), priorAlignment)
+      : null
+
+    decisions.set(index - 1, {
+      decision: relevance >= MIN_SELF_RELEVANCE ? 'keep' : 'filter',
+      priorAlignment,
+      confidence,
+    })
   }
 
   return decisions
 }
 
 async function evaluateWithAi(
+  db: Db,
   pending: PendingInsight[],
   opts: QueueReevaluateOptions,
   state: QueueReevaluateResult & { done: number },
+  knownProfile: string,
 ): Promise<PendingInsight[]> {
   const toFilter: PendingInsight[] = []
 
   for (const batch of chunk(pending, AI_BATCH_SIZE)) {
     if (opts.isCancelled()) break
 
-    let decisions: Map<number, Decision>
+    let decisions: Map<number, AiVerdict>
     try {
       const responseText = await callAnthropic({
         messages: [{ role: 'user', content: buildUserPrompt(batch) }],
-        system: buildSystemPrompt(),
+        system: buildSystemPrompt(knownProfile),
         maxTokens: 2048,
       })
       decisions = parseAiDecisions(responseText, batch.length)
@@ -165,12 +194,18 @@ async function evaluateWithAi(
     }
 
     for (let i = 0; i < batch.length; i += 1) {
-      const decision = decisions.get(i) ?? 'keep'
-      if (decision === 'filter') {
+      const verdict = decisions.get(i) ?? { decision: 'keep' as const, priorAlignment: 'novel' as const, confidence: null }
+      if (verdict.decision === 'filter') {
         toFilter.push(batch[i])
         continue
       }
 
+      db.update(insights)
+        .set({
+          priorAlignment: verdict.priorAlignment,
+          ...(verdict.confidence !== null ? { confidenceScore: verdict.confidence } : {}),
+        })
+        .where(eq(insights.id, batch[i].id)).run()
       state.kept += 1
       state.evaluated += 1
       state.done += 1
@@ -254,11 +289,25 @@ export async function reevaluatePendingInsights(
     return result
   }
 
+  let knownProfile = ''
+  if (usedAi) {
+    const verified = db.select({ content: insights.content, confidenceScore: insights.confidenceScore })
+      .from(insights)
+      .where(and(eq(insights.userId, LOCAL_USER_ID), eq(insights.verificationStatus, 'verified')))
+      .all()
+      .map((r: { content: string; confidenceScore: number | null }) => ({ content: r.content, confidenceScore: r.confidenceScore ?? 50 }))
+    knownProfile = buildKnownProfileSection({
+      verified,
+      bigFiveSummary: getBigFiveSummaryLine(db) ?? undefined,
+    })
+  }
+
   const toFilter = usedAi
-    ? await evaluateWithAi(pending, opts, state)
+    ? await evaluateWithAi(db, pending, opts, state, knownProfile)
     : await evaluateOffline(pending, opts, state)
 
   await rejectFiltered(db, toFilter, pending.length, opts, state)
+  scheduleSave()
 
   const { done: _done, ...result } = state
   return result

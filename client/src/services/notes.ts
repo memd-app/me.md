@@ -10,6 +10,7 @@ import {
 import { admitInsights, extractInsights, formatInterviewTranscript, type ExtractionContext } from './insightExtraction'
 import { applyInsightEvidenceAttachments, fetchExistingInsightRefs, logAdmissionDrops } from './admissionPersistence'
 import { enqueueVaultPendingWrites } from './vaultWriteThrough'
+import { getBigFiveSummaryLine } from './profile'
 type Db = any // Drizzle sql.js instance
 
 // ============================================
@@ -341,6 +342,7 @@ export async function distillSession(
     userName: userProfile?.name || undefined,
     occupation: userProfile?.occupation || undefined,
     existingVerifiedInsights: existingVerified,
+    bigFiveSummary: getBigFiveSummaryLine(db) ?? undefined,
   }
 
   const extractedInsights = await extractInsights(extractionCtx)
@@ -363,6 +365,7 @@ export async function distillSession(
       sourceSessionId: sessionId,
       evidenceCount: insight.evidenceCount,
       evidenceSources: insight.evidenceSources.length > 0 ? JSON.stringify(insight.evidenceSources) : null,
+      priorAlignment: insight.priorAlignment ?? 'novel',
     }).returning().get()
     savedInsights.push(saved)
   }

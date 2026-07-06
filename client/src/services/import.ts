@@ -25,6 +25,7 @@ import { cleanText, cleanTitle, stripFrontmatter } from './textCleaning'
 import { stableHash } from './obsidianExport'
 import { applyInsightEvidenceAttachments, fetchExistingInsightRefs, logAdmissionDrops } from './admissionPersistence'
 import { enqueueVaultPendingWrites } from './vaultWriteThrough'
+import { getBigFiveSummaryLine } from './profile'
 
 type Db = SQLJsDatabase<typeof schema>
 export const MAX_INSIGHTS_PER_NOTE = 8
@@ -455,6 +456,7 @@ export async function processImport(
     sourceType,
     topicTitle: cleanName,
     existingVerifiedInsights: existingVerified,
+    bigFiveSummary: getBigFiveSummaryLine(db) ?? undefined,
   }
 
   const unifiedInsights = await extractInsights(extractionCtx)
@@ -468,6 +470,7 @@ export async function processImport(
     confidenceScore: i.confidenceScore,
     suggestedCategory: i.category,
     extractionMethod: i.extractionMethod,
+    priorAlignment: i.priorAlignment ?? 'novel',
     evidenceCount: i.evidenceCount,
     evidenceSources: i.evidenceSources,
   }))
@@ -589,6 +592,7 @@ export async function processImport(
       sourceSessionId: sessionId,
       evidenceCount: extracted.evidenceCount,
       evidenceSources: extracted.evidenceSources.length > 0 ? JSON.stringify(extracted.evidenceSources) : null,
+      priorAlignment: extracted.priorAlignment ?? 'novel',
     }).run()
 
     savedInsights.push({

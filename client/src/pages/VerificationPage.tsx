@@ -28,6 +28,7 @@ interface Insight {
   confidenceScore: number | null;
   verificationStatus: string;
   privacyTier: string | null;
+  priorAlignment: string | null; // 'corroborated' | 'novel' | 'tension'
   extractionMethod: string | null; // 'ai' | 'fallback'
   sourceSessionId: string | null;
   verifiedAt: string | null;
@@ -959,6 +960,18 @@ export default function VerificationPage() {
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-4 text-xs text-gray-500 dark:text-gray-400">
                 {/* Confidence score */}
                 <span>{insight.confidenceScore}% confidence ({getConfidenceLabel(insight.confidenceScore)})</span>
+
+                {insight.priorAlignment === 'tension' && (
+                  <>
+                    <span aria-hidden="true" className="text-gray-300 dark:text-gray-700">&middot;</span>
+                    <span
+                      className="text-[11px] uppercase tracking-[0.08em] font-medium text-amber-600 dark:text-amber-400"
+                      title="May contradict something you have verified"
+                    >
+                      In tension
+                    </span>
+                  </>
+                )}
 
                 {/* Extraction method indicator — only shown for fallback */}
                 {insight.extractionMethod === 'fallback' && (

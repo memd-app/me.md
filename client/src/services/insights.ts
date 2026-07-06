@@ -111,7 +111,7 @@ export function getPendingInsights(db: Db) {
         )
       )
     )
-    .orderBy(desc(insights.createdAt))
+    .orderBy(desc(insights.confidenceScore), desc(insights.createdAt))
     .all()
 
   const result = pendingInsights.map((row: any) => ({

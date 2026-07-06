@@ -345,6 +345,7 @@ function storePersonalityInsights(
     confidenceScore: insight.confidence,
     category: insight.category ?? 'identity',
     extractionMethod: 'ai',
+    priorAlignment: 'novel',
   }))
   const existing = fetchExistingInsightRefs(db)
   const admission = admitInsights(candidates, existing, `assessment:${attemptId}`)
@@ -367,6 +368,7 @@ function storePersonalityInsights(
       sourceSessionId: null,
       evidenceCount: insight.evidenceCount,
       evidenceSources: insight.evidenceSources.length > 0 ? JSON.stringify(insight.evidenceSources) : null,
+      priorAlignment: insight.priorAlignment ?? 'novel',
     }).run()
   }
   enqueueVaultPendingWrites(db, insightIds)

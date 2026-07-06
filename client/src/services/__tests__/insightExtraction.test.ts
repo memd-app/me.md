@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   extractInsights,
   KIND_TO_CATEGORY,
+  KNOWN_PROFILE_CAP,
   MIN_SELF_RELEVANCE,
   normalizeAiCandidates,
+  selectKnownProfileInsights,
   selfReferenceGate,
 } from '../insightExtraction'
 
@@ -55,6 +57,7 @@ describe('normalizeAiCandidates', () => {
         content: 'Approaches problems methodically rather than intuitively.',
         confidenceScore: 84,
         category: KIND_TO_CATEGORY.trait,
+        priorAlignment: 'novel',
       },
     ])
     expect(droppedByPersonhood).toBe(1)
@@ -87,6 +90,7 @@ describe('normalizeAiCandidates', () => {
         content: 'Considers himself a strong starter but a weak finisher.',
         confidenceScore: 86,
         category: KIND_TO_CATEGORY.self_assessment,
+        priorAlignment: 'novel',
       },
     ])
     expect(droppedByPersonhood).toBe(2)
@@ -102,6 +106,98 @@ describe('normalizeAiCandidates', () => {
 
     expect(kept).toEqual([])
     expect(droppedByPersonhood).toBe(0)
+  })
+
+  it('caps tension confidence and keeps corroborated confidence', () => {
+    const { kept } = normalizeAiCandidates([
+      {
+        content: 'Prefers direct disagreement over quiet consensus.',
+        confidenceScore: 90,
+        kind: 'preference',
+        self_relevance: 90,
+        prior_alignment: 'tension',
+      },
+      {
+        content: 'Values concise written communication.',
+        confidenceScore: 80,
+        kind: 'value',
+        self_relevance: 90,
+        prior_alignment: 'corroborated',
+      },
+    ])
+
+    expect(kept).toEqual([
+      {
+        content: 'Prefers direct disagreement over quiet consensus.',
+        confidenceScore: 60,
+        category: KIND_TO_CATEGORY.preference,
+        priorAlignment: 'tension',
+      },
+      {
+        content: 'Values concise written communication.',
+        confidenceScore: 80,
+        category: KIND_TO_CATEGORY.value,
+        priorAlignment: 'corroborated',
+      },
+    ])
+  })
+
+  it('defaults missing or unknown prior alignment to novel without capping confidence', () => {
+    const { kept } = normalizeAiCandidates([
+      {
+        content: 'Keeps decisions explicit before acting.',
+        confidenceScore: 92,
+        kind: 'habit',
+        self_relevance: 90,
+      },
+      {
+        content: 'Prefers clear ownership boundaries.',
+        confidenceScore: 89,
+        kind: 'preference',
+        self_relevance: 90,
+        prior_alignment: 'unclear',
+      },
+    ])
+
+    expect(kept.map(item => ({ confidenceScore: item.confidenceScore, priorAlignment: item.priorAlignment }))).toEqual([
+      { confidenceScore: 92, priorAlignment: 'novel' },
+      { confidenceScore: 89, priorAlignment: 'novel' },
+    ])
+  })
+})
+
+describe('selectKnownProfileInsights', () => {
+  it('caps known profile insights', () => {
+    const verified = Array.from({ length: 40 }, (_, index) => ({
+      content: `Verified profile insight ${index}`,
+      confidenceScore: index,
+    }))
+
+    expect(selectKnownProfileInsights(verified, 'profile')).toHaveLength(KNOWN_PROFILE_CAP)
+  })
+
+  it('ranks topic-token overlap before input order and confidence for equal overlap', () => {
+    const selected = selectKnownProfileInsights([
+      { content: 'Prefers quiet reflective work.', confidenceScore: 95 },
+      { content: 'Values product strategy conversations.', confidenceScore: 70 },
+      { content: 'Uses product strategy to choose work.', confidenceScore: 90 },
+    ], 'Product strategy', 3)
+
+    expect(selected.map(item => item.content)).toEqual([
+      'Uses product strategy to choose work.',
+      'Values product strategy conversations.',
+      'Prefers quiet reflective work.',
+    ])
+  })
+
+  it('orders by confidence when topic title is empty', () => {
+    const selected = selectKnownProfileInsights([
+      { content: 'First low confidence item.', confidenceScore: 40 },
+      { content: 'Second high confidence item.', confidenceScore: 90 },
+      { content: 'Third medium confidence item.', confidenceScore: 70 },
+    ], undefined, 2)
+
+    expect(selected.map(item => item.confidenceScore)).toEqual([90, 70])
   })
 })
 
