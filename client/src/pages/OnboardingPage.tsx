@@ -1,14 +1,12 @@
-import { useState, useRef, useEffect, useMemo, FormEvent } from 'react';
+import { useState, useEffect, useMemo, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 import { getPresetTopics, selectPresetTopics } from '@/services/topics';
-import { importUrls, importText, importFile } from '@/services/import';
-import { Card, Badge } from '@/components/ui';
+import ApiKeyForm from '@/components/ApiKeyForm';
 
-type OnboardingStep = 'welcome' | 'profile' | 'context' | 'topics';
-type ImportTab = 'url' | 'text' | 'file';
+type OnboardingStep = 'welcome' | 'profile' | 'topics';
 
 interface ProfileFields {
   name: string;
@@ -24,16 +22,6 @@ interface FieldErrors {
   location?: string;
   occupation?: string;
   gender?: string;
-}
-
-interface ImportResult {
-  id: string;
-  url?: string;
-  source: 'url' | 'text' | 'file';
-  status: 'success' | 'error';
-  title?: string;
-  summary?: string;
-  error?: string;
 }
 
 interface PresetTopic {
@@ -57,7 +45,6 @@ const GENDER_OPTIONS = [
 const STEPS: { key: OnboardingStep; label: string }[] = [
   { key: 'welcome', label: 'Welcome' },
   { key: 'profile', label: 'Profile' },
-  { key: 'context', label: 'Import' },
   { key: 'topics', label: 'Topics' },
 ];
 
@@ -86,12 +73,6 @@ const PILLARS: { title: string; description: string }[] = [
     title: 'Manage',
     description: 'Export your verified context for any AI tool — it stays local until you do.',
   },
-];
-
-const IMPORT_TABS: { key: ImportTab; label: string }[] = [
-  { key: 'url', label: 'URL' },
-  { key: 'text', label: 'Paste text' },
-  { key: 'file', label: 'Upload file' },
 ];
 
 function Spinner({ className = 'w-4 h-4' }: { className?: string }) {
@@ -149,24 +130,6 @@ export default function OnboardingPage() {
     gender: user?.gender && user.gender !== 'unspecified' ? user.gender : '',
   });
 
-  // Context import state
-  const [activeImportTab, setActiveImportTab] = useState<ImportTab>('url');
-  const [urlInput, setUrlInput] = useState('');
-  const [isProcessingUrl, setIsProcessingUrl] = useState(false);
-  const [urlError, setUrlError] = useState('');
-  const [importResults, setImportResults] = useState<ImportResult[]>([]);
-
-  // Paste text state
-  const [pasteText, setPasteText] = useState('');
-  const [pasteTitle, setPasteTitle] = useState('');
-  const [isProcessingText, setIsProcessingText] = useState(false);
-  const [pasteError, setPasteError] = useState('');
-
-  // File upload state
-  const [isUploadingFile, setIsUploadingFile] = useState(false);
-  const [fileError, setFileError] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   // Preset topics state
   const [presetTopics, setPresetTopics] = useState<PresetTopic[]>([]);
   const [selectedTopicTitles, setSelectedTopicTitles] = useState<Set<string>>(new Set());
@@ -187,11 +150,9 @@ export default function OnboardingPage() {
       profileFields.location.trim() !== '' ||
       profileFields.occupation.trim() !== '' ||
       profileFields.gender !== '';
-    // Check if imports or topic selections exist
-    const hasImportData = importResults.length > 0 || pasteText.trim() !== '';
     const hasTopicSelections = selectedTopicTitles.size > 0;
-    return hasProfileData || hasImportData || hasTopicSelections;
-  }, [currentStep, profileFields, importResults, pasteText, selectedTopicTitles]);
+    return hasProfileData || hasTopicSelections;
+  }, [currentStep, profileFields, selectedTopicTitles]);
 
   useUnsavedChangesWarning(isOnboardingDirty);
 
@@ -275,10 +236,7 @@ export default function OnboardingPage() {
       isValid = false;
     }
 
-    if (!profileFields.dateOfBirth.trim()) {
-      errors.dateOfBirth = 'Date of birth is required';
-      isValid = false;
-    } else {
+    if (profileFields.dateOfBirth.trim()) {
       const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
       if (!dateRegex.test(profileFields.dateOfBirth)) {
         errors.dateOfBirth = 'Please use YYYY-MM-DD format';
@@ -299,21 +257,6 @@ export default function OnboardingPage() {
       }
     }
 
-    if (!profileFields.location.trim()) {
-      errors.location = 'Location is required';
-      isValid = false;
-    }
-
-    if (!profileFields.occupation.trim()) {
-      errors.occupation = 'Occupation is required';
-      isValid = false;
-    }
-
-    if (!profileFields.gender.trim()) {
-      errors.gender = 'Gender is required';
-      isValid = false;
-    }
-
     setFieldErrors(errors);
     return isValid;
   };
@@ -331,10 +274,10 @@ export default function OnboardingPage() {
     try {
       const profileData = {
         name: profileFields.name.trim(),
-        dateOfBirth: profileFields.dateOfBirth.trim(),
-        location: profileFields.location.trim(),
-        occupation: profileFields.occupation.trim(),
-        gender: profileFields.gender.trim(),
+        dateOfBirth: profileFields.dateOfBirth.trim() || null,
+        location: profileFields.location.trim() || null,
+        occupation: profileFields.occupation.trim() || null,
+        gender: profileFields.gender.trim() || null,
       };
 
       if (user) {
@@ -343,8 +286,7 @@ export default function OnboardingPage() {
         createUser(profileData);
       }
 
-      // Move to context import step
-      setCurrentStep('context');
+      setCurrentStep('topics');
     } catch (err) {
       setServerError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -359,146 +301,11 @@ export default function OnboardingPage() {
     }
   };
 
-  const handleUrlSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setUrlError('');
-
-    const trimmedUrl = urlInput.trim();
-    if (!trimmedUrl) {
-      setUrlError('Please enter a URL');
-      return;
-    }
-
-    // Validate URL format
-    try {
-      const parsed = new URL(trimmedUrl);
-      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-        setUrlError('Only http and https URLs are supported');
-        return;
-      }
-    } catch {
-      setUrlError('Please enter a valid URL (e.g., https://example.com)');
-      return;
-    }
-
-    setIsProcessingUrl(true);
-
-    try {
-      const data = await importUrls(db, [trimmedUrl]);
-
-      if (data.results && data.results.length > 0) {
-        setImportResults((prev) => [
-          ...prev,
-          ...data.results.map((r: { id: string; url: string; status: 'success' | 'error'; title?: string; summary?: string; error?: string }) => ({
-            ...r,
-            source: 'url' as const,
-          })),
-        ]);
-      }
-
-      setUrlInput('');
-    } catch (err) {
-      setUrlError(err instanceof Error ? err.message : 'Failed to process URL');
-    } finally {
-      setIsProcessingUrl(false);
-    }
-  };
-
-  const handleTextSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setPasteError('');
-
-    const trimmedText = pasteText.trim();
-    if (!trimmedText) {
-      setPasteError('Please enter some text');
-      return;
-    }
-
-    if (trimmedText.length < 10) {
-      setPasteError('Please enter at least 10 characters');
-      return;
-    }
-
-    setIsProcessingText(true);
-
-    try {
-      const data = importText(db, trimmedText, pasteTitle.trim() || undefined);
-
-      setImportResults((prev) => [
-        ...prev,
-        {
-          id: data.id,
-          source: 'text',
-          status: 'success',
-          title: data.title || 'Pasted text',
-          summary: data.summary,
-        },
-      ]);
-
-      setPasteText('');
-      setPasteTitle('');
-    } catch (err) {
-      setPasteError(err instanceof Error ? err.message : 'Failed to import text');
-    } finally {
-      setIsProcessingText(false);
-    }
-  };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setFileError('');
-    setIsUploadingFile(true);
-
-    try {
-      // Validate file size (5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        setFileError('File too large. Maximum size is 5MB.');
-        return;
-      }
-
-      const data = await importFile(db, file);
-
-      setImportResults((prev) => [
-        ...prev,
-        {
-          id: data.id,
-          source: 'file',
-          status: 'success',
-          title: data.title || data.filename || 'Uploaded file',
-          summary: data.summary,
-        },
-      ]);
-    } catch (err) {
-      setFileError(err instanceof Error ? err.message : 'Failed to upload file');
-      setImportResults((prev) => [
-        ...prev,
-        {
-          id: '',
-          source: 'file',
-          status: 'error',
-          title: file.name,
-          error: err instanceof Error ? err.message : 'Failed to upload file',
-        },
-      ]);
-    } finally {
-      setIsUploadingFile(false);
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }
-  };
-
-  const [showAssessmentSuggestion, setShowAssessmentSuggestion] = useState(false);
-
   const handleCompleteOnboarding = async () => {
     setIsSubmitting(true);
     try {
       updateUser({ onboardingCompleted: true });
-      // Show assessment suggestion instead of navigating directly
-      setShowAssessmentSuggestion(true);
+      navigate('/app/dashboard', { replace: true });
     } catch {
       navigate('/app/dashboard', { replace: true });
     } finally {
@@ -644,7 +451,7 @@ export default function OnboardingPage() {
               <StepHeading
                 kicker="Step 02 · Profile"
                 title="Tell us about yourself"
-                subtitle="This helps personalize your AI interviews and knowledge extraction."
+                subtitle="Your name is enough to begin. Add an Anthropic API key here if you want the interviewer to ask live questions from the start."
               />
 
               <form onSubmit={handleProfileSubmit} className="space-y-6">
@@ -662,7 +469,7 @@ export default function OnboardingPage() {
                 {/* Name */}
                 <div>
                   <label htmlFor="ob-name" className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
-                    Full Name <span className="text-primary-500">*</span>
+                    Full name <span className="text-primary-500">*</span>
                   </label>
                   <input
                     id="ob-name"
@@ -683,7 +490,7 @@ export default function OnboardingPage() {
                 {/* Date of Birth */}
                 <div>
                   <label htmlFor="ob-dob" className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
-                    Date of Birth <span className="text-primary-500">*</span>
+                    Date of birth <span className="text-gray-400 dark:text-gray-600 normal-case tracking-normal font-normal">(optional)</span>
                   </label>
                   <input
                     id="ob-dob"
@@ -697,7 +504,7 @@ export default function OnboardingPage() {
                     aria-invalid={fieldErrors.dateOfBirth ? true : undefined}
                   />
                   <p id="ob-dob-hint" className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                    Must be between 1900 and today
+                    Use this only if it helps your profile. Dates must be between 1900 and today.
                   </p>
                   {fieldErrors.dateOfBirth && (
                     <p id="ob-dob-error" className="mt-1.5 text-xs text-red-600 dark:text-red-400" role="alert">{fieldErrors.dateOfBirth}</p>
@@ -707,7 +514,7 @@ export default function OnboardingPage() {
                 {/* Location */}
                 <div>
                   <label htmlFor="ob-location" className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
-                    Location <span className="text-primary-500">*</span>
+                    Location <span className="text-gray-400 dark:text-gray-600 normal-case tracking-normal font-normal">(optional)</span>
                   </label>
                   <input
                     id="ob-location"
@@ -728,7 +535,7 @@ export default function OnboardingPage() {
                 {/* Occupation */}
                 <div>
                   <label htmlFor="ob-occupation" className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
-                    Occupation <span className="text-primary-500">*</span>
+                    Occupation <span className="text-gray-400 dark:text-gray-600 normal-case tracking-normal font-normal">(optional)</span>
                   </label>
                   <input
                     id="ob-occupation"
@@ -749,7 +556,7 @@ export default function OnboardingPage() {
                 {/* Gender */}
                 <div>
                   <label htmlFor="ob-gender" className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
-                    Gender <span className="text-primary-500">*</span>
+                    Gender <span className="text-gray-400 dark:text-gray-600 normal-case tracking-normal font-normal">(optional)</span>
                   </label>
                   <select
                     id="ob-gender"
@@ -769,6 +576,16 @@ export default function OnboardingPage() {
                   {fieldErrors.gender && (
                     <p id="ob-gender-error" className="mt-1.5 text-xs text-red-600 dark:text-red-400" role="alert">{fieldErrors.gender}</p>
                   )}
+                </div>
+
+                <div className="border-t border-rule dark:border-dark-border pt-6">
+                  <h3 className="font-serif text-lg text-ink dark:text-gray-100 mb-2">
+                    Anthropic API key
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                    Optional. Without a key, sessions use scripted questions until you add one in Settings.
+                  </p>
+                  <ApiKeyForm idPrefix="onboarding-api-key" />
                 </div>
 
                 <div className="flex gap-3 pt-2">
@@ -800,283 +617,13 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* STEP 3: Context Import */}
-          {currentStep === 'context' && (
-            <div>
-              <StepHeading
-                kicker="Step 03 · Context (optional)"
-                title="Import existing context"
-                subtitle="Give the interviewer a head start with things you've already written. Two more sources — ChatGPT Memory and Obsidian — live under Import once you're in."
-              />
-
-              {/* Import Method Tabs */}
-              <div className="flex border-b border-rule dark:border-dark-border mb-8" role="tablist" aria-label="Import method">
-                {IMPORT_TABS.map((tab) => (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    role="tab"
-                    aria-selected={activeImportTab === tab.key}
-                    aria-controls={`import-panel-${tab.key}`}
-                    id={`import-tab-${tab.key}`}
-                    onClick={() => setActiveImportTab(tab.key)}
-                    className={`flex-1 pb-3 pt-1 text-[11px] uppercase tracking-[0.08em] font-sans font-semibold border-b-2 transition-colors ${
-                      activeImportTab === tab.key
-                        ? 'border-primary-500 text-ink dark:text-gray-100'
-                        : 'border-transparent text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* URL Import Tab */}
-              {activeImportTab === 'url' && (
-                <div id="import-panel-url" role="tabpanel" aria-labelledby="import-tab-url">
-                  <Card className="mb-8">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                      Add links to your blog, portfolio, LinkedIn, or any page about you
-                    </p>
-
-                    <form onSubmit={handleUrlSubmit} className="flex gap-2">
-                      <input
-                        type="text"
-                        value={urlInput}
-                        onChange={(e) => {
-                          setUrlInput(e.target.value);
-                          setUrlError('');
-                        }}
-                        className="input-field flex-1"
-                        placeholder="https://example.com/about-me"
-                        disabled={isProcessingUrl}
-                      />
-                      <button
-                        type="submit"
-                        disabled={isProcessingUrl || !urlInput.trim()}
-                        className="btn-primary px-4 py-2 whitespace-nowrap"
-                      >
-                        {isProcessingUrl ? (
-                          <span className="flex items-center gap-2">
-                            <Spinner />
-                            Processing…
-                          </span>
-                        ) : (
-                          'Add URL'
-                        )}
-                      </button>
-                    </form>
-
-                    {urlError && (
-                      <p className="mt-2 text-xs text-red-600 dark:text-red-400" role="alert">{urlError}</p>
-                    )}
-                  </Card>
-                </div>
-              )}
-
-              {/* Paste Text Tab */}
-              {activeImportTab === 'text' && (
-                <div id="import-panel-text" role="tabpanel" aria-labelledby="import-tab-text">
-                  <Card className="mb-8">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                      Paste text about yourself — a bio, interests, resume excerpt, or anything that describes you
-                    </p>
-
-                    <form onSubmit={handleTextSubmit} className="space-y-3">
-                      <input
-                        type="text"
-                        value={pasteTitle}
-                        onChange={(e) => setPasteTitle(e.target.value)}
-                        className="input-field w-full"
-                        placeholder="Title (optional) — e.g., My Bio, Personal Interests"
-                        disabled={isProcessingText}
-                      />
-                      <textarea
-                        value={pasteText}
-                        onChange={(e) => {
-                          setPasteText(e.target.value);
-                          setPasteError('');
-                        }}
-                        className="input-field w-full min-h-[120px] resize-y"
-                        placeholder="Paste your text here… For example, a paragraph about your interests, career, hobbies, or anything you'd like the AI to know about you."
-                        disabled={isProcessingText}
-                        rows={5}
-                      />
-                      {pasteText.trim().length > 0 && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {pasteText.trim().length} characters
-                        </p>
-                      )}
-                      <button
-                        type="submit"
-                        disabled={isProcessingText || !pasteText.trim()}
-                        className="btn-primary w-full py-2"
-                      >
-                        {isProcessingText ? (
-                          <span className="flex items-center justify-center gap-2">
-                            <Spinner />
-                            Processing…
-                          </span>
-                        ) : (
-                          'Import Text'
-                        )}
-                      </button>
-                    </form>
-
-                    {pasteError && (
-                      <p className="mt-2 text-xs text-red-600 dark:text-red-400" role="alert">{pasteError}</p>
-                    )}
-                  </Card>
-                </div>
-              )}
-
-              {/* File Upload Tab */}
-              {activeImportTab === 'file' && (
-                <div id="import-panel-file" role="tabpanel" aria-labelledby="import-tab-file">
-                  <Card className="mb-8">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                      Upload a text file, markdown, CSV, JSON, or PDF (max 5MB)
-                    </p>
-
-                    <div className="space-y-3">
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".txt,.md,.csv,.json,.pdf,text/plain,text/markdown,text/csv,application/json,application/pdf"
-                        onChange={handleFileUpload}
-                        className="hidden"
-                        id="onboarding-file-upload"
-                        disabled={isUploadingFile}
-                      />
-                      <label
-                        htmlFor="onboarding-file-upload"
-                        className={`flex flex-col items-center justify-center w-full h-36 border border-dashed rounded-md cursor-pointer transition-colors ${
-                          isUploadingFile
-                            ? 'border-rule dark:border-dark-border cursor-wait'
-                            : 'border-rule dark:border-dark-border hover:border-primary-400 dark:hover:border-primary-500 hover:bg-panel/60 dark:hover:bg-dark-card/60'
-                        }`}
-                      >
-                        {isUploadingFile ? (
-                          <div className="flex flex-col items-center gap-2">
-                            <Spinner className="w-6 h-6 text-primary-500" />
-                            <span className="text-sm text-gray-500 dark:text-gray-400">Uploading and processing…</span>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-center gap-2">
-                            <svg className="w-6 h-6 text-gray-400 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                            </svg>
-                            <span className="text-sm text-gray-600 dark:text-gray-300">
-                              Click to select a file
-                            </span>
-                            <span className="text-[11px] uppercase tracking-[0.08em] font-sans text-gray-400 dark:text-gray-600">
-                              .txt · .md · .csv · .json · .pdf
-                            </span>
-                          </div>
-                        )}
-                      </label>
-                    </div>
-
-                    {fileError && (
-                      <p className="mt-2 text-xs text-red-600 dark:text-red-400" role="alert">{fileError}</p>
-                    )}
-                  </Card>
-                </div>
-              )}
-
-              {/* Import Results */}
-              {importResults.length > 0 && (
-                <div className="mb-8">
-                  <p className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-3">
-                    Imported ({importResults.length})
-                  </p>
-                  <div className="border-t border-rule dark:border-dark-border">
-                    {importResults.map((result, idx) => (
-                      <div
-                        key={result.id || idx}
-                        className="border-b border-rule dark:border-dark-border py-4"
-                      >
-                        {result.status === 'success' ? (
-                          <>
-                            <div className="flex items-center justify-between gap-3 mb-1">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <Badge variant="verified" label="Imported" />
-                                <span className="font-serif text-ink dark:text-gray-100 truncate">
-                                  {result.title || 'Untitled'}
-                                </span>
-                              </div>
-                              <span className="text-[11px] uppercase tracking-[0.08em] font-sans font-medium text-gray-400 dark:text-gray-600 shrink-0">
-                                {result.source === 'url' ? 'URL' : result.source === 'text' ? 'Text' : 'File'}
-                              </span>
-                            </div>
-                            {result.url && (
-                              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 truncate">
-                                {result.url}
-                              </p>
-                            )}
-                            {result.summary && (
-                              <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-3">
-                                {result.summary}
-                              </p>
-                            )}
-                          </>
-                        ) : (
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-red-600 dark:text-red-400">
-                                Failed
-                              </span>
-                              <span className="text-sm text-gray-600 dark:text-gray-300 truncate">
-                                {result.title || result.url || 'Unknown'}
-                              </span>
-                            </div>
-                            {result.error && (
-                              <p className="text-xs text-red-600 dark:text-red-400">{result.error}</p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Navigation buttons */}
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setCurrentStep('profile')}
-                  className="btn-secondary flex-1"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={() => setCurrentStep('topics')}
-                  disabled={isSubmitting}
-                  className="btn-primary flex-[2]"
-                >
-                  Continue
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleSkipOnboarding}
-                disabled={isSubmitting}
-                className="w-full text-[11px] uppercase tracking-[0.08em] font-sans font-medium text-ink/40 dark:text-[#7A7264] hover:text-primary-600 dark:hover:text-primary-400 transition-colors mt-4"
-              >
-                Skip for now
-              </button>
-            </div>
-          )}
-
-          {/* STEP 4: Preset Topic Selection */}
+          {/* STEP 3: Preset Topic Selection */}
           {currentStep === 'topics' && (
             <div>
               <StepHeading
-                kicker="Step 04 · Topics"
+                kicker="Step 03 · Topics"
                 title="Choose where to begin"
-                subtitle="Select 3–5 topics to explore first. These will guide your initial AI interviews."
+                subtitle="Select 3–5 topics to explore first. Have existing writing? Import it later from Library → Import."
               />
 
               <p
@@ -1195,7 +742,7 @@ export default function OnboardingPage() {
               <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setCurrentStep('context')}
+                  onClick={() => setCurrentStep('profile')}
                   className="btn-secondary flex-1"
                 >
                   Back
@@ -1222,46 +769,6 @@ export default function OnboardingPage() {
         </div>
       </main>
 
-      {/* Assessment Suggestion Overlay - shown after onboarding completion */}
-      {showAssessmentSuggestion && (
-        <div className="fixed inset-0 z-50 bg-paper dark:bg-dark-bg flex items-center justify-center px-4">
-          <div className="max-w-md w-full text-center">
-            <div className="bg-white dark:bg-dark-card border border-rule dark:border-dark-border rounded-lg p-8">
-              <p className="text-[11px] tracking-[0.16em] uppercase font-sans font-bold text-primary-600 dark:text-primary-400 mb-4">
-                The Big Five
-              </p>
-              <h2 className="font-serif italic text-2xl sm:text-3xl text-ink dark:text-gray-100 mb-3">
-                Discover your personality
-              </h2>
-              <p className="text-gray-600 dark:text-gray-300 mb-2">
-                Take the Big Five personality assessment to add scientifically-validated personality insights to your profile.
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">
-                120 questions &middot; ~15 minutes &middot; Based on the IPIP-NEO model
-              </p>
-
-              <div className="space-y-3">
-                <button
-                  onClick={() => navigate('/app/personality', { replace: true })}
-                  className="btn-primary w-full py-3 text-base"
-                >
-                  Take the assessment
-                </button>
-                <button
-                  onClick={() => navigate('/app/dashboard', { replace: true })}
-                  className="btn-secondary w-full py-2.5"
-                >
-                  Skip for now &mdash; I&apos;ll do it later
-                </button>
-              </div>
-
-              <p className="mt-4 text-[11px] uppercase tracking-[0.08em] font-sans text-ink/40 dark:text-[#7A7264]">
-                You can always take the assessment later, from Personality in the sidebar
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

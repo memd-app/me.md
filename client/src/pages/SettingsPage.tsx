@@ -1,25 +1,21 @@
-import { useState, useRef, useCallback, useMemo } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import type { ReactNode } from 'react'
 import { useUser } from '@/contexts/UserContext'
-import { useDatabase } from '@/contexts/DatabaseContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import { downloadDatabase, downloadForMCP, importDatabaseFile } from '@/db/persistence'
-import { callAnthropic } from '@/services/anthropic'
 import { formatFullDate } from '@/utils/dateFormat'
-import { getAllInsights, editInsight } from '@/services/insights'
-import { enqueueVaultWrite } from '@/services/vaultWriteThrough'
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning'
-import { PageHeader, SectionHeading, EmptyState, Badge, Button } from '@/components/ui'
+import ApiKeyForm from '@/components/ApiKeyForm'
+import { PageHeader, SectionHeading, Button } from '@/components/ui'
 
 // ============================================
 // Settings tab row — internal state, not routes
 // ============================================
 const SETTINGS_TABS = [
-  { id: 'profile', label: 'Profile' },
+  { id: 'profile', label: 'Account' },
   { id: 'apikey', label: 'API Key' },
   { id: 'database', label: 'Database' },
   { id: 'preferences', label: 'Preferences' },
-  { id: 'privacy', label: 'Privacy' },
 ] as const
 
 type SettingsTabId = (typeof SETTINGS_TABS)[number]['id']
@@ -81,214 +77,6 @@ function Aside({ children }: { children: ReactNode }) {
 }
 
 // ============================================
-// Privacy Tab Component
-// ============================================
-interface PrivacyInsightItem {
-  id: string
-  content: string
-  privacyTier: string
-  verificationStatus: string
-  topicTitle: string | null
-  confidenceScore: number | null
-}
-
-function PrivacyTab() {
-  const db = useDatabase()
-  const { user } = useUser()
-  const [insights, setInsights] = useState<PrivacyInsightItem[]>([])
-  const [loading, setLoading] = useState(false)
-  const [loaded, setLoaded] = useState(false)
-  const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
-  const [filter, setFilter] = useState<'all' | 'exportable' | 'never_export'>('all')
-  const [togglingId, setTogglingId] = useState<string | null>(null)
-
-  const loadInsights = useCallback(async () => {
-    if (!user?.id || loaded) return
-    setLoading(true)
-    try {
-      const result = getAllInsights(db, 'verified')
-      const verified = result.insights
-        .map((i: any) => ({
-          id: i.id,
-          content: i.content,
-          privacyTier: i.privacyTier || 'exportable',
-          verificationStatus: i.verificationStatus,
-          topicTitle: i.topicTitle || null,
-          confidenceScore: i.confidenceScore,
-        }))
-      setInsights(verified)
-      setLoaded(true)
-    } catch (err) {
-      console.error('Failed to load insights for privacy:', err)
-    } finally {
-      setLoading(false)
-    }
-  }, [db, user?.id, loaded])
-
-  // Load on first render
-  if (!loaded && !loading) {
-    loadInsights()
-  }
-
-  const togglePrivacyTier = async (insightId: string, currentTier: string) => {
-    const newTier = currentTier === 'exportable' ? 'never_export' : 'exportable'
-    setTogglingId(insightId)
-    setStatus(null)
-    try {
-      await editInsight(db, insightId, { privacyTier: newTier })
-      enqueueVaultWrite(db, insightId, newTier === 'never_export' ? 'reject' : 'verify')
-      setInsights(prev => prev.map(i =>
-        i.id === insightId ? { ...i, privacyTier: newTier } : i
-      ))
-      setStatus({
-        type: 'success',
-        message: `Insight marked as "${newTier === 'never_export' ? 'Never export' : 'Exportable'}"`,
-      })
-      setTimeout(() => setStatus(null), 3000)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update'
-      setStatus({ type: 'error', message })
-    } finally {
-      setTogglingId(null)
-    }
-  }
-
-  const filteredInsights = filter === 'all'
-    ? insights
-    : insights.filter(i => i.privacyTier === filter)
-
-  const exportableCount = insights.filter(i => i.privacyTier === 'exportable').length
-  const neverExportCount = insights.filter(i => i.privacyTier === 'never_export').length
-
-  const FILTERS: { id: typeof filter; label: string; count: number }[] = [
-    { id: 'all', label: 'All', count: insights.length },
-    { id: 'exportable', label: 'Exportable', count: exportableCount },
-    { id: 'never_export', label: 'Never export', count: neverExportCount },
-  ]
-
-  return (
-    <div>
-      <SectionHeading className="mb-3">Privacy settings</SectionHeading>
-      <p className="text-sm text-gray-600 dark:text-gray-300 mb-6 max-w-2xl">
-        Control which verified insights are included in exports. Items marked &ldquo;Never export&rdquo; are
-        excluded from all export formats, MCP access, and profile sharing.
-      </p>
-
-      {/* Stats trio — serif-italic numerals over small-caps labels */}
-      <div className="flex flex-wrap gap-y-4 mb-6">
-        {[
-          { value: insights.length, label: 'Total verified' },
-          { value: exportableCount, label: 'Exportable' },
-          { value: neverExportCount, label: 'Never export' },
-        ].map((item, idx) => (
-          <div
-            key={item.label}
-            className={`min-w-[130px] px-6 first:pl-0 ${idx !== 2 ? 'border-r border-rule dark:border-dark-border' : ''}`}
-          >
-            <p className="font-serif italic font-medium text-2xl leading-none text-gray-900 dark:text-white">
-              {item.value}
-            </p>
-            <p className="mt-1.5 text-[11px] tracking-[0.08em] uppercase font-sans font-semibold text-gray-500 dark:text-gray-400">
-              {item.label}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      <StatusLine status={status} />
-
-      {/* Filter row — small-caps, amber underline on active */}
-      <div className="flex items-center gap-5 mb-4 border-b border-rule dark:border-dark-border">
-        {FILTERS.map((f) => (
-          <button
-            key={f.id}
-            onClick={() => setFilter(f.id)}
-            className={`-mb-px pb-2 text-[11px] uppercase tracking-[0.08em] font-sans font-semibold border-b-2 transition-colors ${
-              filter === f.id
-                ? 'text-primary-600 dark:text-primary-400 border-primary-500 dark:border-primary-400'
-                : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-ink dark:hover:text-gray-100'
-            }`}
-          >
-            {f.label}{' '}
-            <span className="font-normal normal-case tracking-normal text-gray-400 dark:text-gray-600">
-              ({f.count})
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {loading ? (
-        <div className="space-y-3 py-2" aria-hidden="true">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-4 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
-          ))}
-        </div>
-      ) : filteredInsights.length === 0 ? (
-        <EmptyState
-          message={
-            insights.length === 0
-              ? 'No verified insights yet. Verify insights to manage their privacy settings.'
-              : 'No insights match this filter.'
-          }
-          className="py-8"
-        />
-      ) : (
-        <div className="divide-y divide-rule dark:divide-dark-border">
-          {filteredInsights.map((insight) => (
-            <div key={insight.id} className="py-4 first:pt-0 last:pb-0">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-serif text-gray-900 dark:text-gray-100 line-clamp-2">
-                    {insight.content}
-                  </p>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-                    {insight.topicTitle && <span>{insight.topicTitle}</span>}
-                    {insight.confidenceScore != null && (
-                      <>
-                        <span aria-hidden="true">&middot;</span>
-                        <span>{insight.confidenceScore}% confidence</span>
-                      </>
-                    )}
-                    <span aria-hidden="true">&middot;</span>
-                    <Badge
-                      variant={insight.privacyTier === 'never_export' ? 'neutral' : 'verified'}
-                      label={insight.privacyTier === 'never_export' ? 'Never export' : 'Exportable'}
-                    />
-                  </div>
-                </div>
-                <button
-                  onClick={() => togglePrivacyTier(insight.id, insight.privacyTier)}
-                  disabled={togglingId === insight.id}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-dark-bg ${
-                    insight.privacyTier === 'exportable' ? 'bg-primary-500 dark:bg-primary-400' : 'bg-gray-200 dark:bg-dark-border'
-                  } ${togglingId === insight.id ? 'opacity-50' : ''}`}
-                  role="switch"
-                  aria-checked={insight.privacyTier === 'exportable'}
-                  title={insight.privacyTier === 'exportable' ? 'Click to mark as Never export' : 'Click to mark as Exportable'}
-                >
-                  <span
-                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white dark:bg-dark-bg transition-transform ${
-                      insight.privacyTier === 'exportable' ? 'translate-x-[18px]' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <Aside>
-        <span className="font-semibold text-gray-700 dark:text-gray-300">How it works: </span>
-        Items marked &ldquo;Never export&rdquo; are automatically excluded from profile exports (Markdown and
-        JSON), clipboard copy, and MCP tool access. Only verified insights with
-        the &ldquo;Exportable&rdquo; tier are shared.
-      </Aside>
-    </div>
-  )
-}
-
-// ============================================
 // Profile fields config
 // ============================================
 interface EditableField {
@@ -310,7 +98,7 @@ const PROFILE_FIELDS: EditableField[] = [
 // Main Settings Page
 // ============================================
 export default function SettingsPage() {
-  const { user, updateUser, getApiKey, setApiKey } = useUser()
+  const { user, updateUser } = useUser()
   const { theme, setTheme } = useTheme()
   const [activeTab, setActiveTab] = useState<SettingsTabId>('profile')
 
@@ -318,12 +106,6 @@ export default function SettingsPage() {
   const [editingField, setEditingField] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
-
-  // API key state
-  const [apiKeyInput, setApiKeyInput] = useState('')
-  const [apiKeyLoaded, setApiKeyLoaded] = useState(false)
-  const [apiKeyStatus, setApiKeyStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
-  const [testingKey, setTestingKey] = useState(false)
 
   // Database state
   const [dbStatus, setDbStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -337,13 +119,6 @@ export default function SettingsPage() {
 
   // Session length
   const [sessionLength, setSessionLength] = useState<number>(user?.sessionLengthDefault ?? 15)
-
-  // Load API key on tab switch
-  if (activeTab === 'apikey' && !apiKeyLoaded) {
-    const existing = getApiKey()
-    if (existing) setApiKeyInput(existing)
-    setApiKeyLoaded(true)
-  }
 
   // Track unsaved changes
   const isDirty = useMemo(() => {
@@ -388,50 +163,6 @@ export default function SettingsPage() {
       return value.charAt(0).toUpperCase() + value.slice(1)
     }
     return value
-  }
-
-  // ---- API Key helpers ----
-
-  const handleSaveApiKey = () => {
-    const trimmed = apiKeyInput.trim()
-    if (!trimmed) {
-      setApiKeyStatus({ type: 'error', message: 'Please enter an API key' })
-      return
-    }
-    setApiKey(trimmed)
-    setApiKeyStatus({ type: 'success', message: 'API key saved to localStorage' })
-    setTimeout(() => setApiKeyStatus(null), 3000)
-  }
-
-  const handleClearApiKey = () => {
-    localStorage.removeItem('memd_api_key')
-    setApiKeyInput('')
-    setApiKeyStatus({ type: 'success', message: 'API key removed' })
-    setTimeout(() => setApiKeyStatus(null), 3000)
-  }
-
-  const handleTestApiKey = async () => {
-    const trimmed = apiKeyInput.trim()
-    if (!trimmed) {
-      setApiKeyStatus({ type: 'error', message: 'Save an API key first' })
-      return
-    }
-    // Ensure the key is saved before testing
-    setApiKey(trimmed)
-    setTestingKey(true)
-    setApiKeyStatus(null)
-    try {
-      const result = await callAnthropic({
-        messages: [{ role: 'user', content: 'Say "API key works!" in 3 words or less.' }],
-        maxTokens: 20,
-      })
-      setApiKeyStatus({ type: 'success', message: `API key is valid. Response: "${result}"` })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'API call failed'
-      setApiKeyStatus({ type: 'error', message: `API key test failed: ${message}` })
-    } finally {
-      setTestingKey(false)
-    }
   }
 
   // ---- Database helpers ----
@@ -522,7 +253,7 @@ export default function SettingsPage() {
     <div className="max-w-4xl mx-auto">
       <PageHeader
         title="Settings"
-        subtitle="Profile, API key, database, and preferences."
+        subtitle="Account, API key, database, and preferences."
       />
 
       <SettingsTabs active={activeTab} onChange={setActiveTab} />
@@ -532,7 +263,7 @@ export default function SettingsPage() {
       {/* ============================================ */}
       {activeTab === 'profile' && (
         <div>
-          <SectionHeading className="mb-4">Profile information</SectionHeading>
+          <SectionHeading className="mb-4">Account information</SectionHeading>
 
           <StatusLine status={saveStatus} />
 
@@ -610,7 +341,8 @@ export default function SettingsPage() {
           <Aside>
             <span className="font-semibold text-gray-700 dark:text-gray-300">Local-only app. </span>
             All your data is stored in your browser — there are no accounts or passwords. Use the Database tab
-            to export backups.
+            to export backups. Privacy tiers are set on each insight in Review; items marked &ldquo;never export&rdquo;
+            are excluded from exports automatically.
           </Aside>
         </div>
       )}
@@ -634,39 +366,7 @@ export default function SettingsPage() {
             </a>.
           </p>
 
-          <StatusLine status={apiKeyStatus} />
-
-          <div className="space-y-4 max-w-lg">
-            <div>
-              <label htmlFor="api-key-input" className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
-                API key
-              </label>
-              <input
-                id="api-key-input"
-                type="password"
-                value={apiKeyInput}
-                onChange={(e) => setApiKeyInput(e.target.value)}
-                placeholder="sk-ant-..."
-                className="input-field w-full"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSaveApiKey()
-                }}
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-4">
-              <Button onClick={handleSaveApiKey}>Save key</Button>
-              <Button variant="secondary" onClick={handleTestApiKey} loading={testingKey}>
-                {testingKey ? 'Testing…' : 'Test API key'}
-              </Button>
-              <button
-                onClick={handleClearApiKey}
-                className="text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-ink dark:hover:text-gray-100 transition-colors"
-              >
-                Clear key
-              </button>
-            </div>
-          </div>
+          <ApiKeyForm />
 
           <Aside>
             <span className="font-semibold text-gray-700 dark:text-gray-300">Security note: </span>
@@ -818,12 +518,6 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* ============================================ */}
-      {/* Privacy Tab */}
-      {/* ============================================ */}
-      {activeTab === 'privacy' && (
-        <PrivacyTab />
-      )}
     </div>
   )
 }

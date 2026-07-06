@@ -107,16 +107,17 @@ function hasContentForFormat(note: NoteListItem, format: NoteFormat): boolean {
   }
 }
 
-function getAvailableFormats(note: NoteListItem): NoteFormat[] {
-  return [
-    ...ACTIVE_FORMAT_OPTIONS,
-    ...LEGACY_FORMAT_OPTIONS.filter(format => hasContentForFormat(note, format)),
-  ];
+function getSelectableFormats(note: NoteListItem): NoteFormat[] {
+  return ACTIVE_FORMAT_OPTIONS.filter(format => hasContentForFormat(note, format));
 }
 
 function getInitialFormat(note: NoteListItem): NoteFormat {
   const selected = (note.selectedFormat || 'full_analysis') as NoteFormat;
-  return getAvailableFormats(note).includes(selected) ? selected : 'full_analysis';
+  const activeFormats = getSelectableFormats(note);
+  if (activeFormats.includes(selected)) return selected;
+  if (activeFormats.length > 0) return activeFormats[0];
+  if (LEGACY_FORMAT_OPTIONS.includes(selected) && hasContentForFormat(note, selected)) return selected;
+  return LEGACY_FORMAT_OPTIONS.find(format => hasContentForFormat(note, format)) ?? 'full_analysis';
 }
 
 export default function NotesPage() {
@@ -220,6 +221,7 @@ export default function NotesPage() {
   // =====================
   if (selectedNote) {
     const content = getNoteContent(selectedNote, selectedFormat);
+    const selectableFormats = getSelectableFormats(selectedNote);
     return (
       <div className="max-w-4xl mx-auto">
         {/* Breadcrumb */}
@@ -264,22 +266,23 @@ export default function NotesPage() {
             </button>
           </div>
 
-          {/* Format tabs — small-caps, amber underline on the active format */}
-          <nav className="flex items-center gap-6 border-b border-rule dark:border-dark-border" aria-label="Note format">
-            {getAvailableFormats(selectedNote).map(fmt => (
-              <button
-                key={fmt}
-                onClick={() => setSelectedFormat(fmt)}
-                className={`-mb-px pb-2 text-[11px] uppercase tracking-[0.08em] font-sans font-semibold border-b-2 transition-colors ${
-                  selectedFormat === fmt
-                    ? 'text-primary-600 dark:text-primary-400 border-primary-500 dark:border-primary-400'
-                    : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-ink dark:hover:text-gray-100'
-                }`}
-              >
-                {FORMAT_LABELS[fmt]}
-              </button>
-            ))}
-          </nav>
+          {selectableFormats.length > 1 && (
+            <nav className="flex items-center gap-6 border-b border-rule dark:border-dark-border" aria-label="Note format">
+              {selectableFormats.map(fmt => (
+                <button
+                  key={fmt}
+                  onClick={() => setSelectedFormat(fmt)}
+                  className={`-mb-px pb-2 text-[11px] uppercase tracking-[0.08em] font-sans font-semibold border-b-2 transition-colors ${
+                    selectedFormat === fmt
+                      ? 'text-primary-600 dark:text-primary-400 border-primary-500 dark:border-primary-400'
+                      : 'text-gray-500 dark:text-gray-400 border-transparent hover:text-ink dark:hover:text-gray-100'
+                  }`}
+                >
+                  {FORMAT_LABELS[fmt]}
+                </button>
+              ))}
+            </nav>
+          )}
         </div>
 
         {/* Note content — the serif reading surface */}

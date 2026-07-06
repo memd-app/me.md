@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
 import { useDatabase, useVaultSyncStatus } from '@/contexts/DatabaseContext';
@@ -17,10 +17,12 @@ import {
   type VaultConflict,
 } from '@/services/vaultWriteThrough';
 import { createStoreZip } from '@/services/zipStore';
-import { loadVaultHandle, saveVaultHandle } from '@/services/vaultHandle';
+import { getVaultDisplayName, loadVaultHandle, saveVaultHandle } from '@/services/vaultHandle';
+import { getGraphStats } from '@/services/insights';
 import { PageHeader } from '@/components/ui';
 
 type ExportFormat = 'markdown' | 'json' | 'both';
+type GraphStats = ReturnType<typeof getGraphStats>;
 
 function formatSyncSummary(summary: ReconcileReport): string {
   const segments = [
@@ -42,6 +44,68 @@ function formatSyncSummary(summary: ReconcileReport): string {
     : 'Synced to me.md: no changes.'
 }
 
+function countLine(count: number, singular: string): string {
+  return `${count} ${singular}${count === 1 ? '' : 's'}`
+}
+
+function StatColumn({
+  title,
+  rows,
+  empty,
+}: {
+  title: string
+  rows: Array<{ label: string; count: number }>
+  empty: string
+}) {
+  return (
+    <section className="border-t border-b border-rule dark:border-dark-border py-5">
+      <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-4">{title}</h3>
+      {rows.length > 0 ? (
+        <dl className="space-y-3">
+          {rows.map(row => (
+            <div key={row.label} className="flex items-baseline justify-between gap-4">
+              <dt className="text-sm font-medium text-gray-700 dark:text-gray-300">{row.label}</dt>
+              <dd className="font-serif italic text-xl text-gray-950 dark:text-white">{row.count}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="text-sm text-gray-500 dark:text-gray-400">{empty}</p>
+      )}
+    </section>
+  )
+}
+
+function GraphStatsBlock({ stats }: { stats: GraphStats }) {
+  if (stats.verifiedTotal === 0) {
+    return (
+      <p className="mt-5 text-sm text-gray-500 dark:text-gray-400">
+        No verified insights are ready for Obsidian graph links yet.
+      </p>
+    )
+  }
+
+  return (
+    <section className="mt-6">
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
+        {countLine(stats.verifiedTotal, 'verified insight')} · {countLine(stats.topicTotal, 'topic')}
+      </p>
+      <div className="grid gap-8 lg:grid-cols-2">
+        <StatColumn
+          title="Insight kinds"
+          rows={stats.byKind.map(item => ({ label: item.label, count: item.count }))}
+          empty="No kind data yet."
+        />
+        <StatColumn
+          title="Topics by size"
+          rows={stats.topicSizes.map(item => ({ label: item.title, count: item.count }))}
+          empty="No topic links yet."
+        />
+      </div>
+    </section>
+  )
+}
+
 export default function ExportPage() {
   const { user } = useUser();
   const db = useDatabase();
@@ -55,7 +119,10 @@ export default function ExportPage() {
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [conflicts, setConflicts] = useState<VaultConflict[]>(() => getVaultConflicts());
   const [attention, setAttention] = useState<VaultAttentionItem[]>(() => getVaultAttention());
+  const [vaultName, setVaultName] = useState<string | null>(null);
+  const [isLoadingVaultName, setIsLoadingVaultName] = useState(true);
   const fsaSupported = isFileSystemAccessSupported();
+  const graphStats = useMemo(() => getGraphStats(db), [db]);
 
   // Export readiness state
   const [exportStatus, setExportStatus] = useState<{ hasVerifiedData: boolean; verifiedInsightCount: number; topicCount: number } | null>(null);
@@ -89,6 +156,24 @@ export default function ExportPage() {
   useEffect(() => {
     setConflicts(getVaultConflicts());
     setAttention(getVaultAttention());
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    getVaultDisplayName()
+      .then(name => {
+        if (active) setVaultName(name);
+      })
+      .catch(error => {
+        console.warn('[me.md:export] Could not read persisted vault handle', error);
+        if (active) setVaultName(null);
+      })
+      .finally(() => {
+        if (active) setIsLoadingVaultName(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const downloadBlob = (blob: Blob, filename: string) => {
@@ -172,6 +257,7 @@ export default function ExportPage() {
       await saveVaultHandle(handle);
       const summary = await reconcileVault(db, handle);
       setVaultReconnectNeeded(false);
+      setVaultName(handle.name);
       setConflicts(getVaultConflicts());
       setAttention(getVaultAttention());
       setStatus({
@@ -262,6 +348,13 @@ export default function ExportPage() {
     } finally {
       setZipping(false);
     }
+  };
+
+  const openObsidianIndex = () => {
+    if (!vaultName) return;
+    const vault = encodeURIComponent(vaultName);
+    const file = encodeURIComponent('me.md/Me - Index');
+    window.location.href = `obsidian://open?vault=${vault}&file=${file}`;
   };
 
   const hasExportableData = () => {
@@ -471,6 +564,36 @@ export default function ExportPage() {
 
       {/* Obsidian */}
       <div>
+        <div className="border-t border-rule dark:border-dark-border py-6">
+          <h2 className="font-serif text-lg text-ink dark:text-gray-100">
+            Obsidian graph
+          </h2>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-300 max-w-2xl">
+            Every verified insight is a note in your vault, linked to its topic and the index. Obsidian&apos;s graph view draws the picture from those links.
+          </p>
+          {isLoadingVaultName ? (
+            <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading Obsidian vault…</p>
+          ) : vaultName ? (
+            <>
+              <button
+                type="button"
+                onClick={openObsidianIndex}
+                className="btn-secondary mt-5"
+              >
+                Open Me - Index in Obsidian
+              </button>
+              <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
+                If the button does not resolve, open Obsidian and go to me.md/Me - Index.
+              </p>
+            </>
+          ) : (
+            <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+              Connect an Obsidian vault here to see these links in Obsidian&apos;s graph view.
+            </p>
+          )}
+          <GraphStatsBlock stats={graphStats} />
+        </div>
+
         {fsaSupported && (
           <div className="border-t border-rule dark:border-dark-border py-6">
             <div className="flex items-center justify-between gap-4">

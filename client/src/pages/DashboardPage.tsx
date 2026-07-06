@@ -209,12 +209,6 @@ export default function DashboardPage() {
     { key: 'sessions', value: stats?.completedSessions ?? 0, label: 'Sessions completed' },
   ];
 
-  const quickActions = [
-    { label: 'Start an interview', to: '/app/topics' },
-    { label: 'Add a topic', to: '/app/topics/new' },
-    { label: 'Explore the graph', to: '/app/graph' },
-  ];
-
   const hasCategorizedTopics = !!stats?.categoryCompleteness?.some((c) => c.totalTopics > 0);
 
   return (
@@ -434,28 +428,6 @@ export default function DashboardPage() {
             ) : (
               <EmptyState message="Nothing waiting on you right now." className="py-4" />
             )}
-          </section>
-
-          {/* Quick actions */}
-          <section aria-label="Quick actions">
-            <SectionHeading className="mb-2">Quick actions</SectionHeading>
-            <nav aria-label="Quick actions" className="flex flex-col divide-y divide-rule dark:divide-dark-border">
-              {quickActions.map((qa) => (
-                <Link
-                  key={qa.to}
-                  to={qa.to}
-                  className="group flex items-center justify-between py-3 text-[13.5px] font-semibold text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
-                >
-                  <span>{qa.label}</span>
-                  <span
-                    aria-hidden="true"
-                    className="text-gray-400 dark:text-gray-600 group-hover:text-primary-600 dark:group-hover:text-primary-400 group-hover:translate-x-0.5 transition-transform"
-                  >
-                    &rarr;
-                  </span>
-                </Link>
-              ))}
-            </nav>
           </section>
 
           {/* Category completeness */}

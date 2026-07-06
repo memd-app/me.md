@@ -1197,7 +1197,7 @@ export async function* sendMessage(
   db: Db,
   sessionId: string,
   content: string,
-  opts?: { isVoiceInput?: boolean },
+  opts?: { isVoiceInput?: boolean; onFallback?: () => void },
 ): AsyncGenerator<string, void, undefined> {
   // Verify session
   const session = (db as any).select().from(sessions).where(
@@ -1271,6 +1271,7 @@ export async function* sendMessage(
 
   // FALLBACK: Template-based response
   if (!usedRealStreaming) {
+    opts?.onFallback?.()
     fullResponseText = generateAIResponse(
       topic?.title || 'Unknown Topic',
       topic?.description || '',
@@ -1322,6 +1323,7 @@ export async function* sendMessage(
 export async function* retryMessage(
   db: Db,
   sessionId: string,
+  opts?: { onFallback?: () => void },
 ): AsyncGenerator<string, void, undefined> {
   const session = (db as any).select().from(sessions).where(
     and(eq(sessions.id, sessionId), eq(sessions.userId, LOCAL_USER_ID))
@@ -1383,6 +1385,7 @@ export async function* retryMessage(
 
   // Fallback to template
   if (!usedRealStreaming) {
+    opts?.onFallback?.()
     fullResponseText = generateAIResponse(
       topic?.title || 'Unknown Topic',
       topic?.description || '',

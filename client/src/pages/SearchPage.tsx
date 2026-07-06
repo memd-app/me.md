@@ -24,7 +24,6 @@ interface SearchResult {
 }
 
 type FilterType = 'all' | 'topics' | 'insights' | 'sessions' | 'notes';
-type VerificationFilter = '' | 'verified' | 'unverified' | 'rejected' | 're_verification_pending';
 
 const FILTERS: { label: string; value: FilterType }[] = [
   { label: 'All', value: 'all' },
@@ -32,14 +31,6 @@ const FILTERS: { label: string; value: FilterType }[] = [
   { label: 'Insights', value: 'insights' },
   { label: 'Sessions', value: 'sessions' },
   { label: 'Notes', value: 'notes' },
-];
-
-const VERIFICATION_FILTERS: { label: string; value: VerificationFilter }[] = [
-  { label: 'Any Status', value: '' },
-  { label: 'Verified', value: 'verified' },
-  { label: 'Unverified', value: 'unverified' },
-  { label: 'Rejected', value: 'rejected' },
-  { label: 'Re-verify', value: 're_verification_pending' },
 ];
 
 // Type shown as a small-caps text label rather than an emoji + colored pill
@@ -74,25 +65,12 @@ export default function SearchPage() {
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
 
-  // Advanced filters (Feature #87)
-  const [verificationStatus, setVerificationStatus] = useState<VerificationFilter>(
-    (searchParams.get('verificationStatus') as VerificationFilter) || ''
-  );
-  const [dateFrom, setDateFrom] = useState(searchParams.get('dateFrom') || '');
-  const [dateTo, setDateTo] = useState(searchParams.get('dateTo') || '');
-  const [minConfidence, setMinConfidence] = useState(
-    parseInt(searchParams.get('minConfidence') || '0', 10)
-  );
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(
-    !!(searchParams.get('verificationStatus') || searchParams.get('dateFrom') || searchParams.get('dateTo') || searchParams.get('minConfidence'))
-  );
-
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchAbortRef = useRef<AbortController | null>(null);
 
   // Perform search API call
   const performSearch = useCallback(
-    async (searchQuery: string, filter: FilterType, page: number, vStatus: VerificationFilter, dFrom: string, dTo: string, minConf: number) => {
+    async (searchQuery: string, filter: FilterType, page: number) => {
       // Abort any in-flight search request
       if (searchAbortRef.current) {
         searchAbortRef.current.abort();
@@ -116,28 +94,11 @@ export default function SearchPage() {
       setHasSearched(true);
 
       try {
-        const params = new URLSearchParams({
-          q: searchQuery.trim(),
-          filter,
-          page: String(page),
-          limit: String(RESULTS_PER_PAGE),
-        });
-
-        // Add advanced filter params
-        if (vStatus) params.set('verificationStatus', vStatus);
-        if (dFrom) params.set('dateFrom', dFrom);
-        if (dTo) params.set('dateTo', dTo);
-        if (minConf > 0) params.set('minConfidence', String(minConf));
-
         const data = searchAll(db, {
           query: searchQuery.trim(),
           filter,
           page,
           limit: RESULTS_PER_PAGE,
-          verificationStatus: vStatus || undefined,
-          dateFrom: dFrom || undefined,
-          dateTo: dTo || undefined,
-          minConfidence: minConf > 0 ? minConf : undefined,
         }) as any;
         if (!controller.signal.aborted) {
           setResults(data.results || []);
@@ -163,15 +124,11 @@ export default function SearchPage() {
 
   // Update URL params when search state changes
   const updateUrlParams = useCallback(
-    (q: string, filter: FilterType, page: number, vStatus: VerificationFilter, dFrom: string, dTo: string, minConf: number) => {
+    (q: string, filter: FilterType, page: number) => {
       const params: Record<string, string> = {};
       if (q.trim()) params.q = q.trim();
       if (filter !== 'all') params.filter = filter;
       if (page > 1) params.page = String(page);
-      if (vStatus) params.verificationStatus = vStatus;
-      if (dFrom) params.dateFrom = dFrom;
-      if (dTo) params.dateTo = dTo;
-      if (minConf > 0) params.minConfidence = String(minConf);
       setSearchParams(params, { replace: true });
     },
     [setSearchParams]
@@ -194,8 +151,8 @@ export default function SearchPage() {
 
     debounceTimerRef.current = setTimeout(() => {
       setCurrentPage(1);
-      updateUrlParams(query, activeFilter, 1, verificationStatus, dateFrom, dateTo, minConfidence);
-      performSearch(query, activeFilter, 1, verificationStatus, dateFrom, dateTo, minConfidence);
+      updateUrlParams(query, activeFilter, 1);
+      performSearch(query, activeFilter, 1);
     }, 300);
 
     return () => {
@@ -211,40 +168,29 @@ export default function SearchPage() {
     (filter: FilterType) => {
       setActiveFilter(filter);
       setCurrentPage(1);
-      updateUrlParams(query, filter, 1, verificationStatus, dateFrom, dateTo, minConfidence);
-      performSearch(query, filter, 1, verificationStatus, dateFrom, dateTo, minConfidence);
+      updateUrlParams(query, filter, 1);
+      performSearch(query, filter, 1);
     },
-    [query, verificationStatus, dateFrom, dateTo, minConfidence, performSearch, updateUrlParams]
+    [query, performSearch, updateUrlParams]
   );
-
-  // Handle advanced filter changes
-  const handleAdvancedFilterApply = useCallback(() => {
-    setCurrentPage(1);
-    updateUrlParams(query, activeFilter, 1, verificationStatus, dateFrom, dateTo, minConfidence);
-    performSearch(query, activeFilter, 1, verificationStatus, dateFrom, dateTo, minConfidence);
-  }, [query, activeFilter, verificationStatus, dateFrom, dateTo, minConfidence, performSearch, updateUrlParams]);
 
   // Handle page change
   const handlePageChange = useCallback(
     (page: number) => {
       setCurrentPage(page);
-      updateUrlParams(query, activeFilter, page, verificationStatus, dateFrom, dateTo, minConfidence);
-      performSearch(query, activeFilter, page, verificationStatus, dateFrom, dateTo, minConfidence);
+      updateUrlParams(query, activeFilter, page);
+      performSearch(query, activeFilter, page);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     },
-    [query, activeFilter, verificationStatus, dateFrom, dateTo, minConfidence, performSearch, updateUrlParams]
+    [query, activeFilter, performSearch, updateUrlParams]
   );
 
   // Clear all filters
   const handleClearFilters = useCallback(() => {
     setActiveFilter('all');
-    setVerificationStatus('');
-    setDateFrom('');
-    setDateTo('');
-    setMinConfidence(0);
     setCurrentPage(1);
-    updateUrlParams(query, 'all', 1, '', '', '', 0);
-    performSearch(query, 'all', 1, '', '', '', 0);
+    updateUrlParams(query, 'all', 1);
+    performSearch(query, 'all', 1);
   }, [query, performSearch, updateUrlParams]);
 
   // Initialize search from URL params on mount
@@ -252,20 +198,12 @@ export default function SearchPage() {
     const urlQuery = searchParams.get('q') || '';
     const urlFilter = (searchParams.get('filter') as FilterType) || 'all';
     const urlPage = parseInt(searchParams.get('page') || '1', 10);
-    const urlVStatus = (searchParams.get('verificationStatus') as VerificationFilter) || '';
-    const urlDateFrom = searchParams.get('dateFrom') || '';
-    const urlDateTo = searchParams.get('dateTo') || '';
-    const urlMinConf = parseInt(searchParams.get('minConfidence') || '0', 10);
 
     if (urlQuery.trim()) {
       setQuery(urlQuery);
       setActiveFilter(urlFilter);
       setCurrentPage(urlPage);
-      setVerificationStatus(urlVStatus);
-      setDateFrom(urlDateFrom);
-      setDateTo(urlDateTo);
-      setMinConfidence(urlMinConf);
-      performSearch(urlQuery, urlFilter, urlPage, urlVStatus, urlDateFrom, urlDateTo, urlMinConf);
+      performSearch(urlQuery, urlFilter, urlPage);
     }
     // Only run on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -336,9 +274,7 @@ export default function SearchPage() {
 
   // Date formatting uses shared utility from @/utils/dateFormat
 
-  // Check if any advanced filters are active
-  const hasActiveAdvancedFilters = !!(verificationStatus || dateFrom || dateTo || minConfidence > 0);
-  const hasAnyActiveFilters = activeFilter !== 'all' || hasActiveAdvancedFilters;
+  const hasAnyActiveFilters = activeFilter !== 'all';
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -402,120 +338,13 @@ export default function SearchPage() {
             {f.label}
           </button>
         ))}
-
-        <span className="flex-1" />
-
-        <button
-          onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-          className={`flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] font-sans font-semibold transition-colors ${
-            hasActiveAdvancedFilters
-              ? 'text-primary-600 dark:text-primary-400'
-              : 'text-gray-500 dark:text-gray-400 hover:text-ink dark:hover:text-gray-100'
-          }`}
-        >
-          More filters
-          {hasActiveAdvancedFilters && ' · active'}
-          <svg
-            className={`w-3 h-3 transition-transform ${showAdvancedFilters ? 'rotate-180' : ''}`}
-            fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
       </div>
-
-      {/* Advanced Filters Panel (Feature #87) */}
-      {showAdvancedFilters && (
-        <div className="mb-6 pb-6 border-b border-rule dark:border-dark-border space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Verification Status filter */}
-            <div>
-              <label className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
-                Review status
-              </label>
-              <select
-                value={verificationStatus}
-                onChange={(e) => setVerificationStatus(e.target.value as VerificationFilter)}
-                className="input-field text-sm"
-              >
-                {VERIFICATION_FILTERS.map((vf) => (
-                  <option key={vf.value} value={vf.value}>{vf.label}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Date From */}
-            <div>
-              <label className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
-                Date from
-              </label>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="input-field text-sm"
-              />
-            </div>
-
-            {/* Date To */}
-            <div>
-              <label className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
-                Date to
-              </label>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="input-field text-sm"
-              />
-            </div>
-
-            {/* Confidence Score */}
-            <div>
-              <label className="block text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
-                Min confidence: {minConfidence}%
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                step="5"
-                value={minConfidence}
-                onChange={(e) => setMinConfidence(parseInt(e.target.value, 10))}
-                className="w-full h-1 bg-rule dark:bg-dark-border rounded-full appearance-none cursor-pointer accent-primary-500 mt-3"
-              />
-            </div>
-          </div>
-
-          {/* Filter action buttons */}
-          <div className="flex flex-col sm:flex-row gap-3">
-            <button
-              onClick={handleAdvancedFilterApply}
-              className="btn-primary text-sm"
-            >
-              Apply filters
-            </button>
-            {hasActiveAdvancedFilters && (
-              <button
-                onClick={handleClearFilters}
-                className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors self-center"
-              >
-                Clear all filters
-              </button>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Active filters summary */}
       {hasAnyActiveFilters && hasSearched && (
         <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
           Filtered by
-          {activeFilter !== 'all' && <> &middot; type: {activeFilter}</>}
-          {verificationStatus && <> &middot; status: {verificationStatus.replace(/_/g, ' ')}</>}
-          {dateFrom && <> &middot; from {dateFrom}</>}
-          {dateTo && <> &middot; to {dateTo}</>}
-          {minConfidence > 0 && <> &middot; confidence &ge; {minConfidence}%</>}
+          <> &middot; type: {activeFilter}</>
           {' · '}
           <button onClick={handleClearFilters} className="text-primary-600 dark:text-primary-400 hover:text-ink dark:hover:text-gray-100 transition-colors">
             Clear all
@@ -629,7 +458,7 @@ export default function SearchPage() {
       {!isLoading && !error && !hasSearched && (
         <EmptyState
           kicker="Start searching"
-          message="Type in the search bar to find topics, insights, session transcripts, and notes. Use More Filters for advanced filtering by verification status, date, or confidence."
+          message="Type in the search bar to find topics, insights, session transcripts, and notes."
         />
       )}
 
@@ -641,11 +470,11 @@ export default function SearchPage() {
             <>
               No results found for &ldquo;{query}&rdquo;
               {activeFilter !== 'all' && <> in {activeFilter}</>}
-              {hasActiveAdvancedFilters && <> with the active filters</>}. Try checking your spelling, using fewer keywords, or a broader term.
+              {hasAnyActiveFilters && <> with the active filters</>}. Try checking your spelling, using fewer keywords, or a broader term.
             </>
           }
           action={
-            hasActiveAdvancedFilters ? (
+            hasAnyActiveFilters ? (
               <button onClick={handleClearFilters} className="btn-secondary">
                 Clear all filters
               </button>

@@ -123,25 +123,26 @@ export default function ImportPage() {
 
   useUnsavedChangesWarning(isImportDirty);
 
-  // Process an imported file to extract insights
-  const handleProcessImport = async (resultIdx: number) => {
-    const result = importResults[resultIdx];
-    if (!result || !result.id || result.isProcessed || result.isProcessing) return;
-
+  // Process an imported file to extract insights.
+  const handleProcessImport = async (importId: string) => {
     const userId = user?.id;
-    if (!userId) return;
+    if (!userId || !importId) return;
 
     // Mark as processing
     setImportResults((prev) =>
-      prev.map((r, i) => (i === resultIdx ? { ...r, isProcessing: true, processError: undefined } : r))
+      prev.map((r) => (
+        r.id === importId && !r.isProcessed
+          ? { ...r, isProcessing: true, processError: undefined }
+          : r
+      ))
     );
 
     try {
-      const data = await processImport(db, result.id);
+      const data = await processImport(db, importId);
 
       setImportResults((prev) =>
-        prev.map((r, i) =>
-          i === resultIdx
+        prev.map((r) =>
+          r.id === importId
             ? {
                 ...r,
                 isProcessing: false,
@@ -154,12 +155,21 @@ export default function ImportPage() {
       );
     } catch (err) {
       setImportResults((prev) =>
-        prev.map((r, i) =>
-          i === resultIdx
+        prev.map((r) =>
+          r.id === importId
             ? { ...r, isProcessing: false, processError: err instanceof Error ? err.message : 'Failed to process' }
             : r
         )
       );
+    }
+  };
+
+  const addImportResults = (results: ImportResult[]) => {
+    setImportResults((prev) => [...prev, ...results]);
+    for (const result of results) {
+      if (result.status === 'success' && result.id && !result.isProcessed) {
+        void handleProcessImport(result.id);
+      }
     }
   };
 
@@ -213,8 +223,7 @@ export default function ImportPage() {
 
       const data = importChatGPT(db, trimmed, chatgptTitle.trim() || undefined);
 
-      setImportResults((prev) => [
-        ...prev,
+      addImportResults([
         {
           id: data.id,
           source: 'chatgpt',
@@ -267,13 +276,12 @@ export default function ImportPage() {
       const data = await importUrls(db, [trimmedUrl]);
 
       if (data.results && data.results.length > 0) {
-        setImportResults((prev) => [
-          ...prev,
-          ...data.results.map((r: { id: string; url: string; status: 'success' | 'error'; title?: string; summary?: string; error?: string }) => ({
+        addImportResults(
+          data.results.map((r: { id: string; url: string; status: 'success' | 'error'; title?: string; summary?: string; error?: string }) => ({
             ...r,
             source: 'url' as const,
-          })),
-        ]);
+          }))
+        );
       }
 
       setUrlInput('');
@@ -310,8 +318,7 @@ export default function ImportPage() {
 
       const data = importText(db, trimmedText, pasteTitle.trim() || undefined);
 
-      setImportResults((prev) => [
-        ...prev,
+      addImportResults([
         {
           id: data.id,
           source: 'text',
@@ -351,8 +358,7 @@ export default function ImportPage() {
 
       const data = await importFile(db, file);
 
-      setImportResults((prev) => [
-        ...prev,
+      addImportResults([
         {
           id: data.id,
           source: 'file',
@@ -768,16 +774,16 @@ export default function ImportPage() {
                       </p>
                     )}
 
-                    {/* Process button - shown when not yet processed */}
-                    {!result.isProcessed && !result.isProcessing && (
+                    {/* Retry button - shown only after extraction fails */}
+                    {!result.isProcessed && !result.isProcessing && result.processError && (
                       <button
-                        onClick={() => handleProcessImport(idx)}
+                        onClick={() => handleProcessImport(result.id)}
                         className="mt-3 inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-primary-600 dark:text-primary-400 hover:text-ink dark:hover:text-gray-100 transition-colors"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
-                        Extract Insights for Review
+                        Retry extraction
                       </button>
                     )}
 

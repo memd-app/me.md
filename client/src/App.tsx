@@ -8,7 +8,6 @@ import AppLayout from '@/components/layout/AppLayout';
 import OnboardingPage from '@/pages/OnboardingPage';
 import DashboardPage from '@/pages/DashboardPage';
 import TopicsPage from '@/pages/TopicsPage';
-import KnowledgeGraphPage from '@/pages/KnowledgeGraphPage';
 import ProfilePage from '@/pages/ProfilePage';
 import VerificationPage from '@/pages/VerificationPage';
 import BookmarksPage from '@/pages/BookmarksPage';
@@ -77,7 +76,7 @@ function App() {
             <Route path="session/:id" element={<LegacySessionRedirect />} />
             <Route path="notes" element={<NotesPage />} />
             <Route path="notes/bookmarks" element={<BookmarksPage />} />
-            <Route path="graph" element={<KnowledgeGraphPage />} />
+            <Route path="graph" element={<Navigate to="/app/export" replace />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="review" element={<VerificationPage />} />
             <Route path="chat" element={<ChatPage />} />

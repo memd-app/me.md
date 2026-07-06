@@ -77,6 +77,7 @@ export default function VerificationPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
+  const [privacyTogglingId, setPrivacyTogglingId] = useState<string | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -382,6 +383,43 @@ export default function VerificationPage() {
     }
   };
 
+  const handleTogglePrivacyTier = useCallback((insight: Insight) => {
+    if (!user || bulk || privacyTogglingId) return;
+    const currentTier = insight.privacyTier === 'never_export' ? 'never_export' : 'exportable';
+    const newTier = currentTier === 'exportable' ? 'never_export' : 'exportable';
+
+    setPrivacyTogglingId(insight.id);
+    try {
+      const data = editInsight(db, insight.id, {
+        privacyTier: newTier,
+        expectedUpdatedAt: insight.updatedAt || undefined,
+      });
+      enqueueVaultWrite(db, insight.id, newTier === 'never_export' ? 'reject' : 'verify');
+
+      setPendingInsights(prev =>
+        prev.map(item =>
+          item.id === insight.id
+            ? { ...item, privacyTier: data.insight.privacyTier, updatedAt: data.insight.updatedAt }
+            : item
+        )
+      );
+      setVerifiedInsights(prev =>
+        prev.map(item =>
+          item.id === insight.id
+            ? { ...item, privacyTier: data.insight.privacyTier, updatedAt: data.insight.updatedAt }
+            : item
+        )
+      );
+      addToast(newTier === 'never_export' ? 'Insight marked never export' : 'Insight marked exportable', 'success');
+    } catch (err) {
+      console.error('Failed to update privacy tier:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update privacy tier');
+      addToast('Failed to update privacy tier', 'error');
+    } finally {
+      setPrivacyTogglingId(null);
+    }
+  }, [addToast, bulk, db, privacyTogglingId, user]);
+
   const handleToggleHistory = async (insightId: string) => {
     // Toggle off if already showing this insight's history
     if (historyState?.insightId === insightId) {
@@ -567,12 +605,15 @@ export default function VerificationPage() {
     );
   }
 
-  const neverExportCount = verifiedInsights.filter(i => i.privacyTier === 'never_export').length;
+  const neverExportCount = [
+    ...pendingInsights,
+    ...verifiedInsights,
+  ].filter(i => i.privacyTier === 'never_export').length;
   const queueStats: Array<{ key: string; value: number; label: string; note?: string }> = [
     { key: 'pending', value: stats.pending, label: 'Awaiting review' },
     { key: 'verified', value: stats.verified, label: 'Verified' },
     { key: 'rejected', value: stats.rejected, label: 'Rejected' },
-    { key: 'neverExport', value: neverExportCount, label: 'Never export', note: 'Managed in Settings' },
+    { key: 'neverExport', value: neverExportCount, label: 'Never export', note: 'Set on cards' },
   ];
   const confirmCount = confirm?.group.count ?? 0;
   const hasPending = stats.pending > 0;
@@ -677,20 +718,8 @@ export default function VerificationPage() {
 
       {/* Queue status — editorial numerals, like the Desk's "At a glance" */}
       <section aria-label="Queue status" className="mb-10">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-5">
           <SectionHeading>Queue status</SectionHeading>
-          {hasPending && (
-            <button
-              type="button"
-              onClick={() => {
-                if (!bulk) setConfirmReevaluate(true);
-              }}
-              disabled={bulk !== null}
-              className="text-[11px] uppercase tracking-[0.08em] font-semibold text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors disabled:opacity-50"
-            >
-              Re-evaluate queue
-            </button>
-          )}
         </div>
         <div className="flex flex-wrap gap-y-6">
           {queueStats.map((item, idx) => (
@@ -821,6 +850,16 @@ export default function VerificationPage() {
                         >
                           Reject all ({group.count})
                         </button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            if (!bulk) setConfirmReevaluate(true);
+                          }}
+                          disabled={bulk !== null || !hasPending}
+                        >
+                          Re-evaluate queue
+                        </Button>
                         <Button
                           variant="secondary"
                           size="sm"
@@ -1007,18 +1046,33 @@ export default function VerificationPage() {
                   </>
                 )}
 
-                {/* Privacy tier indicator — passive small-caps marker, managed in Settings (single owner) */}
+                {/* Privacy tier toggle */}
                 <span aria-hidden="true" className="text-gray-300 dark:text-gray-700">&middot;</span>
-                <span
-                  className={`inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.08em] font-medium ${
-                    insight.privacyTier === 'never_export'
-                      ? 'text-gray-500 dark:text-gray-400'
-                      : 'text-primary-600 dark:text-primary-400'
-                  }`}
-                  title="Privacy tier is managed in Settings"
+                <button
+                  type="button"
+                  onClick={() => handleTogglePrivacyTier(insight)}
+                  disabled={bulk !== null || privacyTogglingId === insight.id}
+                  className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] font-medium text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors disabled:opacity-50"
+                  role="switch"
+                  aria-checked={insight.privacyTier !== 'never_export'}
+                  title={insight.privacyTier === 'never_export' ? 'Mark as exportable' : 'Mark as never export'}
                 >
+                  <span
+                    aria-hidden="true"
+                    className={`relative inline-flex h-3.5 w-6 rounded-full transition-colors ${
+                      insight.privacyTier === 'never_export'
+                        ? 'bg-gray-200 dark:bg-dark-border'
+                        : 'bg-primary-500 dark:bg-primary-400'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-2.5 w-2.5 rounded-full bg-white transition-transform ${
+                        insight.privacyTier === 'never_export' ? 'translate-x-0.5' : 'translate-x-3'
+                      }`}
+                    />
+                  </span>
                   {insight.privacyTier === 'never_export' ? 'Never export' : 'Exportable'}
-                </span>
+                </button>
               </div>
 
               {/* Action buttons - hidden during edit mode */}

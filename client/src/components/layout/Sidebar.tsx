@@ -1,10 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
-import { useDatabase } from '@/contexts/DatabaseContext';
-import { assessmentAttempts } from '@/db/schema';
-import { eq } from 'drizzle-orm';
-import { LOCAL_USER_ID } from '@/contexts/UserContext';
 
 interface NavItem {
   to: string;
@@ -35,7 +31,7 @@ const navGroups: NavGroup[] = [
       { to: '/app/topics', label: 'Topics' },
       { to: '/app/notes', label: 'Notes' },
       { to: '/app/import', label: 'Import' },
-      { to: '/app/graph', label: 'Graph' },
+      { to: '/app/export', label: 'Export & Sync' },
     ],
   },
   {
@@ -58,9 +54,7 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen, onClose, collapsed = false, onToggleCollapse }: SidebarProps) {
   const { user } = useUser();
-  const db = useDatabase();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const [hasNeverTakenTest, setHasNeverTakenTest] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
     try {
       return JSON.parse(localStorage.getItem(NAV_GROUPS_KEY) || '{}');
@@ -76,22 +70,6 @@ export default function Sidebar({ isOpen, onClose, collapsed = false, onToggleCo
       return next;
     });
   };
-
-  // Check if user has ever taken the personality assessment (from local DB)
-  useEffect(() => {
-    if (!user) return;
-    try {
-      const attempts = db.select().from(assessmentAttempts)
-        .where(eq(assessmentAttempts.userId, LOCAL_USER_ID))
-        .all();
-      const hasCompleted = attempts.some((a: { status: string | null }) => a.status === 'completed');
-      setHasNeverTakenTest(!hasCompleted);
-    } catch {
-      // ignore - table may not exist yet
-    }
-  }, [user, db]);
-
-
 
   // Trap focus in sidebar when open on mobile + handle Escape key
   useEffect(() => {
@@ -195,15 +173,13 @@ export default function Sidebar({ isOpen, onClose, collapsed = false, onToggleCo
                   )}
                   {!isCollapsed && (
                     <ul className="space-y-0.5" role="list">
-                      {group.items.map((item) => {
-                        const badge = item.to === '/app/personality' && hasNeverTakenTest;
-                        return (
+                      {group.items.map((item) => (
                           <li key={item.to} role="listitem">
                             <NavLink
                               to={item.to}
                               end={item.end}
                               onClick={onClose}
-                              aria-label={badge ? `${item.label} (not taken yet)` : item.label}
+                              aria-label={item.label}
                               className={({ isActive }) =>
                                 `group flex items-center gap-3 px-3 py-1.5 rounded-md font-sans text-[13.5px] font-medium transition-colors duration-150 ${
                                   isActive
@@ -221,18 +197,11 @@ export default function Sidebar({ isOpen, onClose, collapsed = false, onToggleCo
                                     }`}
                                   />
                                   <span className="flex-1">{item.label}</span>
-                                  {badge && (
-                                    <span
-                                      className="w-1.5 h-1.5 rounded-full bg-primary-500 animate-pulse"
-                                      aria-label="Not taken yet"
-                                    />
-                                  )}
                                 </>
                               )}
                             </NavLink>
                           </li>
-                        );
-                      })}
+                      ))}
                     </ul>
                   )}
                 </div>

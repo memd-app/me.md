@@ -89,16 +89,17 @@ function hasNoteContent(note: Note, format: NoteFormat): boolean {
   }
 }
 
-function getAvailableNoteFormats(note: Note): NoteFormat[] {
-  return [
-    ...ACTIVE_NOTE_FORMATS,
-    ...LEGACY_NOTE_FORMATS.filter(format => hasNoteContent(note, format)),
-  ];
+function getSelectableNoteFormats(note: Note): NoteFormat[] {
+  return ACTIVE_NOTE_FORMATS.filter(format => hasNoteContent(note, format));
 }
 
 function getInitialNoteFormat(note: Note): NoteFormat {
   const selected = (note.selectedFormat || 'full_analysis') as NoteFormat;
-  return getAvailableNoteFormats(note).includes(selected) ? selected : 'full_analysis';
+  const activeFormats = getSelectableNoteFormats(note);
+  if (activeFormats.includes(selected)) return selected;
+  if (activeFormats.length > 0) return activeFormats[0];
+  if (LEGACY_NOTE_FORMATS.includes(selected) && hasNoteContent(note, selected)) return selected;
+  return LEGACY_NOTE_FORMATS.find(format => hasNoteContent(note, format)) ?? 'full_analysis';
 }
 
 function canRegenerateFormat(format: NoteFormat): boolean {
@@ -232,6 +233,7 @@ export default function SessionPage() {
   const [isDistilling, setIsDistilling] = useState(false);
   const [distillStep, setDistillStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [usedOfflineFallback, setUsedOfflineFallback] = useState(false);
   const [note, setNote] = useState<Note | null>(null);
   const [noteInsights, setNoteInsights] = useState<Insight[]>([]);
   const [selectedFormat, setSelectedFormat] = useState<NoteFormat>('full_analysis');
@@ -254,6 +256,7 @@ export default function SessionPage() {
   const [isSavingConnections, setIsSavingConnections] = useState(false);
   const [connectionsSaved, setConnectionsSaved] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [isNoteActionsOpen, setIsNoteActionsOpen] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -497,6 +500,7 @@ export default function SessionPage() {
   const handleRegenerateContent = async () => {
     if (!user || !session || !note || isRegenerating || !canRegenerateFormat(selectedFormat)) return;
 
+    setIsNoteActionsOpen(false);
     setIsRegenerating(true);
     setRegenerateSuccess(false);
     setError(null);
@@ -518,6 +522,7 @@ export default function SessionPage() {
 
   // Start editing note content
   const handleStartEdit = () => {
+    setIsNoteActionsOpen(false);
     setEditContent(getNoteContent());
     setIsEditingNote(true);
     setNoteSaveSuccess(false);
@@ -590,6 +595,7 @@ export default function SessionPage() {
   // Download note as markdown file
   const handleDownloadNote = () => {
     if (!note) return;
+    setIsNoteActionsOpen(false);
     const content = getNoteContent();
     const title = note.title || 'Untitled Note';
     // Build markdown header with metadata
@@ -802,7 +808,11 @@ export default function SessionPage() {
       // We'll update after the generator starts
       let accumulatedContent = '';
 
-      const generator = sendMessageService(db, session.id, trimmedContent, { isVoiceInput: isVoice });
+      setUsedOfflineFallback(false);
+      const generator = sendMessageService(db, session.id, trimmedContent, {
+        isVoiceInput: isVoice,
+        onFallback: () => setUsedOfflineFallback(true),
+      });
 
       for await (const chunk of generator) {
         if (abortController.signal.aborted) break;
@@ -886,7 +896,10 @@ export default function SessionPage() {
       if (lastMsg && lastMsg.role === 'user') {
         // AI response failed - need to regenerate it using the retry service
         let accumulatedContent = '';
-        const generator = retryMessage(db, session.id);
+        setUsedOfflineFallback(false);
+        const generator = retryMessage(db, session.id, {
+          onFallback: () => setUsedOfflineFallback(true),
+        });
 
         for await (const chunk of generator) {
           if (abortController.signal.aborted) break;
@@ -913,7 +926,10 @@ export default function SessionPage() {
       } else {
         // The user message wasn't saved, resend it
         let accumulatedContent = '';
-        const generator = sendMessageService(db, session.id, failedMessageContent!);
+        setUsedOfflineFallback(false);
+        const generator = sendMessageService(db, session.id, failedMessageContent!, {
+          onFallback: () => setUsedOfflineFallback(true),
+        });
 
         for await (const chunk of generator) {
           if (abortController.signal.aborted) break;
@@ -1123,6 +1139,7 @@ export default function SessionPage() {
 
   // Show distillation view
   if (showDistillation && note) {
+    const selectableFormats = getSelectableNoteFormats(note);
     return (
       <div className="flex flex-col h-full max-w-4xl mx-auto -m-6">
         {/* Header with breadcrumb */}
@@ -1170,24 +1187,27 @@ export default function SessionPage() {
         <div className="px-6 py-3 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-dark-border shrink-0">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 overflow-x-auto">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-300 shrink-0">Format:</span>
-              {getAvailableNoteFormats(note).map((format) => (
-                <button
-                  key={format}
-                  onClick={() => handleFormatChange(format)}
-                  disabled={isRegenerating || isSavingNote}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors shrink-0 ${
-                    selectedFormat === format
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  {FORMAT_LABELS[format]}
-                </button>
-              ))}
+              {selectableFormats.length > 1 && (
+                <>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-300 shrink-0">Format:</span>
+                  {selectableFormats.map((format) => (
+                    <button
+                      key={format}
+                      onClick={() => handleFormatChange(format)}
+                      disabled={isRegenerating || isSavingNote}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors shrink-0 ${
+                        selectedFormat === format
+                          ? 'bg-primary-600 text-white'
+                          : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      {FORMAT_LABELS[format]}
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              {/* Copy to clipboard button */}
               {!isEditingNote && (
                 <button
                   onClick={handleCopyNote}
@@ -1216,35 +1236,6 @@ export default function SessionPage() {
                   )}
                 </button>
               )}
-              {/* Download as markdown button */}
-              {!isEditingNote && (
-                <button
-                  onClick={handleDownloadNote}
-                  disabled={isRegenerating}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Download note as markdown file"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Download .md
-                </button>
-              )}
-              {/* Edit button */}
-              {!isEditingNote && (
-                <button
-                  onClick={handleStartEdit}
-                  disabled={isRegenerating}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Edit note content"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                  Edit
-                </button>
-              )}
-              {/* Save and Cancel buttons during editing */}
               {isEditingNote && (
                 <>
                   <button
@@ -1275,28 +1266,47 @@ export default function SessionPage() {
                   </button>
                 </>
               )}
-              {/* Regenerate button */}
               {!isEditingNote && (
-                <button
-                  onClick={handleRegenerateContent}
-                  disabled={isRegenerating || !canRegenerateFormat(selectedFormat)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={canRegenerateFormat(selectedFormat) ? 'Regenerate note content in current format from session messages' : 'Regeneration is only available for Full Analysis and JSON'}
-                >
-                  {isRegenerating ? (
-                    <>
-                      <div className="animate-spin w-3 h-3 border-2 border-amber-300 border-t-amber-600 rounded-full" />
-                      Regenerating...
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      Regenerate
-                    </>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsNoteActionsOpen((open) => !open)}
+                    disabled={isRegenerating}
+                    className="flex items-center justify-center w-8 h-8 text-lg leading-none rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="More note actions"
+                    aria-label="More note actions"
+                    aria-expanded={isNoteActionsOpen}
+                  >
+                    ⋯
+                  </button>
+                  {isNoteActionsOpen && (
+                    <div className="absolute right-0 top-full z-20 mt-2 w-44 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg py-1">
+                      <button
+                        type="button"
+                        onClick={handleDownloadNote}
+                        className="block w-full text-left px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      >
+                        Download .md
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleStartEdit}
+                        className="block w-full text-left px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRegenerateContent}
+                        disabled={!canRegenerateFormat(selectedFormat)}
+                        className="block w-full text-left px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={canRegenerateFormat(selectedFormat) ? 'Regenerate note content in current format from session messages' : 'Regeneration is only available for Full Analysis and JSON'}
+                      >
+                        {isRegenerating ? 'Regenerating…' : 'Regenerate'}
+                      </button>
+                    </div>
                   )}
-                </button>
+                </div>
               )}
             </div>
           </div>
@@ -1687,6 +1697,17 @@ export default function SessionPage() {
               Finish & Distill
             </button>
           </div>
+        </div>
+      )}
+
+      {isSessionActive && usedOfflineFallback && (
+        <div className="px-6 py-3 bg-panel dark:bg-dark-card border-b border-rule dark:border-dark-border shrink-0">
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            Offline mode — using scripted questions. Add your Anthropic API key in{' '}
+            <Link to="/app/settings" className="text-primary-600 dark:text-primary-400 hover:underline">
+              Settings
+            </Link>.
+          </p>
         </div>
       )}
 
