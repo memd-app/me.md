@@ -1,17 +1,24 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '../contexts/ToastContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
+import Modal from '@/components/common/Modal';
 import { Badge, Button, EmptyState, PageHeader, SectionHeading } from '@/components/ui';
 import { getInsightStats, getPendingInsights, getAllInsights, verifyInsight, rejectInsight, editInsight, getInsight } from '@/services/insights';
 import { enqueueVaultWrite } from '@/services/vaultWriteThrough';
 import { formatDateTime as sharedFormatDateTime, formatShortDate } from '@/utils/dateFormat';
+import { groupPendingInsights, NO_TOPIC_KEY, type InsightGroup } from '@/utils/reviewGrouping';
+import { computeNextActive, resolveTriageIntent } from '@/utils/reviewKeyboard';
+
+const BULK_CHUNK_SIZE = 20;
+
+type BulkKind = 'verify' | 'reject';
 
 interface Insight {
   id: string;
   noteId: string;
-  topicId: string;
+  topicId: string | null;
   userId: string;
   content: string;
   confidenceScore: number | null;
@@ -69,6 +76,22 @@ export default function VerificationPage() {
   const [editSaving, setEditSaving] = useState(false);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [historyState, setHistoryState] = useState<HistoryState | null>(null);
+  const [activeGroupKey, setActiveGroupKey] = useState<string | null>(null);
+  const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const [bulk, setBulk] = useState<{
+    kind: BulkKind;
+    groupKey: string;
+    groupName: string;
+    total: number;
+    done: number;
+  } | null>(null);
+  const [confirm, setConfirm] = useState<{
+    kind: BulkKind;
+    group: InsightGroup;
+  } | null>(null);
+  const bulkCancelRef = useRef(false);
+  const cardRefs = useRef(new Map<string, HTMLDivElement>());
+  const previousVisibleIdsRef = useRef<string[]>([]);
 
   const fetchData = useCallback(async (signal?: AbortSignal) => {
     if (!user) return;
@@ -98,12 +121,39 @@ export default function VerificationPage() {
     return () => controller.abort();
   }, [fetchData]);
 
-  const handleApprove = async (insightId: string) => {
-    if (!user) return;
+  const groups = useMemo(() => groupPendingInsights(pendingInsights), [pendingInsights]);
+  const visibleInsights = useMemo(
+    () =>
+      activeGroupKey
+        ? pendingInsights.filter(insight => (insight.topicId ?? NO_TOPIC_KEY) === activeGroupKey)
+        : pendingInsights,
+    [activeGroupKey, pendingInsights],
+  );
+  const activeGroup = activeGroupKey ? groups.find(group => group.key === activeGroupKey) ?? null : null;
+
+  const focusCard = useCallback((id: string | null) => {
+    if (!id) return;
+    window.setTimeout(() => {
+      cardRefs.current.get(id)?.focus();
+    }, 0);
+  }, []);
+
+  const approveOne = useCallback((id: string) => {
+    verifyInsight(db, id);
+    enqueueVaultWrite(db, id, 'verify');
+  }, [db]);
+
+  const rejectOne = useCallback((id: string) => {
+    rejectInsight(db, id, 'Rejected by user');
+    enqueueVaultWrite(db, id, 'reject');
+  }, [db]);
+
+  const handleApprove = useCallback((insightId: string) => {
+    if (!user || bulk || actionInProgress) return;
     setActionInProgress(insightId);
+    const orderIds = visibleInsights.map(insight => insight.id);
     try {
-      verifyInsight(db, insightId);
-      enqueueVaultWrite(db, insightId, 'verify');
+      approveOne(insightId);
 
       // Remove from pending list and update stats
       setPendingInsights(prev => prev.filter(i => i.id !== insightId));
@@ -112,6 +162,9 @@ export default function VerificationPage() {
         pending: prev.pending - 1,
         verified: prev.verified + 1,
       }));
+      const nextId = computeNextActive(orderIds, insightId, 'approve');
+      setActiveCardId(nextId);
+      focusCard(nextId);
       addToast('Insight verified', 'success');
     } catch (err) {
       console.error('Failed to approve insight:', err);
@@ -120,14 +173,14 @@ export default function VerificationPage() {
     } finally {
       setActionInProgress(null);
     }
-  };
+  }, [actionInProgress, addToast, approveOne, bulk, focusCard, user, visibleInsights]);
 
-  const handleReject = async (insightId: string) => {
-    if (!user) return;
+  const handleReject = useCallback((insightId: string) => {
+    if (!user || bulk || actionInProgress) return;
     setActionInProgress(insightId);
+    const orderIds = visibleInsights.map(insight => insight.id);
     try {
-      rejectInsight(db, insightId, 'Rejected by user');
-      enqueueVaultWrite(db, insightId, 'reject');
+      rejectOne(insightId);
 
       // Remove from pending list and update stats
       setPendingInsights(prev => prev.filter(i => i.id !== insightId));
@@ -136,6 +189,9 @@ export default function VerificationPage() {
         pending: prev.pending - 1,
         rejected: prev.rejected + 1,
       }));
+      const nextId = computeNextActive(orderIds, insightId, 'reject');
+      setActiveCardId(nextId);
+      focusCard(nextId);
       addToast('Insight rejected', 'warning');
     } catch (err) {
       console.error('Failed to reject insight:', err);
@@ -144,9 +200,80 @@ export default function VerificationPage() {
     } finally {
       setActionInProgress(null);
     }
-  };
+  }, [actionInProgress, addToast, bulk, focusCard, rejectOne, user, visibleInsights]);
 
-  const handleStartEdit = (insight: Insight) => {
+  const runBulk = useCallback(async (kind: BulkKind, group: InsightGroup) => {
+    if (bulk) return;
+
+    const ids = group.insightIds.slice();
+    bulkCancelRef.current = false;
+    setBulk({ kind, groupKey: group.key, groupName: group.name, total: ids.length, done: 0 });
+
+    const processedIds: string[] = [];
+    let flushedCount = 0;
+    let done = 0;
+
+    const flushProcessed = (batchIds: string[]) => {
+      if (batchIds.length === 0) return;
+      const processedSet = new Set(batchIds);
+      setPendingInsights(prev => prev.filter(insight => !processedSet.has(insight.id)));
+      setStats(prev =>
+        kind === 'verify'
+          ? { ...prev, pending: prev.pending - batchIds.length, verified: prev.verified + batchIds.length }
+          : { ...prev, pending: prev.pending - batchIds.length, rejected: prev.rejected + batchIds.length }
+      );
+    };
+
+    for (let i = 0; i < ids.length; i++) {
+      if (bulkCancelRef.current) break;
+
+      const id = ids[i];
+      try {
+        if (kind === 'verify') {
+          approveOne(id);
+        } else {
+          rejectOne(id);
+        }
+        processedIds.push(id);
+        done++;
+      } catch (err) {
+        console.error('Bulk item failed', id, err);
+      }
+
+      if ((i + 1) % BULK_CHUNK_SIZE === 0 || i === ids.length - 1) {
+        const batchIds = processedIds.slice(flushedCount);
+        flushProcessed(batchIds);
+        flushedCount = processedIds.length;
+        setBulk(current => current && ({ ...current, done }));
+        await new Promise<void>(resolve => setTimeout(resolve, 0));
+      }
+    }
+
+    const finalBatchIds = processedIds.slice(flushedCount);
+    flushProcessed(finalBatchIds);
+    setBulk(current => current && ({ ...current, done }));
+
+    const verb = kind === 'verify' ? 'Approved' : 'Rejected';
+    addToast(
+      bulkCancelRef.current
+        ? `${verb} ${done} of ${ids.length} — cancelled`
+        : `${verb} ${done} insight${done === 1 ? '' : 's'}`,
+      kind === 'verify' ? 'success' : 'warning',
+    );
+    setBulk(null);
+
+    const processedSet = new Set(processedIds);
+    setActiveGroupKey(key => {
+      if (key !== group.key) return key;
+      const hasRemaining = pendingInsights.some(
+        insight => (insight.topicId ?? NO_TOPIC_KEY) === group.key && !processedSet.has(insight.id),
+      );
+      return hasRemaining ? key : null;
+    });
+  }, [addToast, approveOne, bulk, pendingInsights, rejectOne]);
+
+  const handleStartEdit = useCallback((insight: Insight) => {
+    if (bulk) return;
     setEditState({ insightId: insight.id, editedContent: insight.content, expectedUpdatedAt: insight.updatedAt });
     // Focus textarea after render
     setTimeout(() => {
@@ -157,7 +284,7 @@ export default function VerificationPage() {
         editTextareaRef.current.setSelectionRange(len, len);
       }
     }, 50);
-  };
+  }, [bulk]);
 
   const handleCancelEdit = () => {
     setEditState(null);
@@ -226,6 +353,81 @@ export default function VerificationPage() {
     }
   };
 
+  useEffect(() => {
+    if (activeGroupKey && !groups.some(group => group.key === activeGroupKey)) {
+      setActiveGroupKey(null);
+    }
+  }, [activeGroupKey, groups]);
+
+  useEffect(() => {
+    const currentIds = visibleInsights.map(insight => insight.id);
+    const previousIds = previousVisibleIdsRef.current;
+
+    if (activeCardId && !currentIds.includes(activeCardId)) {
+      const candidateId = computeNextActive(previousIds, activeCardId, 'remove');
+      const nextId = candidateId && currentIds.includes(candidateId)
+        ? candidateId
+        : currentIds[0] ?? null;
+      setActiveCardId(nextId);
+      focusCard(nextId);
+    }
+
+    previousVisibleIdsRef.current = currentIds;
+  }, [activeCardId, focusCard, visibleInsights]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const el = document.activeElement as HTMLElement | null;
+      const activeCardEl = activeCardId ? cardRefs.current.get(activeCardId) ?? null : null;
+      const intent = resolveTriageIntent({
+        key: e.key,
+        hasActiveCard: !!activeCardId && el === activeCardEl,
+        isEditing: editState !== null,
+        isConfirmOpen: confirm !== null,
+        isBulkRunning: bulk !== null,
+        targetIsFormField: !!el && (
+          ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable
+        ),
+      });
+
+      if (!intent || !activeCardId) return;
+      e.preventDefault();
+
+      if (intent === 'approve') {
+        handleApprove(activeCardId);
+        return;
+      }
+
+      if (intent === 'reject') {
+        handleReject(activeCardId);
+        return;
+      }
+
+      if (intent === 'edit') {
+        const insight = visibleInsights.find(item => item.id === activeCardId);
+        if (insight) handleStartEdit(insight);
+        return;
+      }
+
+      const nextId = computeNextActive(visibleInsights.map(insight => insight.id), activeCardId, 'next');
+      setActiveCardId(nextId);
+      focusCard(nextId);
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [
+    activeCardId,
+    bulk,
+    confirm,
+    editState,
+    focusCard,
+    handleApprove,
+    handleReject,
+    handleStartEdit,
+    visibleInsights,
+  ]);
+
   const getActionLabel = (action: string): string => {
     switch (action) {
       case 'verified': return 'Verified';
@@ -267,6 +469,19 @@ export default function VerificationPage() {
 
   const formatDate = (dateStr: string | null) => formatShortDate(dateStr);
 
+  const getOriginLabel = (origin: InsightGroup['origin']) => {
+    switch (origin) {
+      case 'session':
+        return 'Session';
+      case 'mixed':
+        return 'Mixed';
+      default:
+        return 'Imported';
+    }
+  };
+
+  const insightNoun = (count: number) => `insight${count === 1 ? '' : 's'}`;
+
   if (isLoading) {
     return (
       <div className="max-w-4xl mx-auto">
@@ -299,6 +514,7 @@ export default function VerificationPage() {
     { key: 'rejected', value: stats.rejected, label: 'Rejected' },
     { key: 'neverExport', value: neverExportCount, label: 'Never export', note: 'Managed in Settings' },
   ];
+  const confirmCount = confirm?.group.count ?? 0;
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -306,6 +522,56 @@ export default function VerificationPage() {
         title="Review"
         subtitle="Everything the interviewer extracted, awaiting your judgment."
       />
+
+      <Modal
+        open={confirm !== null}
+        onClose={() => setConfirm(null)}
+        title={
+          confirm
+            ? `${confirm.kind === 'verify' ? 'Approve' : 'Reject'} all in ${confirm.group.name}`
+            : 'Review source'
+        }
+        footer={confirm && (
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setConfirm(null)}>
+              Cancel
+            </Button>
+            {confirm.kind === 'verify' ? (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  const payload = confirm;
+                  setConfirm(null);
+                  void runBulk(payload.kind, payload.group);
+                }}
+              >
+                Approve {confirmCount}
+              </Button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  const payload = confirm;
+                  setConfirm(null);
+                  void runBulk(payload.kind, payload.group);
+                }}
+                className="inline-flex items-center px-3.5 py-1.5 text-sm font-semibold text-gray-600 dark:text-gray-400 border border-rule dark:border-dark-border rounded-md hover:text-primary-600 dark:hover:text-primary-400 hover:border-primary-400 dark:hover:border-primary-500 transition-colors disabled:opacity-50"
+              >
+                Reject {confirmCount}
+              </button>
+            )}
+          </>
+        )}
+      >
+        {confirm && (
+          <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+            {confirm.kind === 'verify'
+              ? `This verifies ${confirmCount} ${insightNoun(confirmCount)} and writes each to your vault. You can still edit or reject any of them afterward.`
+              : `This rejects ${confirmCount} ${insightNoun(confirmCount)}. Rejected insights are removed from your profile export.`}
+          </p>
+        )}
+      </Modal>
 
       {/* Error message */}
       {error && (
@@ -341,6 +607,107 @@ export default function VerificationPage() {
         </div>
       </section>
 
+      {groups.length > 0 && (
+        <section aria-label="Review by source" className="mb-10">
+          <SectionHeading className="mb-4">Review by source</SectionHeading>
+          <div className="border-y border-rule dark:border-dark-border divide-y divide-rule dark:divide-dark-border">
+            {groups.map(group => {
+              const isActive = activeGroupKey === group.key;
+              const groupBulk = bulk?.groupKey === group.key ? bulk : null;
+              const progressPercent = groupBulk && groupBulk.total > 0
+                ? Math.round((groupBulk.done / groupBulk.total) * 100)
+                : 0;
+
+              return (
+                <div
+                  key={group.key}
+                  className={`py-4 transition-colors ${
+                    isActive ? 'bg-panel/60 dark:bg-dark-card/60 px-4 -mx-4' : ''
+                  }`}
+                >
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <h2 className="font-serif text-xl leading-tight text-gray-900 dark:text-white truncate">
+                          {group.name}
+                        </h2>
+                        <span className="text-[11px] uppercase tracking-[0.08em] font-semibold text-gray-500 dark:text-gray-400">
+                          {getOriginLabel(group.origin)}
+                        </span>
+                        <span className="text-[11px] uppercase tracking-[0.08em] font-semibold text-primary-600 dark:text-primary-400">
+                          {group.count}
+                        </span>
+                      </div>
+                      {group.preview.length > 0 && (
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 truncate">
+                          {group.preview.join(' · ')}
+                        </p>
+                      )}
+                    </div>
+
+                    {groupBulk ? (
+                      <div className="sm:min-w-[220px]" aria-live="polite">
+                        <div className="flex items-center justify-end gap-3">
+                          <span className="text-sm text-gray-500 dark:text-gray-400">
+                            {groupBulk.done} of {groupBulk.total}…
+                          </span>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              bulkCancelRef.current = true;
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                        <div className="mt-2 h-px bg-rule dark:bg-dark-border">
+                          <div
+                            className="h-px bg-primary-500 transition-[width] duration-150"
+                            style={{ width: `${progressPercent}%` }}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => {
+                            if (!bulk) setConfirm({ kind: 'verify', group });
+                          }}
+                          disabled={bulk !== null}
+                        >
+                          Approve all ({group.count})
+                        </Button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!bulk) setConfirm({ kind: 'reject', group });
+                          }}
+                          disabled={bulk !== null}
+                          className="inline-flex items-center px-3.5 py-1.5 text-sm font-semibold text-gray-600 dark:text-gray-400 border border-rule dark:border-dark-border rounded-md hover:text-primary-600 dark:hover:text-primary-400 hover:border-primary-400 dark:hover:border-primary-500 transition-colors disabled:opacity-50"
+                        >
+                          Reject all ({group.count})
+                        </button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setActiveGroupKey(group.key)}
+                          disabled={bulk !== null}
+                        >
+                          Review individually
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {pendingInsights.length === 0 ? (
         <EmptyState
           message="Nothing awaiting review. Finish an interview session and new insights will land here."
@@ -348,21 +715,62 @@ export default function VerificationPage() {
         />
       ) : (
         <div className="space-y-5">
+          {activeGroup && (
+            <div className="inline-flex items-center gap-2 rounded-sm border border-rule dark:border-dark-border px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400">
+              <span>
+                <span className="text-[11px] uppercase tracking-[0.08em] font-semibold">Showing:</span> {activeGroup.name}
+              </span>
+              <button
+                type="button"
+                onClick={() => setActiveGroupKey(null)}
+                aria-label="Clear source filter"
+                className="text-gray-400 hover:text-primary-600 dark:text-gray-500 dark:hover:text-primary-400 transition-colors"
+              >
+                ×
+              </button>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {pendingInsights.length} insight{pendingInsights.length !== 1 ? 's' : ''} awaiting review
+              {visibleInsights.length} insight{visibleInsights.length !== 1 ? 's' : ''} awaiting review
             </p>
           </div>
           {/* Keyboard navigation hint */}
           <p className="text-xs text-gray-400 dark:text-gray-600 hidden lg:block" aria-hidden="true">
             <kbd className="px-1.5 py-0.5 rounded-sm border border-rule dark:border-dark-border text-gray-500 dark:text-gray-400 font-mono text-[10px]">Tab</kbd> to navigate review actions
           </p>
-          {pendingInsights.map(insight => (
+          <p className="text-xs text-gray-400 dark:text-gray-600 hidden lg:block" aria-hidden="true">
+            <kbd className="px-1.5 py-0.5 rounded-sm border border-rule dark:border-dark-border text-gray-500 dark:text-gray-400 font-mono text-[10px]">→</kbd> approve · <kbd className="px-1.5 py-0.5 rounded-sm border border-rule dark:border-dark-border text-gray-500 dark:text-gray-400 font-mono text-[10px]">←</kbd> reject · <kbd className="px-1.5 py-0.5 rounded-sm border border-rule dark:border-dark-border text-gray-500 dark:text-gray-400 font-mono text-[10px]">↑</kbd> edit · <kbd className="px-1.5 py-0.5 rounded-sm border border-rule dark:border-dark-border text-gray-500 dark:text-gray-400 font-mono text-[10px]">↓</kbd> next
+          </p>
+          {visibleInsights.length === 0 ? (
+            <EmptyState
+              message="No insights in this source. Clear the source filter to return to the full queue."
+              className="py-16"
+            />
+          ) : visibleInsights.map(insight => (
             <div
               key={insight.id}
               role="article"
-              aria-label={`Insight: ${insight.content.substring(0, 80)}${insight.content.length > 80 ? '...' : ''}. Use the review action buttons to approve, edit, reject, or view history.`}
-              className="card hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
+              tabIndex={0}
+              aria-keyshortcuts="ArrowRight ArrowLeft ArrowUp ArrowDown"
+              aria-label={`Insight: ${insight.content.substring(0, 80)}${insight.content.length > 80 ? '…' : ''}. Use the review action buttons to approve, edit, reject, or view history.`}
+              ref={node => {
+                if (node) {
+                  cardRefs.current.set(insight.id, node);
+                } else {
+                  cardRefs.current.delete(insight.id);
+                }
+              }}
+              onFocus={() => setActiveCardId(insight.id)}
+              onBlur={(e) => {
+                const nextTarget = e.relatedTarget;
+                if (!(nextTarget instanceof Node) || !e.currentTarget.contains(nextTarget)) {
+                  setActiveCardId(current => current === insight.id ? null : current);
+                }
+              }}
+              className={`card hover:border-gray-300 dark:hover:border-gray-600 transition-colors focus:outline-none ${
+                activeCardId === insight.id ? 'ring-2 ring-primary-500 ring-offset-2 ring-offset-paper dark:ring-offset-dark-bg' : ''
+              }`}
             >
               {/* Insight content - view or edit mode */}
               <div className="mb-4">
@@ -375,7 +783,7 @@ export default function VerificationPage() {
                       aria-label="Edit insight content"
                       className="input-field font-serif leading-relaxed resize-y min-h-[80px]"
                       rows={3}
-                      disabled={editSaving}
+                      disabled={editSaving || bulk !== null}
                       onKeyDown={(e) => {
                         if (e.key === 'Escape') {
                           handleCancelEdit();
@@ -388,7 +796,7 @@ export default function VerificationPage() {
                         size="sm"
                         onClick={handleSaveEdit}
                         loading={editSaving}
-                        disabled={editSaving || editState.editedContent.trim() === '' || editState.editedContent.trim() === insight.content}
+                        disabled={editSaving || bulk !== null || editState.editedContent.trim() === '' || editState.editedContent.trim() === insight.content}
                         aria-label="Save edited insight"
                       >
                         Save
@@ -397,7 +805,7 @@ export default function VerificationPage() {
                         variant="secondary"
                         size="sm"
                         onClick={handleCancelEdit}
-                        disabled={editSaving}
+                        disabled={editSaving || bulk !== null}
                         aria-label="Cancel editing"
                       >
                         Cancel
@@ -476,7 +884,7 @@ export default function VerificationPage() {
                     size="sm"
                     onClick={() => handleApprove(insight.id)}
                     loading={actionInProgress === insight.id}
-                    disabled={actionInProgress === insight.id}
+                    disabled={actionInProgress === insight.id || bulk !== null}
                     aria-label="Approve this insight"
                   >
                     Approve
@@ -487,7 +895,7 @@ export default function VerificationPage() {
                     variant="secondary"
                     size="sm"
                     onClick={() => handleStartEdit(insight)}
-                    disabled={actionInProgress === insight.id}
+                    disabled={actionInProgress === insight.id || bulk !== null}
                     aria-label="Edit this insight"
                   >
                     Edit
@@ -496,7 +904,7 @@ export default function VerificationPage() {
                   {/* Reject button — ink-on-rule, turns accent on hover (DESIGN.md; no dedicated red outside confirmations) */}
                   <button
                     onClick={() => handleReject(insight.id)}
-                    disabled={actionInProgress === insight.id}
+                    disabled={actionInProgress === insight.id || bulk !== null}
                     aria-label="Reject this insight"
                     className="inline-flex items-center px-3.5 py-1.5 text-sm font-semibold text-gray-600 dark:text-gray-400 border border-rule dark:border-dark-border rounded-md hover:text-primary-600 dark:hover:text-primary-400 hover:border-primary-400 dark:hover:border-primary-500 transition-colors disabled:opacity-50"
                   >
