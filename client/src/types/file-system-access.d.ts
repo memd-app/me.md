@@ -19,6 +19,7 @@ declare global {
     entries(): AsyncIterableIterator<[string, FileSystemDirectoryHandle | FileSystemFileHandle]>
     getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<FileSystemDirectoryHandle>
     getFileHandle(name: string, options?: { create?: boolean }): Promise<FileSystemFileHandle>
+    removeEntry(name: string, options?: { recursive?: boolean }): Promise<void>
     queryPermission(descriptor?: FileSystemHandlePermissionDescriptor): Promise<PermissionState>
     requestPermission(descriptor?: FileSystemHandlePermissionDescriptor): Promise<PermissionState>
   }

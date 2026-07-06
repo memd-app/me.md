@@ -7,6 +7,7 @@ import { downloadDatabase, downloadForMCP, importDatabaseFile } from '@/db/persi
 import { callAnthropic } from '@/services/anthropic'
 import { formatFullDate } from '@/utils/dateFormat'
 import { getAllInsights, editInsight } from '@/services/insights'
+import { enqueueVaultWrite } from '@/services/vaultWriteThrough'
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning'
 import { PageHeader, SectionHeading, EmptyState, Badge, Button } from '@/components/ui'
 
@@ -135,6 +136,7 @@ function PrivacyTab() {
     setStatus(null)
     try {
       await editInsight(db, insightId, { privacyTier: newTier })
+      enqueueVaultWrite(db, insightId, newTier === 'never_export' ? 'reject' : 'verify')
       setInsights(prev => prev.map(i =>
         i.id === insightId ? { ...i, privacyTier: newTier } : i
       ))

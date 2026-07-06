@@ -5,6 +5,7 @@ import { useToast } from '../contexts/ToastContext';
 import ApiErrorAlert from '@/components/ApiErrorAlert';
 import { Badge, Button, EmptyState, PageHeader, SectionHeading } from '@/components/ui';
 import { getInsightStats, getPendingInsights, getAllInsights, verifyInsight, rejectInsight, editInsight, getInsight } from '@/services/insights';
+import { enqueueVaultWrite } from '@/services/vaultWriteThrough';
 import { formatDateTime as sharedFormatDateTime, formatShortDate } from '@/utils/dateFormat';
 
 interface Insight {
@@ -102,6 +103,7 @@ export default function VerificationPage() {
     setActionInProgress(insightId);
     try {
       verifyInsight(db, insightId);
+      enqueueVaultWrite(db, insightId, 'verify');
 
       // Remove from pending list and update stats
       setPendingInsights(prev => prev.filter(i => i.id !== insightId));
@@ -125,6 +127,7 @@ export default function VerificationPage() {
     setActionInProgress(insightId);
     try {
       rejectInsight(db, insightId, 'Rejected by user');
+      enqueueVaultWrite(db, insightId, 'reject');
 
       // Remove from pending list and update stats
       setPendingInsights(prev => prev.filter(i => i.id !== insightId));
@@ -173,6 +176,7 @@ export default function VerificationPage() {
           content: editState.editedContent.trim(),
           expectedUpdatedAt: editState.expectedUpdatedAt || undefined,
         });
+      enqueueVaultWrite(db, editState.insightId, 'edit');
 
       // Update the insight in the pending list with new content
       setPendingInsights(prev =>

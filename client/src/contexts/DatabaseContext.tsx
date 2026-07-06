@@ -2,29 +2,49 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 import { initDatabase, getDb } from '@/db/database'
 import type { SQLJsDatabase as DrizzleDb } from 'drizzle-orm/sql-js'
 import type * as schema from '@/db/schema'
+import { users } from '@/db/schema'
+import { eq } from 'drizzle-orm'
+import { maybeAutoReconcile } from '@/services/vaultWriteThrough'
 
 interface DatabaseContextType {
   db: DrizzleDb<typeof schema> | null
   isLoading: boolean
   error: string | null
+  vaultReconnectNeeded: boolean
+  setVaultReconnectNeeded: (needed: boolean) => void
 }
 
 const DatabaseContext = createContext<DatabaseContextType>({
   db: null,
   isLoading: true,
   error: null,
+  vaultReconnectNeeded: false,
+  setVaultReconnectNeeded: () => {},
 })
 
 export function DatabaseProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [db, setDb] = useState<DrizzleDb<typeof schema> | null>(null)
+  const [vaultReconnectNeeded, setVaultReconnectNeeded] = useState(false)
 
   useEffect(() => {
     initDatabase()
       .then(() => {
-        setDb(getDb())
+        const nextDb = getDb()
+        setDb(nextDb)
         setIsLoading(false)
+
+        const hasUser = nextDb.select({ id: users.id }).from(users).where(eq(users.id, 'local-user')).get()
+        if (hasUser) {
+          void maybeAutoReconcile(nextDb)
+            .then((result) => {
+              setVaultReconnectNeeded('status' in result && result.status === 'needs-reconnect')
+            })
+            .catch((err) => {
+              console.warn('[me.md] Vault auto-reconcile failed:', err)
+            })
+        }
       })
       .catch((err) => {
         console.error('[me.md] Database init failed:', err)
@@ -61,7 +81,7 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <DatabaseContext.Provider value={{ db, isLoading, error }}>
+    <DatabaseContext.Provider value={{ db, isLoading, error, vaultReconnectNeeded, setVaultReconnectNeeded }}>
       {children}
     </DatabaseContext.Provider>
   )
@@ -71,4 +91,12 @@ export function useDatabase() {
   const ctx = useContext(DatabaseContext)
   if (!ctx.db) throw new Error('useDatabase must be used within DatabaseProvider after init')
   return ctx.db
+}
+
+export function useVaultSyncStatus() {
+  const ctx = useContext(DatabaseContext)
+  return {
+    vaultReconnectNeeded: ctx.vaultReconnectNeeded,
+    setVaultReconnectNeeded: ctx.setVaultReconnectNeeded,
+  }
 }

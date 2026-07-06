@@ -435,6 +435,62 @@ export function editInsight(
   return { insight: updated }
 }
 
+export function recordVaultSync(
+  db: Db,
+  id: string,
+  data: { content?: string; contentHash: string; bodyHash: string; syncedAt: string }
+) {
+  const updates: Record<string, any> = {
+    vaultContentHash: data.contentHash,
+    vaultBodyHash: data.bodyHash,
+    vaultSyncedAt: data.syncedAt,
+  }
+
+  if (data.content !== undefined) {
+    updates.content = data.content
+    updates.updatedAt = data.syncedAt
+  }
+
+  db.update(insights).set(updates).where(eq(insights.id, id)).run()
+  scheduleSave()
+}
+
+export function clearVaultSync(db: Db, id: string) {
+  db.update(insights).set({
+    vaultContentHash: null,
+    vaultBodyHash: null,
+    vaultSyncedAt: null,
+  }).where(eq(insights.id, id)).run()
+  scheduleSave()
+}
+
+export function applyVaultBody(db: Db, id: string, body: string): void {
+  const userId = LOCAL_USER_ID
+  const insight = db.select().from(insights).where(
+    and(eq(insights.id, id), eq(insights.userId, userId))
+  ).get()
+
+  if (!insight) {
+    throw new Error('Insight not found')
+  }
+
+  const now = new Date().toISOString()
+  db.update(insights).set({
+    content: body,
+    updatedAt: now,
+  }).where(eq(insights.id, id)).run()
+
+  db.insert(verificationHistory).values({
+    id: crypto.randomUUID(),
+    insightId: id,
+    action: 'vault_sync',
+    previousContent: insight.content,
+    newContent: body,
+  }).run()
+
+  scheduleSave()
+}
+
 /**
  * Delete an insight and all related data (verification history, concept nodes/edges).
  */

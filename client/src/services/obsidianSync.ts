@@ -1,4 +1,5 @@
 import type { ObsidianExportResult } from '@/services/obsidianExport'
+import { createFsaVaultFs } from '@/services/vaultFs'
 
 export interface SyncSummary {
   created: number
@@ -39,43 +40,22 @@ export async function syncNotesToVault(
   }
 
   const summary: SyncSummary = { created: 0, updated: 0, skipped: 0, folder: result.rootFolder }
+  const fs = createFsaVaultFs(handle)
 
   // Sync is intentionally non-destructive: deleted app insights may leave orphan notes in the vault.
   for (const note of result.notes) {
-    const segments = note.path.split('/').filter(Boolean)
-    const fileName = segments.pop()
-    if (!fileName) continue
-
-    let directory = handle
-    for (const segment of segments) {
-      directory = await directory.getDirectoryHandle(segment, { create: true })
-    }
-
-    let fileHandle: FileSystemFileHandle | null = null
-    let existingContent: string | null = null
-    let exists = true
-    try {
-      fileHandle = await directory.getFileHandle(fileName, { create: false })
-      existingContent = await (await fileHandle.getFile()).text()
-    } catch (error) {
-      if (!isNamedDomError(error, 'NotFoundError')) throw error
-      exists = false
-    }
-
-    if (exists && existingContent === note.content) {
+    const existingContent = await fs.read(note.path)
+    if (existingContent === note.content) {
       summary.skipped += 1
       continue
     }
 
-    const writableHandle = fileHandle ?? await directory.getFileHandle(fileName, { create: true })
-    const writable = await writableHandle.createWritable()
-    await writable.write(note.content)
-    await writable.close()
+    await fs.write(note.path, note.content)
 
-    if (exists) {
-      summary.updated += 1
-    } else {
+    if (existingContent === null) {
       summary.created += 1
+    } else {
+      summary.updated += 1
     }
   }
 

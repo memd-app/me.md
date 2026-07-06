@@ -38,6 +38,16 @@ interface TopicGroup {
   insights: InsightNoteData[]
 }
 
+export interface InsightGenRow {
+  id: string
+  content: string
+  confidenceScore: number | null
+  verifiedAt: string | null
+  updatedAt: string | null
+  topicId: string | null
+  topicTitle: string | null
+}
+
 export function generateObsidianNotes(db: Db): ObsidianExportResult {
   const rows = db.select({
     id: insights.id,
@@ -85,32 +95,15 @@ export function generateObsidianNotes(db: Db): ObsidianExportResult {
     }
 
     const title = deriveInsightTitle(row.content)
-    const slug = slugify(row.id, title)
-    const verified = formatDate(row.verifiedAt ?? row.updatedAt)
-    const fields: Array<[string, string | number]> = [
-      ['title', title],
-      ['topic', topicName],
-      ['confidence', Math.round(row.confidenceScore ?? 50)],
-    ]
-    if (verified) fields.push(['verified', verified])
-    fields.push(['source', ROOT_FOLDER], ['id', row.id])
-
-    const content = [
-      toFrontmatter(fields),
-      '',
-      row.content,
-      '',
-      `Topic: [[${topicLink}]]`,
-      '',
-    ].join('\n')
+    const { slug, note } = generateInsightNote(row)
 
     const insightData: InsightNoteData = {
       slug,
       title,
-      content,
+      content: note.content,
     }
     group.insights.push(insightData)
-    insightNotes.push(makeNote(`${ROOT_FOLDER}/Insights/${slug}.md`, content))
+    insightNotes.push(note)
   }
 
   const groups = Array.from(topicGroups.values())
@@ -142,6 +135,76 @@ export function generateObsidianNotes(db: Db): ObsidianExportResult {
     topicCount: groups.length,
     hasPersonality,
   }
+}
+
+export function generateInsightNote(row: InsightGenRow): { slug: string; note: ObsidianNote } {
+  const topicName = sanitizeTopicTitle(row.topicTitle ?? GENERAL_TOPIC)
+  const topicLink = `Topic - ${topicName}`
+  const title = deriveInsightTitle(row.content)
+  const slug = slugify(row.id, title)
+  const verified = formatDate(row.verifiedAt ?? row.updatedAt)
+  const fields: Array<[string, string | number]> = [
+    ['title', title],
+    ['topic', topicName],
+    ['confidence', Math.round(row.confidenceScore ?? 50)],
+  ]
+  if (verified) fields.push(['verified', verified])
+  fields.push(['source', ROOT_FOLDER], ['id', row.id])
+
+  const content = [
+    toFrontmatter(fields),
+    '',
+    row.content,
+    '',
+    `Topic: [[${topicLink}]]`,
+    '',
+  ].join('\n')
+
+  return {
+    slug,
+    note: makeNote(`${ROOT_FOLDER}/Insights/${slug}.md`, content),
+  }
+}
+
+export function generateNotesForInsight(
+  db: Db,
+  insightId: string,
+): { insight: ObsidianNote; topic: ObsidianNote; index: ObsidianNote } {
+  const row = db.select({
+    id: insights.id,
+    content: insights.content,
+    confidenceScore: insights.confidenceScore,
+    verifiedAt: insights.verifiedAt,
+    updatedAt: insights.updatedAt,
+    topicId: insights.topicId,
+    topicTitle: topics.title,
+  }).from(insights)
+    .leftJoin(topics, eq(insights.topicId, topics.id))
+    .where(and(
+      eq(insights.id, insightId),
+      eq(insights.userId, LOCAL_USER_ID),
+      eq(insights.verificationStatus, 'verified'),
+      eq(insights.privacyTier, 'exportable'),
+    ))
+    .get()
+
+  if (!row) {
+    throw new Error('Insight is not verified and exportable.')
+  }
+
+  const { note: generatedInsight } = generateInsightNote(row)
+  const topicName = sanitizeTopicTitle(row.topicTitle ?? GENERAL_TOPIC)
+  const topicPath = `${ROOT_FOLDER}/Topics/Topic - ${topicName}.md`
+  const result = generateObsidianNotes(db)
+  const insight = result.notes.find(note => note.path === generatedInsight.path) ?? generatedInsight
+  const topic = result.notes.find(note => note.path === topicPath)
+  const index = result.notes.find(note => note.path === `${ROOT_FOLDER}/Me - Index.md`)
+
+  if (!topic || !index) {
+    throw new Error('Could not generate the insight note set.')
+  }
+
+  return { insight, topic, index }
 }
 
 export function slugify(id: string, title: string): string {

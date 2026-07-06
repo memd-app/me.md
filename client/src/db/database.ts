@@ -143,6 +143,9 @@ export const CREATE_TABLES_SQL = `
     source_session_id TEXT REFERENCES sessions(id),
     evidence_count INTEGER DEFAULT 0,
     evidence_sources TEXT,
+    vault_content_hash TEXT,
+    vault_body_hash TEXT,
+    vault_synced_at TEXT,
     verified_at TEXT,
     re_verify_at TEXT,
     re_verify_interval INTEGER,
@@ -256,6 +259,9 @@ function columnExists(sqlDb: SqlJsDatabase, table: string, column: string): bool
 const MIGRATIONS: Array<{ table: string; column: string; ddl: string }> = [
   { table: 'insights', column: 'evidence_count', ddl: 'ALTER TABLE insights ADD COLUMN evidence_count INTEGER DEFAULT 0' },
   { table: 'insights', column: 'evidence_sources', ddl: 'ALTER TABLE insights ADD COLUMN evidence_sources TEXT' },
+  { table: 'insights', column: 'vault_content_hash', ddl: 'ALTER TABLE insights ADD COLUMN vault_content_hash TEXT' },
+  { table: 'insights', column: 'vault_body_hash', ddl: 'ALTER TABLE insights ADD COLUMN vault_body_hash TEXT' },
+  { table: 'insights', column: 'vault_synced_at', ddl: 'ALTER TABLE insights ADD COLUMN vault_synced_at TEXT' },
   { table: 'imported_files', column: 'content_hash', ddl: 'ALTER TABLE imported_files ADD COLUMN content_hash TEXT' },
 ]
 
@@ -264,6 +270,7 @@ function runMigrations(sqlDb: SqlJsDatabase): void {
     if (!columnExists(sqlDb, migration.table, migration.column)) sqlDb.run(migration.ddl)
   }
   sqlDb.run('CREATE INDEX IF NOT EXISTS idx_imported_files_hash ON imported_files(content_hash)')
+  sqlDb.run('CREATE INDEX IF NOT EXISTS idx_insights_vault_synced ON insights(vault_synced_at)')
 }
 
 // ---- Public API ----

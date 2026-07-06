@@ -1,11 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
-import { useDatabase } from '@/contexts/DatabaseContext';
+import { useDatabase, useVaultSyncStatus } from '@/contexts/DatabaseContext';
 import { useToast } from '@/contexts/ToastContext';
 import { getExportStatus, exportAsMarkdown, exportAsJson } from '@/services/profile';
 import { generateObsidianNotes } from '@/services/obsidianExport';
-import { ensurePermission, isFileSystemAccessSupported, pickVaultDirectory, syncNotesToVault } from '@/services/obsidianSync';
+import { isFileSystemAccessSupported, pickVaultDirectory } from '@/services/obsidianSync';
+import {
+  getVaultConflicts,
+  reconcileVault,
+  resolveVaultConflict,
+  type VaultConflict,
+} from '@/services/vaultWriteThrough';
 import { createStoreZip } from '@/services/zipStore';
 import { loadVaultHandle, saveVaultHandle } from '@/services/vaultHandle';
 import { PageHeader } from '@/components/ui';
@@ -15,6 +21,7 @@ type ExportFormat = 'markdown' | 'json' | 'both';
 export default function ExportPage() {
   const { user } = useUser();
   const db = useDatabase();
+  const { vaultReconnectNeeded, setVaultReconnectNeeded } = useVaultSyncStatus();
   const { addToast } = useToast();
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('markdown');
   const [exporting, setExporting] = useState(false);
@@ -22,6 +29,7 @@ export default function ExportPage() {
   const [syncing, setSyncing] = useState(false);
   const [zipping, setZipping] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [conflicts, setConflicts] = useState<VaultConflict[]>(() => getVaultConflicts());
   const fsaSupported = isFileSystemAccessSupported();
 
   // Export readiness state
@@ -52,6 +60,10 @@ export default function ExportPage() {
     checkExportStatus();
     return () => controller.abort();
   }, [user]);
+
+  useEffect(() => {
+    setConflicts(getVaultConflicts());
+  }, []);
 
   const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
@@ -133,26 +145,47 @@ export default function ExportPage() {
       if (!handle) handle = await pickVaultDirectory();
       if (!handle) return;
 
-      if (!(await ensurePermission(handle))) {
-        setStatus({
-          type: 'error',
-          message: 'Vault permission denied. Pick the folder again to re-grant access.',
-        });
-        return;
-      }
-
       await saveVaultHandle(handle);
-      const result = generateObsidianNotes(db);
-      const summary = await syncNotesToVault(handle, result);
+      const summary = await reconcileVault(db, handle);
+      setVaultReconnectNeeded(false);
+      setConflicts(getVaultConflicts());
       setStatus({
         type: 'success',
-        message: `Synced to ${summary.folder}: ${summary.created} created, ${summary.updated} updated, ${summary.skipped} unchanged.`,
+        message: `Synced to me.md: ${summary.created} created, ${summary.updated} updated, ${summary.pulled} pulled, ${summary.recreated} recreated, ${summary.conflicts} conflict${summary.conflicts === 1 ? '' : 's'}.`,
       });
     } catch (err) {
       if (isAbortError(err)) return;
       setStatus({
         type: 'error',
         message: err instanceof Error ? err.message : 'Failed to sync to the vault. Please try again.',
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleResolveConflict = async (conflict: VaultConflict, choice: 'app' | 'vault') => {
+    try {
+      setSyncing(true);
+      setStatus(null);
+
+      let handle = await loadVaultHandle();
+      if (!handle) handle = await pickVaultDirectory();
+      if (!handle) return;
+
+      await saveVaultHandle(handle);
+      await resolveVaultConflict(db, handle, conflict, choice);
+      setVaultReconnectNeeded(false);
+      setConflicts(getVaultConflicts());
+      setStatus({
+        type: 'success',
+        message: choice === 'app' ? 'Kept the app version and updated the vault.' : 'Kept the vault version and updated the app.',
+      });
+    } catch (err) {
+      if (isAbortError(err)) return;
+      setStatus({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Failed to resolve the vault conflict. Please try again.',
       });
     } finally {
       setSyncing(false);
@@ -381,22 +414,90 @@ export default function ExportPage() {
       {/* Obsidian */}
       <div>
         {fsaSupported && (
-          <div className="border-t border-rule dark:border-dark-border py-6 flex items-center justify-between gap-4">
-            <div>
-              <h2 className="font-serif text-lg text-ink dark:text-gray-100">
-                Sync to Obsidian Vault
-              </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-300">
-                Write verified insights as Markdown notes into a folder in your vault. Updates in place; never deletes your files.
-              </p>
+          <div className="border-t border-rule dark:border-dark-border py-6">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="font-serif text-lg text-ink dark:text-gray-100">
+                  Sync to Obsidian Vault
+                </h2>
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  Reconcile verified insight notes with your vault. Updates in place; rejected notes move to Rejected.
+                </p>
+                {vaultReconnectNeeded && (
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Reconnect vault to sync.
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                className="btn-primary shrink-0"
+              >
+                {syncing ? 'Syncing...' : 'Sync to Vault'}
+              </button>
             </div>
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              className="btn-primary shrink-0"
-            >
-              {syncing ? 'Syncing...' : 'Sync to Vault'}
-            </button>
+
+            {conflicts.length > 0 && (
+              <div className="mt-6 border-t border-rule dark:border-dark-border pt-5">
+                <h3 className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-3">
+                  Vault conflicts
+                </h3>
+                <div className="divide-y divide-rule dark:divide-dark-border">
+                  {conflicts.map((conflict) => (
+                    <div key={conflict.insightId} className="py-4 first:pt-0 last:pb-0">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-ink dark:text-gray-100 truncate">
+                            {conflict.slug}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {conflict.path}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleResolveConflict(conflict, 'app')}
+                            disabled={syncing}
+                            className="btn-secondary text-sm"
+                          >
+                            Keep app
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleResolveConflict(conflict, 'vault')}
+                            disabled={syncing}
+                            className="btn-primary text-sm"
+                          >
+                            Keep vault
+                          </button>
+                        </div>
+                      </div>
+                      <details className="mt-3 text-sm">
+                        <summary className="cursor-pointer text-gray-600 dark:text-gray-300">
+                          Compare bodies
+                        </summary>
+                        <div className="mt-3 grid gap-3 md:grid-cols-2">
+                          <div>
+                            <p className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                              App
+                            </p>
+                            <pre className="whitespace-pre-wrap break-words text-xs leading-relaxed text-gray-700 dark:text-gray-300 border border-rule dark:border-dark-border rounded-md p-3 max-h-48 overflow-auto">{conflict.appBody}</pre>
+                          </div>
+                          <div>
+                            <p className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                              Vault
+                            </p>
+                            <pre className="whitespace-pre-wrap break-words text-xs leading-relaxed text-gray-700 dark:text-gray-300 border border-rule dark:border-dark-border rounded-md p-3 max-h-48 overflow-auto">{conflict.vaultBody}</pre>
+                          </div>
+                        </div>
+                      </details>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
