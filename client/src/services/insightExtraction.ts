@@ -522,7 +522,7 @@ Score how well the CONTENT supports the insight, not how nice it sounds:
 Worked example — source: "I've turned down two promotions because managing people pulls me
 away from the actual engineering, which is the part I can't give up."
 -> {"content":"Chooses hands-on engineering over management, having declined promotions to
-stay technical","confidenceScore":88,"kind":"preference","self_relevance":95}  (emphatic + specific +
+stay technical","confidenceScore":88,"kind":"preference","self_relevance":95,"prior_alignment":"novel"}  (emphatic + specific +
 evidenced by a concrete action = high band).
 confidenceScore measures evidence strength; self_relevance measures whether the statement is
 about the person at all. Score them independently.
