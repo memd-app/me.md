@@ -13,6 +13,7 @@
  */
 
 import { callAnthropic, isApiKeyConfigured } from './anthropic'
+import { cleanText, extractJson, isDeclarativeStatement, stripFrontmatter } from './textCleaning'
 
 // ============================================
 // Types
@@ -108,15 +109,32 @@ function chunkContent(content: string): string[] {
  * Build the system prompt based on source type.
  */
 function buildSystemPrompt(ctx: ExtractionContext): string {
-  const basePrompt = `You are a personal knowledge analyst for me.md, a system that builds verified personal context from AI-guided interviews. Your job is to semantically identify genuine personal insights from content — not keyword-match, but deeply understand what the user is revealing about themselves.
-
-Output ONLY a valid JSON array with no markdown code fences, no explanation, and no commentary.`
-
-  const userContext = ctx.userName
-    ? `\nThe user's name is ${ctx.userName}${ctx.occupation ? `, occupation: ${ctx.occupation}` : ''}.`
+  const who = ctx.userName
+    ? ` The material belongs to ${ctx.userName}${ctx.occupation ? `, ${ctx.occupation}` : ''}.`
     : ''
 
-  return basePrompt + userContext
+  return `<role>
+You extract verified-quality personal insights for me.md, a local-first personal-knowledge
+tool. An insight is a portable, first-person-true statement about this person that another
+tool could use to act more like them.${who}
+</role>
+
+<rules>
+- Extract only what the content genuinely supports. It is correct to return an empty array
+  when the content is impersonal, generic, or not about this person.
+- Never invent, infer beyond the evidence, or restate a question as an insight.
+- Write each insight as a clean declarative statement in plain prose. Strip any markdown,
+  formatting, list markers, or emoji from your output — content, not syntax.
+- If the content is in a language other than English, write insights in that same language.
+- Deduplicate against the provided verified insights; skip anything equivalent.
+</rules>
+
+<output_contract>
+Return a JSON array and nothing else — no prose, no code fences. Each element:
+{"content": string (<=300 chars, a full sentence), "confidenceScore": integer 50-95,
+ "category": one of "identity"|"skills"|"experiences"|"perspectives"|"goals"}
+Empty input or no genuine insights -> return exactly: []
+</output_contract>`
 }
 
 /**
@@ -148,7 +166,7 @@ ${contentChunk}`
 
     case 'import_chatgpt':
       insightRange = '5-15'
-      sourceInstructions = `Extract self-knowledge insights from the following ChatGPT memory export${topicContext}. This content represents structured personal data the user previously shared with ChatGPT. Treat it as high-quality personal knowledge since the user intentionally stored this.
+      sourceInstructions = `Extract self-knowledge insights from the following ChatGPT memory export${topicContext}. This content represents structured personal data the user previously shared with ChatGPT.
 
 ## ChatGPT Memory Content
 
@@ -157,7 +175,7 @@ ${contentChunk}`
 
     case 'import_url':
       insightRange = '3-10'
-      sourceInstructions = `Extract self-knowledge insights from the following web page content${topicContext}. This is content the user chose to import, so look for personal relevance — the user likely identifies with or values aspects of this content. Focus on extracting insights that reveal the user's interests, values, or self-identification.
+      sourceInstructions = `Extract self-knowledge insights from the following web page content${topicContext}. Look for personal relevance only where the content actually supports it.
 
 ## Web Page Content
 
@@ -167,7 +185,7 @@ ${contentChunk}`
     case 'import_text':
     case 'import_file':
       insightRange = '3-12'
-      sourceInstructions = `Extract self-knowledge insights from the following ${ctx.sourceType === 'import_file' ? 'uploaded file' : 'text'} content${topicContext}. This is content the user chose to import into their personal knowledge system, so it likely contains personally meaningful information.
+      sourceInstructions = `Extract self-knowledge insights from the following ${ctx.sourceType === 'import_file' ? 'uploaded file' : 'text'} content${topicContext}.
 
 ## Imported Content
 
@@ -185,49 +203,29 @@ ${contentChunk}`
 
   return `${sourceInstructions}
 ${deduplicationSection}
-## Instructions
+<task>
+Extract ${insightRange} insights that are specific and grounded in what the content actually
+reveals. Prefer fewer, sharper insights over padding. Categorize each as identity, skills,
+experiences, perspectives, or goals.
 
-Extract ${insightRange} distinct, genuine self-knowledge insights — statements that capture something true and specific about the user. Each insight should be:
-- A clear, declarative statement about the user (e.g., "Values autonomy over stability when making career decisions")
-- Specific and grounded in what the content actually reveals (not generic truisms)
-- Semantically meaningful — capturing genuine personal knowledge, not surface-level keywords
-- Useful as portable context for other AI tools to understand and act like the user
+Do not extract: statements true of anyone ("wants to be happy"), restated prompts, or vague
+emotional reactions with no substance.
+</task>
 
-Also categorize each insight into one of these categories:
-- "identity" — core traits, personality, self-concept
-- "skills" — abilities, expertise, professional competencies
-- "experiences" — life events, memories, journeys
-- "perspectives" — beliefs, opinions, approaches, communication/decision style
-- "goals" — aspirations, plans, desired futures
+<confidence_calibration>
+Score how well the CONTENT supports the insight, not how nice it sounds:
+- 50-60: implied or inferred; stated once, hedged, or low specificity.
+- 61-75: stated plainly with reasonable specificity; single clear mention.
+- 76-85: stated with conviction AND concrete specifics, or reinforced 2+ times.
+- 86-95: emphatic, highly specific with context, and recurring across the content.
+Worked example — source: "I've turned down two promotions because managing people pulls me
+away from the actual engineering, which is the part I can't give up."
+-> {"content":"Chooses hands-on engineering over management, having declined promotions to
+stay technical","confidenceScore":88,"category":"perspectives"}  (emphatic + specific +
+evidenced by a concrete action = high band).
+</confidence_calibration>
 
-Avoid extracting:
-- Generic statements that could apply to anyone (e.g., "Wants to be happy")
-- Simple restatements of questions or prompts
-- Vague or purely emotional reactions without substance
-
-## Confidence Scoring
-
-Evaluate each insight's confidenceScore (50-95) based on THREE dimensions:
-
-**Conviction** (How strongly/emphatically was this expressed?):
-- Low (50-60): Hedged, tentative, or inferred
-- Medium (61-75): Stated clearly but without emphasis
-- High (76-95): Emphatic, repeated, or emotionally charged
-
-**Specificity** (How precise and detailed is the insight?):
-- Low: Broad generalization ("I like helping people")
-- Medium: Somewhat specific ("I prefer mentoring junior developers")
-- High: Highly specific with context
-
-**Consistency** (Is it reinforced across multiple statements or just mentioned once?):
-- Low: Mentioned once in passing
-- Medium: Referenced in 2+ related statements
-- High: A recurring theme throughout the content
-
-Output format (JSON array only, no wrapping):
-[
-  { "content": "Insight statement here", "confidenceScore": 75, "category": "identity" }
-]`
+Return the JSON array only.`
 }
 
 /**
@@ -254,19 +252,7 @@ async function callClaudeForInsights(
 
     console.log(`[me.md:insight-extraction] Response received (${responseText.length} chars)`)
 
-    // Clean up markdown code fences
-    let cleaned = responseText.trim()
-    if (cleaned.startsWith('```json')) {
-      cleaned = cleaned.slice(7)
-    } else if (cleaned.startsWith('```')) {
-      cleaned = cleaned.slice(3)
-    }
-    if (cleaned.endsWith('```')) {
-      cleaned = cleaned.slice(0, -3)
-    }
-    cleaned = cleaned.trim()
-
-    const parsed = JSON.parse(cleaned)
+    const parsed = extractJson<unknown[]>(responseText)
     if (!Array.isArray(parsed)) return null
 
     // Validate and normalize structure
@@ -278,13 +264,16 @@ async function callClaudeForInsights(
         const obj = item as Record<string, unknown>
         return typeof obj.content === 'string' && typeof obj.confidenceScore === 'number'
       })
-      .map((item: { content: string; confidenceScore: number; category?: string }) => ({
-        content: item.content.substring(0, 500),
-        confidenceScore: Math.min(Math.max(item.confidenceScore, 50), 95),
-        category: (typeof item.category === 'string' && validCategories.has(item.category))
-          ? item.category
-          : 'identity',
-      }))
+      .map(item => {
+        const obj = item as { content: string; confidenceScore: number; category?: string }
+        return {
+          content: obj.content.substring(0, 500),
+          confidenceScore: Math.min(Math.max(obj.confidenceScore, 50), 95),
+          category: (typeof obj.category === 'string' && validCategories.has(obj.category))
+            ? obj.category
+            : 'identity',
+        }
+      })
       .slice(0, MAX_INSIGHTS_PER_CHUNK)
   } catch (error: unknown) {
     const err = error as { message?: string }
@@ -298,65 +287,26 @@ async function callClaudeForInsights(
 // ============================================
 
 /**
- * Score a statement for insight-worthiness (rule-based fallback).
+ * Honest confidence for a rule-based fragment. We cannot assess conviction or consistency
+ * without the model, so we report a low, fixed band that says "unverified pattern match":
+ *   - 45: first-person self-statement ("I value...", "My approach is...")
+ *   - 38: reasoning/preference signal without a clear first-person subject
+ *   - 32: kept only because the source is curated (ChatGPT memory) -- weakest
+ * These are deliberately below the AI floor (50) so Review sorts them last and the
+ * "Rule-based" badge is never contradicted by a confident-looking number.
  */
-function scoreStatement(statement: string, sourceType: SourceType): number {
-  const lower = statement.toLowerCase()
-  let score: number
-
-  // Base scores differ by source type
-  switch (sourceType) {
-    case 'interview':
-      score = 50
-      break
-    case 'import_chatgpt':
-      score = 45 // ChatGPT memories are already curated personal data
-      break
-    case 'import_url':
-      score = 40 // Web content may not be personal
-      break
-    default:
-      score = 40
-  }
-
-  // Strong personal statements
-  if (/\b(i am|i believe|i value|i always|i never|i think|i feel|my|i prefer|i tend to)\b/i.test(lower)) {
-    score += 15
-  }
-
-  // Reasoning/understanding markers
-  if (/\b(because|reason|learned|realized|understand|important|matters)\b/i.test(lower)) {
-    score += 10
-  }
-
-  // Core trait indicators
-  if (/\b(core|fundamental|deeply|who i am|trait|personality|character|principle|philosophy)\b/i.test(lower)) {
-    score += 10
-  }
-
-  // Preference indicators
-  if (/\b(prefer|like|enjoy|love|dislike|hate|comfortable|style|approach)\b/i.test(lower)) {
-    score += 8
-  }
-
-  // Length bonus
-  if (statement.length > 60) {
-    score += 5
-  }
-
-  // Belief/principle keywords (interview-specific boost)
-  if (sourceType === 'interview' && /\b(believe|think|feel|value|important|always|never|principle)\b/i.test(lower)) {
-    score += 5
-  }
-
-  return Math.min(score, 95)
+function ruleBasedConfidence(statement: string, sourceType: SourceType): number {
+  const s = statement.toLowerCase()
+  if (/\b(i am|i'm|i believe|i value|i prefer|i always|i never|i tend to|my )\b/.test(s)) return 45
+  if (/\b(because|i think|i feel|i learned|i realized|important to me|matters to me)\b/.test(s)) return 38
+  return sourceType === 'import_chatgpt' ? 34 : 32
 }
 
 /**
  * Categorize a statement by keyword analysis.
  */
 function categorizeStatement(statement: string): string {
-  const lower = statement.toLowerCase()
+  const lower = cleanText(statement).toLowerCase()
 
   if (/\b(skill|expert|experience|professional|work|career|project|competent|proficien)\b/.test(lower)) return 'skills'
   if (/\b(goal|aspir|dream|plan|future|want to|aim|ambition)\b/.test(lower)) return 'goals'
@@ -364,25 +314,6 @@ function categorizeStatement(statement: string): string {
   if (/\b(think|believe|approach|perspective|opinion|view|prefer|style|method)\b/.test(lower)) return 'perspectives'
 
   return 'identity'
-}
-
-/**
- * Get score threshold based on source type.
- */
-function getScoreThreshold(sourceType: SourceType): number {
-  switch (sourceType) {
-    case 'interview':
-      return 55
-    case 'import_chatgpt':
-      return 45
-    case 'import_url':
-      return 55
-    case 'import_text':
-    case 'import_file':
-      return 48
-    default:
-      return 50
-  }
 }
 
 /**
@@ -409,9 +340,21 @@ function getMaxInsights(sourceType: SourceType): number {
  */
 function extractInsightsFallback(ctx: ExtractionContext): ExtractedInsight[] {
   const results: ExtractedInsight[] = []
-  const threshold = getScoreThreshold(ctx.sourceType)
   const maxInsights = getMaxInsights(ctx.sourceType)
-  const minLength = 20
+
+  const emit = (rawStatement: string, category?: string) => {
+    // Gate on the raw fragment so table/heading/task shape remains detectable,
+    // then store cleaned text so markdown never reaches content or titles.
+    if (!isDeclarativeStatement(rawStatement)) return
+    const content = cleanText(rawStatement).slice(0, 500).trim()
+    if (content.length < 25) return
+    results.push({
+      content,
+      confidenceScore: ruleBasedConfidence(content, ctx.sourceType),
+      category: category ?? categorizeStatement(content),
+      extractionMethod: 'fallback',
+    })
+  }
 
   // Special handling for ChatGPT structured sections
   if (ctx.sourceType === 'import_chatgpt') {
@@ -429,64 +372,31 @@ function extractInsightsFallback(ctx: ExtractionContext): ExtractedInsight[] {
       'personality traits': 'identity',
     }
 
-    // Try to parse sections from the content
     const sectionRegex = /^##?\s*(.+)$/gm
-    let match
-    const sectionPositions: Array<{ name: string; start: number }> = []
+    const positions: Array<{ name: string; start: number }> = []
+    let m
 
-    while ((match = sectionRegex.exec(ctx.content)) !== null) {
-      sectionPositions.push({ name: match[1].trim(), start: match.index + match[0].length })
+    while ((m = sectionRegex.exec(ctx.content)) !== null) {
+      positions.push({ name: m[1].trim(), start: m.index + m[0].length })
     }
 
-    if (sectionPositions.length > 0) {
-      for (let i = 0; i < sectionPositions.length; i++) {
-        const sectionName = sectionPositions[i].name
-        const sectionStart = sectionPositions[i].start
-        const sectionEnd = i + 1 < sectionPositions.length ? sectionPositions[i + 1].start : ctx.content.length
-        const sectionContent = ctx.content.substring(sectionStart, sectionEnd)
-        const category = sectionCategoryMap[sectionName.toLowerCase()] || 'identity'
-
-        const statements = sectionContent
-          .split(/[.!?\n]+/)
-          .map(s => s.replace(/^[-*•]\s*/, '').trim())
-          .filter(s => s.length > 20 && s.length < 500)
-
-        for (const statement of statements) {
-          const score = scoreStatement(statement, ctx.sourceType)
-          if (score >= threshold) {
-            results.push({
-              content: statement,
-              confidenceScore: score,
-              category,
-              extractionMethod: 'fallback',
-            })
-          }
-        }
+    if (positions.length > 0) {
+      for (let i = 0; i < positions.length; i++) {
+        const end = i + 1 < positions.length ? positions[i + 1].start : ctx.content.length
+        const body = ctx.content.substring(positions[i].start, end)
+        const category = sectionCategoryMap[positions[i].name.toLowerCase()] || 'identity'
+        for (const part of body.split(/(?<=[.!?])\s+|\n+/)) emit(part, category)
       }
 
-      // If we found section-based results, return them
       if (results.length > 0) {
         return deduplicateInsights(results, ctx.existingVerifiedInsights).slice(0, maxInsights)
       }
     }
   }
 
-  // Generic extraction: split content into statements
-  const statements = ctx.content
-    .split(/[.!?\n]+/)
-    .map(s => s.replace(/^[-*•]\s*/, '').trim())
-    .filter(s => s.length > minLength && s.length < 500)
-
-  for (const statement of statements) {
-    const score = scoreStatement(statement, ctx.sourceType)
-    if (score >= threshold) {
-      results.push({
-        content: statement.substring(0, 500),
-        confidenceScore: Math.min(score, 95),
-        category: categorizeStatement(statement),
-        extractionMethod: 'fallback',
-      })
-    }
+  // Splitting on lines first preserves markdown-block shape for the gate to reject.
+  for (const line of ctx.content.split(/\n+/)) {
+    for (const part of line.split(/(?<=[.!?])\s+/)) emit(part)
   }
 
   return deduplicateInsights(results, ctx.existingVerifiedInsights).slice(0, maxInsights)
@@ -574,15 +484,11 @@ async function callClaudeForInsightsWithRetry(
  * and cap them to signal that human review is especially important.
  */
 function applyFallbackConfidencePenalty(insights: ExtractedInsight[]): ExtractedInsight[] {
-  const FALLBACK_CONFIDENCE_PENALTY = 15
-  const FALLBACK_MAX_CONFIDENCE = 70
+  const FALLBACK_MAX_CONFIDENCE = 45 // rule-based can never look AI-confident
 
-  return insights.map(insight => ({
-    ...insight,
-    confidenceScore: Math.min(
-      Math.max(insight.confidenceScore - FALLBACK_CONFIDENCE_PENALTY, 30),
-      FALLBACK_MAX_CONFIDENCE
-    ),
+  return insights.map(i => ({
+    ...i,
+    confidenceScore: Math.min(Math.max(i.confidenceScore, 25), FALLBACK_MAX_CONFIDENCE),
   }))
 }
 
@@ -606,7 +512,7 @@ export async function extractInsights(ctx: ExtractionContext): Promise<Extracted
   console.log(`[me.md:insight-extraction] Starting unified extraction: sourceType=${ctx.sourceType}, contentLength=${ctx.content.length}`)
 
   // For interviews, format the content as a conversation transcript if it isn't already
-  const processedContent = ctx.content
+  const processedContent = stripFrontmatter(ctx.content)
 
   // Chunk large content
   const chunks = chunkContent(processedContent)
@@ -672,7 +578,7 @@ export async function extractInsights(ctx: ExtractionContext): Promise<Extracted
 
   // Fallback to rule-based extraction for ALL content
   console.warn(`[me.md:insight-extraction] FULL FALLBACK ACTIVATED for sourceType=${ctx.sourceType}, topic="${ctx.topicTitle || 'unknown'}": All insights generated via rule-based extraction.`)
-  const fallbackResults = extractInsightsFallback(ctx)
+  const fallbackResults = extractInsightsFallback({ ...ctx, content: processedContent })
   // Apply confidence penalty to all fallback insights
   const penalizedResults = applyFallbackConfidencePenalty(fallbackResults)
   console.log(`[me.md:insight-extraction] Fallback extraction complete: ${penalizedResults.length} insights (all flagged as fallback with reduced confidence)`)

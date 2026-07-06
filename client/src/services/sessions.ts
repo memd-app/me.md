@@ -11,6 +11,7 @@ import {
   streamClaudeResponse,
   generateClaudeQuickReplies,
 } from './ai'
+import { cleanText } from './textCleaning'
 import type {
   AIResponseOptions,
   ProfileContext,
@@ -226,9 +227,10 @@ function generateOpeningMessage(
 
   const intentPhrase = intent && intentPhrases[intent]
     ? intentPhrases[intent]
-    : 'explore your thoughts and experiences around'
+    : ''
 
-  let message = `Welcome to this interview session! I'm here to ${intentPhrase} **${title}**.`
+  let message = `We'll begin gathering the story only you can tell about **${title}**.`
+  if (intentPhrase) message = `Let's ${intentPhrase} **${title}**.`
 
   if (description) {
     message += `\n\n${description}`
@@ -241,7 +243,7 @@ function generateOpeningMessage(
     const hasRelatedInsights = profileContext.relatedInsights.length > 0
 
     if (hasVerifiedInsights || hasPreviousTopics) {
-      message += `\n\n**Building on what I know about you:**`
+      message += `\n\n**From what you've already verified:**`
 
       if (hasPreviousTopics) {
         const topicNames = profileContext.previousSessionTopics.slice(0, 3).map(t => `"${t.title}"`).join(', ')
@@ -298,8 +300,8 @@ function generateOpeningMessage(
     referenceUrls.forEach((url, index) => {
       message += `\n- [Reference ${index + 1}](${url})`
     })
-    message += `\n\nI'll use these references to ask more targeted questions and better understand your perspective on **${title}**. Let's dive in with a focused approach.`
-    message += `\n\n**Based on the context you've shared, what's the most important aspect of "${title}" that you'd like to explore?** How does the referenced material connect to your personal experience or thinking?`
+    message += `\n\nI'll use these references to ask more targeted questions and better understand your perspective on **${title}**.`
+    message += `\n\nWhere would you like to start — the aspect of “${title}” that matters most to you right now?`
   } else {
     message += `\n\n**Our interview map:** I'll guide us through five key angles to build a comprehensive picture of your knowledge:`
     message += `\n- **Journey** — your personal story and evolution`
@@ -308,7 +310,7 @@ function generateOpeningMessage(
     message += `\n- **Examples** — concrete stories and lived experiences`
     message += `\n- **Tensions** — contradictions, trade-offs, and open questions`
     message += `\n\nWe'll touch on each angle breadth-first, then go deeper where it matters most.`
-    message += `\n\nTo get us started, I'd love to hear: **What first comes to mind when you think about "${title}"?** Feel free to share anything — a thought, a memory, a feeling, or even a question you have about it.`
+    message += `\n\nTo begin: what first comes to mind when you think about “${title}”? A thought, a memory, a question — anything is a good start.`
   }
 
   return message
@@ -324,19 +326,17 @@ function generateGapAwareGreeting(
   lastUserMessages: string[],
   totalMessageCount: number,
 ): string {
-  let greeting = `Welcome back! It's been ${timeGap} since we last spoke about **${topicTitle}**.`
+  let greeting = `Where were we — it's been ${timeGap} since we last talked about **${topicTitle}**.`
 
   if (lastUserMessages.length > 0) {
     const lastThought = lastUserMessages[lastUserMessages.length - 1]
-    const snippet = lastThought.length > 100 ? lastThought.substring(0, 100) + '...' : lastThought
-    greeting += `\n\nLast time, you were sharing your thoughts: "${snippet}"`
+    const snippet = lastThought.length > 100 ? lastThought.substring(0, 100) + '…' : lastThought
+    greeting += `\n\nLast time, you were thinking through: “${snippet}”.`
   }
 
-  if (totalMessageCount > 6) {
-    greeting += `\n\nWe've had a great conversation so far with ${totalMessageCount} messages exchanged. **Would you like to pick up where we left off, or has anything new come to mind** during the break that you'd like to explore?`
-  } else {
-    greeting += `\n\nWe were just getting started in our exploration. **Would you like to continue from where we left off, or would you prefer to take a different direction?**`
-  }
+  greeting += totalMessageCount > 6
+    ? `\n\nWe've built good depth here. Pick up where we left off, or start somewhere new?`
+    : `\n\nWe were just getting going. Continue from there, or take a different direction?`
 
   return greeting
 }
@@ -377,12 +377,10 @@ function extractKeyPhrases(message: string): string[] {
 }
 
 function extractQuote(message: string, maxLength: number = 80): string {
-  const sentences = message.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 15)
-  if (sentences.length === 0) {
-    return message.length > maxLength ? message.substring(0, maxLength) + '...' : message
-  }
-  const best = sentences.sort((a, b) => b.length - a.length)[0]
-  return best.length > maxLength ? best.substring(0, maxLength) + '...' : best
+  const clean = cleanText(message)
+  const sentences = clean.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(s => s.length > 15)
+  const best = sentences.sort((a, b) => b.length - a.length)[0] ?? clean
+  return best.length > maxLength ? best.substring(0, maxLength).trimEnd() + '…' : best
 }
 
 function generateReflection(
@@ -399,34 +397,34 @@ function generateReflection(
   let priorReference = ''
   if (previousUserMessages.length > 0 && messageCount > 1) {
     const earlierQuote = extractQuote(previousUserMessages[previousUserMessages.length - 1], 60)
-    priorReference = ` Earlier you mentioned "${earlierQuote}" — and I can see how that connects to what you're sharing now.`
+    priorReference = ` Earlier you mentioned “${earlierQuote}” — that gives us a thread to compare.`
   }
 
   const reflections: Record<Methodology, string[]> = {
     clean_language: [
-      `When you say "${quote}", there's a clarity in how you frame that experience. ${keyPhrase ? `The way you use the word "${keyPhrase}" suggests it carries particular significance for you.` : 'That language reveals something important about your perspective.'}${priorReference} Your expression has a precision that's worth exploring further.`,
-      `I notice how you describe this — "${quote}". ${keyPhrase ? `"${keyPhrase}" seems like a meaningful concept in how you understand **${topicTitle}**.` : `The way you frame **${topicTitle}** reveals layers of meaning.`}${priorReference} There's richness in the specific words you've chosen.`,
-      `Your words paint a vivid picture: "${quote}". ${keyPhrase ? `I'm drawn to how "${keyPhrase}" functions in your thinking about this.` : 'The specific language you use reveals underlying patterns.'}${priorReference} These details matter because they capture something uniquely yours.`,
+      `When you say “${quote}”, you're giving us exact language to work with. ${keyPhrase ? `The word “${keyPhrase}” gives us a handle on how you frame **${topicTitle}**.` : `That phrasing gives us a handle on how you frame **${topicTitle}**.`}${priorReference}`,
+      `I notice the wording here: “${quote}”. ${keyPhrase ? `“${keyPhrase}” seems to carry weight in how you describe **${topicTitle}**.` : `Your phrasing gives us a specific entry point into **${topicTitle}**.`}${priorReference}`,
+      `You put the experience this way: “${quote}”. ${keyPhrase ? `Let's stay with “${keyPhrase}” and see what it does in your thinking.` : 'Let’s stay with the wording and see what it points to.'}${priorReference}`,
     ],
     socratic: [
-      `That's a thoughtful position — "${quote}". ${keyPhrase ? `Your point about "${keyPhrase}" raises some interesting implications I'd like to examine.` : 'Let me examine the assumptions underlying that perspective.'}${priorReference} Understanding the foundations of this view will help us go deeper.`,
-      `I appreciate you sharing that perspective. When you say "${quote}", it reveals a belief worth interrogating constructively. ${keyPhrase ? `The concept of "${keyPhrase}" in particular seems central to how you see **${topicTitle}**.` : `Your framing of **${topicTitle}** carries interesting assumptions.`}${priorReference}`,
-      `"${quote}" — that's a strong articulation. ${keyPhrase ? `Let's consider what "${keyPhrase}" really means in this context and whether it holds up under scrutiny.` : 'I want to test this idea to help you refine it.'}${priorReference} The goal is to strengthen your understanding, not challenge it.`,
+      `You made a clear claim: “${quote}”. ${keyPhrase ? `The point about “${keyPhrase}” gives us an assumption to examine.` : 'That gives us an assumption to examine.'}${priorReference}`,
+      `When you say “${quote}”, there is a belief we can test carefully. ${keyPhrase ? `“${keyPhrase}” looks central to how you see **${topicTitle}**.` : `Your framing of **${topicTitle}** gives us something concrete to question.`}${priorReference}`,
+      `“${quote}” gives us a position to work from. ${keyPhrase ? `Let's define what “${keyPhrase}” means here and where its limits are.` : 'Let’s define the idea and where its limits are.'}${priorReference}`,
     ],
     five_whys: [
-      `"${quote}" — there's something deeper underneath that. ${keyPhrase ? `When you mention "${keyPhrase}", I sense there's a root cause or core motivation driving this.` : 'I sense there are layers here we haven\'t uncovered yet.'}${priorReference} Let's keep digging to find the foundational belief.`,
-      `Thank you for sharing that: "${quote}". ${keyPhrase ? `The idea of "${keyPhrase}" might be a surface expression of something more fundamental about how you approach **${topicTitle}**.` : `There seems to be a deeper pattern underlying your approach to **${topicTitle}**.`}${priorReference} Understanding the root will give you powerful self-knowledge.`,
-      `I hear you — "${quote}". ${keyPhrase ? `"${keyPhrase}" is interesting, but I wonder what drives that for you at a deeper level.` : 'That feels like an important layer, and I think there are more beneath it.'}${priorReference} Each layer we peel back brings us closer to something core.`,
+      `“${quote}” points to a lower layer. ${keyPhrase ? `“${keyPhrase}” may be the visible part of a reason underneath your approach to **${topicTitle}**.` : `There may be a reason underneath your approach to **${topicTitle}**.`}${priorReference}`,
+      `You named it as “${quote}”. ${keyPhrase ? `The idea of “${keyPhrase}” may be a surface expression of a more basic motive.` : 'That may be a surface expression of a more basic motive.'}${priorReference}`,
+      `I hear the shape of it in “${quote}”. ${keyPhrase ? `Let's look at what drives “${keyPhrase}” rather than taking it as the final layer.` : 'Let’s look at what drives it rather than taking it as the final layer.'}${priorReference}`,
     ],
     appreciative_inquiry: [
-      `What you've shared is genuinely illuminating: "${quote}". ${keyPhrase ? `Your awareness around "${keyPhrase}" represents real strength in how you navigate **${topicTitle}**.` : `Your clarity about **${topicTitle}** reflects genuine self-awareness.`}${priorReference} I'd love to build on that strength.`,
-      `"${quote}" — there's something powerful in that. ${keyPhrase ? `The way you engage with "${keyPhrase}" shows a capacity for deep reflection that's valuable.` : 'Your ability to articulate this shows remarkable introspective skill.'}${priorReference} Let's explore what's working well here.`,
-      `I'm struck by the depth in what you've shared: "${quote}". ${keyPhrase ? `"${keyPhrase}" seems to be connected to something that really matters to you about **${topicTitle}**.` : `Your engagement with **${topicTitle}** reveals genuine passion and thoughtfulness.`}${priorReference} This is exactly the kind of insight that builds a rich personal profile.`,
+      `You put that precisely: “${quote}”. ${keyPhrase ? `The way you hold “${keyPhrase}” looks like a real strength in how you navigate **${topicTitle}**.` : `There's a clear self-awareness in how you frame **${topicTitle}**.`}${priorReference}`,
+      `“${quote}” names something that is working. ${keyPhrase ? `Your relationship to “${keyPhrase}” gives us a strength to examine directly.` : `Your framing of **${topicTitle}** gives us a strength to examine directly.`}${priorReference}`,
+      `You described it as “${quote}”. ${keyPhrase ? `“${keyPhrase}” seems connected to what you rely on when **${topicTitle}** is going well.` : `Let's look at what you rely on when **${topicTitle}** is going well.`}${priorReference}`,
     ],
     micro_phenomenology: [
-      `"${quote}" — I want to slow down on that moment. ${keyPhrase ? `When you think about "${keyPhrase}", there's likely a specific sensory or emotional experience attached.` : 'There\'s likely a vivid inner experience connected to what you\'ve described.'}${priorReference} The fine details of how you experience this matter.`,
-      `Thank you for that: "${quote}". ${keyPhrase ? `I'm curious about the lived experience when "${keyPhrase}" comes up for you in relation to **${topicTitle}**.` : `I want to zoom into the actual felt experience of **${topicTitle}** for you.`}${priorReference} The micro-details reveal patterns that broader descriptions can miss.`,
-      `When you describe "${quote}", I want to capture the texture of that experience. ${keyPhrase ? `"${keyPhrase}" likely triggers specific thoughts, feelings, or even physical sensations.` : 'The specific quality of this experience is what makes it uniquely yours.'}${priorReference} Let me help you articulate the fine grain.`,
+      `“${quote}” gives us a moment to slow down. ${keyPhrase ? `When “${keyPhrase}” comes up, we can look at the sequence of thought, feeling, and attention.` : 'We can look at the sequence of thought, feeling, and attention.'}${priorReference}`,
+      `You described the moment as “${quote}”. ${keyPhrase ? `I'm interested in what happens in experience when “${keyPhrase}” appears around **${topicTitle}**.` : `I'm interested in what happens in experience around **${topicTitle}**.`}${priorReference}`,
+      `When you describe “${quote}”, we have enough to inspect the texture of the experience. ${keyPhrase ? `“${keyPhrase}” can anchor the close observation.` : 'The wording can anchor the close observation.'}${priorReference}`,
     ],
   }
 
@@ -482,7 +480,7 @@ function generateQuestion(
       `When **${keyPhrase}** is at its **best** in relation to **${topicTitle}**, what does that look like? Can you describe a **peak moment**?`,
       `What **strengths of yours** make your approach to **${keyPhrase}** and **${topicTitle}** particularly effective? What are you **most proud of** here?`,
       `**Imagine the ideal future** where your understanding of **${keyPhrase}** is fully realized — **what would be different** about how you engage with **${topicTitle}**?`,
-      `What **conditions or environments** help you be at your best with **${keyPhrase}**? When does your **natural brilliance** around **${topicTitle}** shine through?`,
+      `What **conditions or environments** help you be at your best with **${keyPhrase}**? What do those conditions make possible around **${topicTitle}**?`,
       hasPrior && priorPhrase
         ? `You've shown real depth in discussing both **${priorPhrase}** and **${keyPhrase}** — **what's the greatest strength** you bring to understanding **${topicTitle}**?`
         : `If you could **amplify what's already working** about your relationship with **${keyPhrase}**, **what would you do more of**?`,
@@ -582,25 +580,8 @@ function generateProfileContextBridge(
     return { ...insight, relevanceScore: score }
   }).sort((a, b) => b.relevanceScore - a.relevanceScore)
 
-  let bestInsight = scoredInsights.find(i => i.relevanceScore > 0)
-
-  if (!bestInsight) {
-    if (crossTopicInsights.length > 0) {
-      const insightIndex = messageCount % crossTopicInsights.length
-      bestInsight = { ...crossTopicInsights[insightIndex], relevanceScore: 1 }
-    } else if (profileContext.previousSessionTopics.length > 0) {
-      const topicIndex = messageCount % profileContext.previousSessionTopics.length
-      const relatedTopic = profileContext.previousSessionTopics[topicIndex]
-      const generalBridges = [
-        `I notice this connects to ground you've covered before — you previously explored **"${relatedTopic.title}"**, and I can see how those threads might weave together with what you're sharing about **${topicTitle}** now.`,
-        `What you're describing reminds me of themes from your work on **"${relatedTopic.title}"**. There seem to be connections between these areas of your experience.`,
-        `This resonates with what you explored in **"${relatedTopic.title}"** — I'm curious how your thinking on **${topicTitle}** builds on or contrasts with that earlier exploration.`,
-      ]
-      return generalBridges[messageCount % generalBridges.length]
-    } else {
-      return ''
-    }
-  }
+  const bestInsight = scoredInsights.find(i => i.relevanceScore > 0)
+  if (!bestInsight) return ''
 
   const insightSnippet = bestInsight.content.length > 100
     ? bestInsight.content.substring(0, 100) + '...'
@@ -679,7 +660,7 @@ function generateAIResponse(
   }
 
   if (messageCount === 0) {
-    const base = `I appreciate you getting started! Let me reflect on what you've shared.\n\n${reflection}`
+    const base = `I appreciate you getting started. Let me reflect on what you've shared.\n\n${reflection}`
     return profileBridge
       ? `${base}\n\n${profileBridge}\n\n${question}`
       : `${base}\n\n${question}`

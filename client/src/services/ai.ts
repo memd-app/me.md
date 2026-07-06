@@ -1,4 +1,5 @@
 import { callAnthropic, streamAnthropic, isApiKeyConfigured } from './anthropic'
+import { cleanText, extractJson } from './textCleaning'
 
 // ============================================
 // AI Service Layer - Claude API Integration
@@ -81,12 +82,15 @@ function buildSystemPrompt(
 ): string {
   const parts: string[] = []
 
-  // Core identity
-  parts.push(`You are an expert interviewer for me.md, a personal knowledge system. Your role is to help users build deep, verified self-knowledge through structured interviews.`)
-  parts.push(`You are interviewing the user about the topic: "${topicTitle}".`)
+  parts.push(`<role>
+You are the interviewer for me.md, a personal-knowledge tool. You draw out what a person knows
+about themselves through focused, one-question-at-a-time conversation. Your voice is that of a
+considerate editor: literate, quiet, precise — warm without gushing, curious without flattery.
+</role>`)
+  parts.push(`You are interviewing the user about the topic: "${cleanText(topicTitle)}".`)
 
   if (topicDescription) {
-    parts.push(`Topic description: ${topicDescription}`)
+    parts.push(`Topic description: ${cleanText(topicDescription)}`)
   }
 
   // Intent
@@ -128,15 +132,15 @@ function buildSystemPrompt(
     if (profileContext.previousSessionTopics.length > 0) {
       const topicList = profileContext.previousSessionTopics
         .slice(0, 5)
-        .map(t => `"${t.title}" (${t.sessionCount} session${t.sessionCount > 1 ? 's' : ''})`)
+        .map(t => `"${cleanText(t.title)}" (${t.sessionCount} session${t.sessionCount > 1 ? 's' : ''})`)
         .join(', ')
       parts.push(`Previously explored topics: ${topicList}.`)
     }
 
     if (profileContext.relatedInsights.length > 0) {
-      parts.push(`\nVerified insights from related topics (reference these to create cross-topic connections):`)
+      parts.push(`\nVerified insights from related topics (use only when genuinely relevant):`)
       for (const insight of profileContext.relatedInsights.slice(0, 5)) {
-        parts.push(`- [From "${insight.topicTitle}"]: "${insight.content}"`)
+        parts.push(`- [From "${cleanText(insight.topicTitle)}"]: "${cleanText(insight.content)}"`)
       }
     }
 
@@ -147,21 +151,21 @@ function buildSystemPrompt(
     if (otherInsights.length > 0) {
       parts.push(`\nOther verified self-knowledge:`)
       for (const insight of otherInsights) {
-        parts.push(`- [From "${insight.topicTitle}"]: "${insight.content}"`)
+        parts.push(`- [From "${cleanText(insight.topicTitle)}"]: "${cleanText(insight.content)}"`)
       }
     }
   }
 
-  // Response format guidelines
-  parts.push(`\n## Response Guidelines`)
-  parts.push(`1. Start with a brief reflection (2-4 sentences) that references the user's actual words and shows you understood what they said.`)
-  parts.push(`2. If there are relevant verified insights from other topics, create a brief cross-topic connection (1-2 sentences) showing how themes relate across their explorations.`)
-  parts.push(`3. End with ONE focused question following the current methodology and interview angle.`)
-  parts.push(`4. Use **bold** for key concepts and *italics* for quotes from the user or their verified insights.`)
-  parts.push(`5. Keep responses concise — aim for 3-6 sentences total (reflection + optional cross-topic bridge + question).`)
-  parts.push(`6. Be warm, curious, and genuinely interested. You are here to help them discover and articulate who they are.`)
-  parts.push(`7. Never be generic. Always reference specific things the user has said or verified insights they've established.`)
-  parts.push(`8. Do NOT use numbered lists in your response. Write naturally in flowing paragraphs.`)
+  parts.push(`<response_rules>
+- Open with a brief reflection (2-4 sentences) in the person's own words, showing you followed
+  what they said.
+- Only draw a cross-topic connection when a provided verified insight is genuinely relevant.
+  If none fits, don't invent one — a forced bridge is worse than none.
+- Close with exactly ONE question, following the current methodology and angle.
+- Use **bold** sparingly for a key concept and *italics* for the person's own words. Write in
+  flowing prose; no numbered lists.
+- Keep it to 3-6 sentences total. No exclamation marks. Don't praise; reflect.
+</response_rules>`)
 
   if (userMessageCount >= 10) {
     parts.push(`\nNote: The conversation has been going for ${userMessageCount} exchanges. The user may want to wrap up soon. You can occasionally mention that they've built good depth and can finish and distill insights when they feel ready.`)
@@ -484,11 +488,18 @@ function formatConversationTranscript(
  * Returns null if AI is unavailable (caller should use fallback).
  */
 export async function generateFullAnalysisAI(ctx: DistillationContext): Promise<string | null> {
-  const transcript = formatConversationTranscript(ctx.userMessages, ctx.assistantMessages)
+  let transcript = formatConversationTranscript(ctx.userMessages, ctx.assistantMessages)
+  if (transcript.length > 24000) {
+    transcript = transcript.slice(0, 24000) + '\n\n[Transcript truncated to fit; distill only what appears above.]'
+  }
 
   const systemPrompt = `You are a personal knowledge analyst for me.md, a personal knowledge system. Your job is to distill interview session conversations into deep, meaningful Full Analysis documents that capture the user's authentic self-knowledge.
 
 You produce structured markdown output. Be specific, reference the user's actual words and ideas (using direct quotes where impactful), and surface patterns and insights that help the user understand themselves better.
+
+If the session is too thin to support a section, say so plainly in that section rather than
+inventing content (e.g. "This session didn't go deep enough here yet."). Never manufacture
+principles or examples that the transcript doesn't contain.
 
 ${ctx.userName ? `The user's name is ${ctx.userName}${ctx.occupation ? `, occupation: ${ctx.occupation}` : ''}.` : ''}`
 
@@ -532,6 +543,7 @@ export async function generateJsonContentAI(ctx: DistillationContext): Promise<s
   const systemPrompt = `You are a personal knowledge analyst for me.md. Your job is to extract structured data from interview sessions into a JSON format that can be consumed by AI agents and applications.
 
 Output ONLY valid JSON with no markdown code fences, no explanation, and no commentary. Just the raw JSON object.
+Arrays may be empty if the session doesn't support them; do not pad with placeholders.
 
 ${ctx.userName ? `The user's name is ${ctx.userName}${ctx.occupation ? `, occupation: ${ctx.occupation}` : ''}.` : ''}`
 
@@ -560,26 +572,12 @@ Extract meaningful, specific content from the actual conversation. Do NOT use ge
   const result = await callClaudeForDistillation(systemPrompt, userPrompt)
   if (!result) return null
 
-  // Clean up: remove markdown code fences if Claude wrapped the JSON
-  let cleaned = result.trim()
-  if (cleaned.startsWith('```json')) {
-    cleaned = cleaned.slice(7)
-  } else if (cleaned.startsWith('```')) {
-    cleaned = cleaned.slice(3)
+  const parsed = extractJson<unknown>(result)
+  if (!parsed) {
+    console.warn('[me.md:ai] Claude returned invalid JSON for distillation.')
+    return null
   }
-  if (cleaned.endsWith('```')) {
-    cleaned = cleaned.slice(0, -3)
-  }
-  cleaned = cleaned.trim()
-
-  // Validate it's valid JSON
-  try {
-    JSON.parse(cleaned)
-    return cleaned
-  } catch {
-    console.warn('[me.md:ai] Claude returned invalid JSON for distillation, returning raw response.')
-    return cleaned
-  }
+  return JSON.stringify(parsed)
 }
 
 /**
@@ -646,38 +644,27 @@ Output format (JSON array only, no wrapping):
   const result = await callClaudeForDistillation(systemPrompt, userPrompt)
   if (!result) return null
 
-  // Clean up markdown code fences
-  let cleaned = result.trim()
-  if (cleaned.startsWith('```json')) {
-    cleaned = cleaned.slice(7)
-  } else if (cleaned.startsWith('```')) {
-    cleaned = cleaned.slice(3)
-  }
-  if (cleaned.endsWith('```')) {
-    cleaned = cleaned.slice(0, -3)
-  }
-  cleaned = cleaned.trim()
-
-  try {
-    const parsed = JSON.parse(cleaned)
-    if (!Array.isArray(parsed)) return null
-
-    // Validate structure
-    return parsed
-      .filter((item: unknown) => {
-        if (typeof item !== 'object' || item === null) return false
-        const obj = item as Record<string, unknown>
-        return typeof obj.content === 'string' && typeof obj.confidenceScore === 'number'
-      })
-      .map((item: { content: string; confidenceScore: number }) => ({
-        content: item.content.substring(0, 500),
-        confidenceScore: Math.min(Math.max(item.confidenceScore, 50), 95),
-      }))
-      .slice(0, 10)
-  } catch {
+  const parsed = extractJson<unknown[]>(result)
+  if (!Array.isArray(parsed)) {
     console.warn('[me.md:ai] Failed to parse AI insight extraction result.')
     return null
   }
+
+  // Validate structure
+  return parsed
+    .filter((item: unknown) => {
+      if (typeof item !== 'object' || item === null) return false
+      const obj = item as Record<string, unknown>
+      return typeof obj.content === 'string' && typeof obj.confidenceScore === 'number'
+    })
+    .map(item => {
+      const obj = item as { content: string; confidenceScore: number }
+      return {
+        content: obj.content.substring(0, 500),
+        confidenceScore: Math.min(Math.max(obj.confidenceScore, 50), 95),
+      }
+    })
+    .slice(0, 10)
 }
 
 // ============================================
@@ -716,6 +703,7 @@ export async function generatePersonalizedTopicSuggestions(ctx: TopicSuggestionC
   const systemPrompt = `You are a personal knowledge analyst for me.md, a personal knowledge system that helps users build comprehensive self-understanding through AI-guided interviews.
 
 Your job is to suggest personalized follow-up topics for exploration based on the user's existing knowledge graph — their explored topics, verified insights, and knowledge gaps.
+Suggest fewer than the range if the profile is too sparse to justify more; do not pad.
 
 Output ONLY a valid JSON array with no markdown code fences, no explanation, and no commentary. Just the raw JSON array.
 
@@ -723,7 +711,14 @@ ${ctx.userName ? `The user's name is ${ctx.userName}${ctx.occupation ? `, occupa
 
   // Build a summary of existing topics
   const topicSummary = ctx.existingTopics.map(t => {
-    const tags = t.tags ? JSON.parse(t.tags).join(', ') : 'none'
+    const tags = (() => {
+      try {
+        const parsed = JSON.parse(t.tags ?? '[]')
+        return Array.isArray(parsed) ? parsed.join(', ') : 'none'
+      } catch {
+        return 'none'
+      }
+    })()
     return `- "${t.title}" (status: ${t.status}, intent: ${t.intent || 'none'}, tags: ${tags}, category: ${t.presetCategory || 'custom'})`
   }).join('\n')
 
@@ -802,19 +797,7 @@ Use one of these intents: articulate, explore, decide, document
 
     console.log(`[me.md:ai] Topic suggestions response received (${responseText.length} chars)`)
 
-    // Clean up markdown code fences
-    let cleaned = responseText.trim()
-    if (cleaned.startsWith('```json')) {
-      cleaned = cleaned.slice(7)
-    } else if (cleaned.startsWith('```')) {
-      cleaned = cleaned.slice(3)
-    }
-    if (cleaned.endsWith('```')) {
-      cleaned = cleaned.slice(0, -3)
-    }
-    cleaned = cleaned.trim()
-
-    const parsed = JSON.parse(cleaned)
+    const parsed = extractJson<unknown[]>(responseText)
     if (!Array.isArray(parsed)) return null
 
     // Validate and sanitize each suggestion
@@ -827,15 +810,18 @@ Use one of these intents: articulate, explore, decide, document
         const obj = item as Record<string, unknown>
         return typeof obj.title === 'string' && typeof obj.description === 'string'
       })
-      .map((item: AISuggestedTopic) => ({
-        title: item.title.substring(0, 200),
-        description: item.description.substring(0, 500),
-        category: validCategories.includes(item.category) ? item.category : 'perspectives',
-        intent: validIntents.includes(item.intent) ? item.intent : 'explore',
-        tags: Array.isArray(item.tags) ? item.tags.slice(0, 6).map((t: string) => String(t).toLowerCase().trim()) : [],
-        suggestedQuestion: typeof item.suggestedQuestion === 'string' ? item.suggestedQuestion.substring(0, 500) : '',
-        rationale: typeof item.rationale === 'string' ? item.rationale.substring(0, 300) : '',
-      }))
+      .map(item => {
+        const obj = item as Partial<AISuggestedTopic>
+        return {
+          title: String(obj.title).substring(0, 200),
+          description: String(obj.description).substring(0, 500),
+          category: validCategories.includes(obj.category || '') ? obj.category || 'perspectives' : 'perspectives',
+          intent: validIntents.includes(obj.intent || '') ? obj.intent || 'explore' : 'explore',
+          tags: Array.isArray(obj.tags) ? obj.tags.slice(0, 6).map(t => String(t).toLowerCase().trim()) : [],
+          suggestedQuestion: typeof obj.suggestedQuestion === 'string' ? obj.suggestedQuestion.substring(0, 500) : '',
+          rationale: typeof obj.rationale === 'string' ? obj.rationale.substring(0, 300) : '',
+        }
+      })
       .slice(0, 5)
   } catch (error: unknown) {
     const err = error as { status?: number; message?: string }

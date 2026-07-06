@@ -20,6 +20,7 @@ import {
 import { scheduleSave } from '@/db/persistence'
 import { LOCAL_USER_ID } from '@/contexts/UserContext'
 import { callAnthropic, isApiKeyConfigured } from './anthropic'
+import { extractJson } from './textCleaning'
 
 // ============================================
 // Big Five library imports (CJS packages)
@@ -218,9 +219,41 @@ async function generatePersonalityInsights(
       ).join('\n')}`
     }
 
-    const systemPrompt = `You are a personality psychologist for me.md. Generate rich, personalized personality insights from Big Five assessment results. Output ONLY valid JSON.`
+    const systemPrompt = `<role>
+You interpret Big Five (IPIP NEO-PI-R) results into grounded personality insights for me.md.
+You are precise and evidence-bound: every claim must trace to a specific domain or facet score.
+</role>
+<rules>
+- Ground each insight in a named score. If a score doesn't support a claim, don't make it.
+- Provisional, not verdicts: these await the person's review. No clinical or diagnostic language.
+- category MUST be one of: openness, conscientiousness, extraversion, agreeableness,
+  neuroticism, cross_domain.
+- Only assert an agreement or contradiction with an interview insight when the score genuinely
+  supports it; return empty arrays otherwise.
+</rules>
+<output_contract>
+Return one JSON object, no prose, no fences:
+{"insights":[{"category":string,"claim":string(<=300 chars),"confidence":int 50-95,
+ "evidence":string(cite the score, e.g. "Conscientiousness 4.3/5, Self-Discipline 4.5")}],
+ "agreements":string[],"contradictions":string[]}
+</output_contract>`
 
-    const userPrompt = `Analyze Big Five results and generate 5-10 insights.\n\n## Scores\n${scoresText}\n\n## Descriptions\n${descriptionsText}${existingInsightsContext}\n\nOutput JSON: { "insights": [{ "category": "...", "claim": "...", "confidence": 75, "evidence": "..." }], "agreements": [], "contradictions": [] }`
+    const userPrompt = `Generate 5-10 insights from these Big Five results.
+
+## Scores
+${scoresText}
+
+## Descriptions
+${descriptionsText}${existingInsightsContext}
+
+<confidence_calibration>
+- 50-64: single moderate facet, or a domain near the midpoint (2.5-3.5).
+- 65-79: a clear high/low domain (>=4 or <=2) with one supporting facet.
+- 80-95: a strong domain AND two+ aligned facets pointing the same way.
+Never default to a round number; let the scores set it.
+</confidence_calibration>
+
+Return the JSON object only.`
 
     const responseText = await callAnthropic({
       messages: [{ role: 'user', content: userPrompt }],
@@ -228,16 +261,11 @@ async function generatePersonalityInsights(
       maxTokens: 4096,
     })
 
-    let cleaned = responseText.trim()
-    if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7)
-    else if (cleaned.startsWith('```')) cleaned = cleaned.slice(3)
-    if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3)
-    cleaned = cleaned.trim()
-
-    const parsed = JSON.parse(cleaned)
+    const parsed = extractJson<{ insights?: unknown[]; agreements?: unknown[]; contradictions?: unknown[] }>(responseText)
+    if (!parsed) throw new Error('Could not parse personality insight JSON.')
     const validCategories = ['openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism', 'cross_domain']
 
-    const validInsights: PersonalityInsight[] = (parsed.insights || [])
+    const validInsights: PersonalityInsight[] = (Array.isArray(parsed.insights) ? parsed.insights : [])
       .filter((item: any) => typeof item === 'object' && item !== null && typeof item.claim === 'string' && typeof item.confidence === 'number')
       .map((item: any) => ({
         category: validCategories.includes(item.category) ? item.category : 'cross_domain',
@@ -296,14 +324,14 @@ function storePersonalityInsights(
     ? `\n\n## Contradictions with Interview Insights\n${insightsResult.contradictions.map(c => `- ${c}`).join('\n')}`
     : ''
 
-  const fullAnalysis = `# AI Personality Analysis\n\nGenerated from Big Five assessment (attempt: ${attemptId}).\n\n## Key Insights\n${insightSummary}${agreementsSummary}${contradictionsSummary}`
+  const fullAnalysis = `# Big Five profile\n\nGenerated from Big Five assessment (attempt: ${attemptId}).\n\n## Key Insights\n${insightSummary}${agreementsSummary}${contradictionsSummary}`
 
   db.insert(notes).values({
     id: noteId,
     sessionId: attemptId,
     topicId,
     userId: LOCAL_USER_ID,
-    title: `Big Five AI Analysis — ${new Date().toLocaleDateString()}`,
+    title: `Big Five profile — ${new Date().toLocaleDateString()}`,
     contentFullAnalysis: fullAnalysis,
     contentBriefSummary: `Big Five personality analysis with ${insightsResult.insights.length} insights generated.`,
     selectedFormat: 'full_analysis',

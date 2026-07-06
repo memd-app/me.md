@@ -21,6 +21,7 @@ import {
 import { scheduleSave } from '@/db/persistence'
 import { LOCAL_USER_ID } from '@/contexts/UserContext'
 import { extractInsights, type SourceType, type ExtractionContext } from './insightExtraction'
+import { cleanText, cleanTitle, stripFrontmatter } from './textCleaning'
 
 type Db = SQLJsDatabase<typeof schema>
 
@@ -40,17 +41,18 @@ function extractTextFromHtml(html: string): string {
 
 function extractTitle(html: string): string {
   const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
-  return titleMatch?.[1]?.replace(/\s+/g, ' ').trim() || 'Untitled Page'
+  return cleanTitle(titleMatch?.[1] ?? '', 'Untitled page')
 }
 
 function generateSummary(text: string, maxLength = 500): string {
-  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 10)
+  const clean = cleanText(text)
+  const sentences = clean.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 10)
   let summary = ''
   for (const sentence of sentences) {
     if (summary.length + sentence.length > maxLength) break
-    summary += sentence.trim() + '. '
+    summary += sentence.trim() + ' '
   }
-  return summary.trim() || text.substring(0, maxLength)
+  return summary.trim() || clean.substring(0, maxLength)
 }
 
 function parseImportedContext(importedContextJson: string | null): unknown[] {
@@ -163,13 +165,14 @@ export async function importUrls(db: Db, urls: string[]) {
  */
 export function importText(db: Db, text: string, title?: string) {
   if (!text || text.trim().length === 0) throw new Error('Text content is required')
+  const body = stripFrontmatter(text)
 
   const user = db.select().from(users).where(eq(users.id, LOCAL_USER_ID)).get()
   if (!user) throw new Error('User not found')
 
-  const trimmedText = text.trim()
+  const trimmedText = body.trim()
   const fileId = crypto.randomUUID()
-  const displayTitle = title || 'Pasted text'
+  const displayTitle = cleanTitle(title || 'Pasted text', 'Pasted text')
   const summary = generateSummary(trimmedText)
 
   db.insert(importedFiles).values({
@@ -203,14 +206,15 @@ export function importText(db: Db, text: string, title?: string) {
 export function importChatGPT(db: Db, text: string, title?: string) {
   if (!text || text.trim().length === 0) throw new Error('ChatGPT response text is required')
 
-  const trimmedText = text.trim()
+  const body = stripFrontmatter(text)
+  const trimmedText = body.trim()
   if (trimmedText.length < 20) throw new Error('The response seems too short. Please paste the full ChatGPT output.')
 
   const user = db.select().from(users).where(eq(users.id, LOCAL_USER_ID)).get()
   if (!user) throw new Error('User not found')
 
   const fileId = crypto.randomUUID()
-  const displayTitle = title || 'ChatGPT Memory Extraction'
+  const displayTitle = cleanTitle(title || 'ChatGPT Memory Extraction', 'ChatGPT memory extraction')
   const summary = generateSummary(trimmedText)
 
   // Parse sections from ChatGPT output
@@ -299,13 +303,14 @@ export async function importFile(db: Db, file: File) {
   if (extractedText.length > 10000) {
     extractedText = extractedText.substring(0, 10000) + '... [truncated]'
   }
+  extractedText = stripFrontmatter(extractedText)
 
   if (!extractedText || extractedText.trim().length === 0) {
     throw new Error('Could not extract text from file')
   }
 
   const fileId = crypto.randomUUID()
-  const filename = file.name || 'Uploaded file'
+  const filename = cleanTitle(file.name || 'Uploaded file', 'Uploaded file')
   const summary = generateSummary(extractedText)
 
   db.insert(importedFiles).values({
@@ -394,6 +399,7 @@ export async function processImport(db: Db, importId: string) {
   } else if (pc.extractedText) {
     contentText = pc.extractedText
   }
+  const cleanName = cleanTitle(pc.title || importedFile.filename || '', 'Untitled import')
 
   if (!contentText || contentText.trim().length === 0) {
     return {
@@ -415,7 +421,7 @@ export async function processImport(db: Db, importId: string) {
   const extractionCtx: ExtractionContext = {
     content: contentText,
     sourceType,
-    topicTitle: pc.title || importedFile.filename || undefined,
+    topicTitle: cleanName,
     existingVerifiedInsights: existingVerified,
   }
 
@@ -439,7 +445,7 @@ export async function processImport(db: Db, importId: string) {
   }
 
   // Create topic, session, note, and insights
-  const topicTitle = `Import: ${importedFile.filename || 'Untitled'}`.substring(0, 200)
+  const topicTitle = cleanName.substring(0, 200)
   const topicId = crypto.randomUUID()
   const sessionId = crypto.randomUUID()
   const noteId = crypto.randomUUID()
@@ -450,8 +456,8 @@ export async function processImport(db: Db, importId: string) {
   }
   const dominantCategory = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'identity'
 
-  const noteTitle = `Import Notes: ${importedFile.filename || 'Untitled'}`
-  const noteSummary = `Insights extracted from ${importedFile.fileType} import "${importedFile.filename || 'Untitled'}". ${extractedInsights.length} insights identified.`
+  const noteTitle = cleanName
+  const noteSummary = `${extractedInsights.length} insight${extractedInsights.length === 1 ? '' : 's'} drawn from “${cleanName}”.`
 
   const savedInsights: Array<{
     id: string; content: string; confidenceScore: number; verificationStatus: string; suggestedCategory: string
