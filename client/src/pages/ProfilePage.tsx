@@ -6,7 +6,15 @@ import ApiErrorAlert from '@/components/ApiErrorAlert';
 import { formatDateTime } from '@/utils/dateFormat';
 import { getProfileSummary, regenerateProfile, exportAsMarkdown } from '@/services/profile';
 import { getLatestAssessment } from '@/services/assessment';
-import { PageHeader, SectionHeading, EmptyState, Button } from '@/components/ui';
+import { isApiKeyConfigured } from '@/services/anthropic';
+import {
+  getFacetStaleness,
+  getProfileFacets,
+  synthesizeFacets,
+  type FacetRecord,
+} from '@/services/profileSynthesis';
+import { useToast } from '@/contexts/ToastContext';
+import { PageHeader, SectionHeading, EmptyState, Button, SimpleMarkdown } from '@/components/ui';
 
 interface BigFiveDomainScore {
   domain: string;
@@ -119,8 +127,12 @@ export default function ProfilePage() {
   const [regenerating, setRegenerating] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [assessmentData, setAssessmentData] = useState<AssessmentLatest | null>(null);
+  const [facets, setFacets] = useState<FacetRecord[]>([]);
+  const [facetStaleness, setFacetStaleness] = useState<{ insightCount: number; generatedAt: string | null; verifiedSince: number } | null>(null);
+  const [synthesizing, setSynthesizing] = useState(false);
   const previousInsightCount = useRef<number | null>(null);
   const isMounted = useRef(true);
+  const { addToast } = useToast();
 
   const fetchSummary = useCallback(async (showLoadingState = true, signal?: AbortSignal) => {
     if (!user) return;
@@ -130,6 +142,8 @@ export default function ProfilePage() {
       const data = getProfileSummary(db);
       if (isMounted.current) {
         setSummary(data.summary);
+        setFacets(getProfileFacets(db));
+        setFacetStaleness(getFacetStaleness(db));
         previousInsightCount.current = data.summary.totalVerifiedInsights;
       }
     } catch (err) {
@@ -218,6 +232,34 @@ export default function ProfilePage() {
     }
   };
 
+  const handleSynthesize = async () => {
+    if (!user || !hasAnyInsights) return;
+    if (!isApiKeyConfigured()) {
+      addToast('Add your Anthropic API key in Settings to generate the analysis.', 'warning');
+      return;
+    }
+
+    try {
+      setSynthesizing(true);
+      const nextFacets = await synthesizeFacets(db);
+      setFacets(nextFacets);
+      setFacetStaleness(getFacetStaleness(db));
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Could not generate the analysis', 'error');
+    } finally {
+      setSynthesizing(false);
+    }
+  };
+
+  const handleCopyFacet = async (facet: FacetRecord) => {
+    try {
+      await navigator.clipboard.writeText(facet.body);
+      addToast('Facet copied to clipboard');
+    } catch {
+      addToast('Could not copy facet', 'error');
+    }
+  };
+
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto">
@@ -251,6 +293,15 @@ export default function ProfilePage() {
   }
 
   const hasAnyInsights = summary !== null && summary.totalVerifiedInsights > 0;
+  const hasFacets = facets.length > 0;
+  const canSynthesize = hasAnyInsights && isApiKeyConfigured();
+  const synthesizeTitle = !hasAnyInsights
+    ? 'Verify insights to generate a profile analysis.'
+    : !canSynthesize
+      ? 'Add your Anthropic API key in Settings to generate the analysis.'
+      : hasFacets
+        ? 'Regenerate profile analysis'
+        : 'Generate profile analysis';
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -387,6 +438,72 @@ export default function ProfilePage() {
           </div>
         </section>
       )}
+
+      {/* Profile analysis */}
+      <section className="mb-10 pb-8 border-b border-rule dark:border-dark-border">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-5">
+          <div>
+            <SectionHeading>Profile analysis</SectionHeading>
+            {hasFacets && facetStaleness && (
+              <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                Based on {facetStaleness.insightCount} verified insight{facetStaleness.insightCount !== 1 ? 's' : ''}
+                {' '}&middot; generated {facetStaleness.generatedAt ? formatDateTime(facetStaleness.generatedAt) : 'unknown date'}
+                {facetStaleness.verifiedSince > 0 && (
+                  <>
+                    {' '}&middot; {facetStaleness.verifiedSince} verified since
+                  </>
+                )}
+              </p>
+            )}
+          </div>
+          <Button
+            onClick={handleSynthesize}
+            disabled={!canSynthesize}
+            loading={synthesizing}
+            title={synthesizeTitle}
+            className="shrink-0"
+          >
+            {synthesizing ? 'Analyzing…' : hasFacets ? 'Regenerate' : 'Generate analysis'}
+          </Button>
+        </div>
+
+        {!hasAnyInsights ? (
+          <EmptyState
+            message="Verify insights to generate a profile analysis."
+            className="py-8"
+          />
+        ) : hasFacets ? (
+          <div className="space-y-8">
+            {facets.map((facet) => (
+              <article key={facet.key} className="pt-6 first:pt-0 border-t first:border-t-0 border-rule dark:border-dark-border">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
+                  <h3 className="font-serif text-xl text-gray-900 dark:text-white">
+                    {facet.title}
+                  </h3>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleCopyFacet(facet)}
+                    className="self-start"
+                  >
+                    <span className="flex flex-col items-start leading-tight">
+                      <span>Copy</span>
+                      <span className="text-[11px] font-normal text-gray-400 dark:text-gray-500">
+                        for an agent prompt
+                      </span>
+                    </span>
+                  </Button>
+                </div>
+                <SimpleMarkdown content={facet.body} />
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="font-serif italic text-gray-500 dark:text-gray-400">
+            Generate an agent-usable analysis from your verified insights.
+          </p>
+        )}
+      </section>
 
       {/* Empty state when no verified insights */}
       {!hasAnyInsights && (

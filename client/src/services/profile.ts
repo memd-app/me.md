@@ -21,6 +21,7 @@ import {
   assessmentResults,
 } from '@/db/schema'
 import { LOCAL_USER_ID } from '@/contexts/UserContext'
+import { getProfileFacets, type FacetRecord } from './profileSynthesis'
 
 type Db = SQLJsDatabase<typeof schema>
 
@@ -213,7 +214,26 @@ function buildProfileSummary(
 // Markdown generation
 // ============================================
 
-function generateMarkdown(summary: ProfileSummary): string {
+function generateFacetsMarkdown(facets: FacetRecord[]): string[] {
+  if (facets.length === 0) return []
+
+  const lines: string[] = []
+  lines.push('## Profile analysis')
+  lines.push('')
+  lines.push('*Synthesized from your verified insights.*')
+  lines.push('')
+
+  for (const facet of facets) {
+    lines.push(`### ${facet.title}`)
+    lines.push('')
+    lines.push(facet.body.trimEnd())
+    lines.push('')
+  }
+
+  return lines
+}
+
+function generateMarkdown(summary: ProfileSummary, facets: FacetRecord[] = []): string {
   const lines: string[] = []
   lines.push(`# ${summary.userName}'s me.md`)
   lines.push('')
@@ -223,6 +243,7 @@ function generateMarkdown(summary: ProfileSummary): string {
   lines.push('')
   lines.push('---')
   lines.push('')
+  lines.push(...generateFacetsMarkdown(facets))
 
   const renderSection = (section: ProfileSection, extra?: string) => {
     lines.push(`## ${section.title}`)
@@ -432,7 +453,7 @@ export function generatePersonalityMarkdown(data: PersonalityExportData): string
 // Helpers for fetching verified insights
 // ============================================
 
-function getVerifiedExportableInsights(db: Db) {
+export function getVerifiedExportableInsights(db: Db) {
   return db.select({
     content: insights.content,
     topicTitle: topics.title,
@@ -517,7 +538,8 @@ export function exportAsMarkdown(db: Db): string {
     }
   })
 
-  let markdown = generateMarkdown(summary)
+  const facets = getProfileFacets(db)
+  let markdown = generateMarkdown(summary, facets)
 
   const personalityData = getPersonalityExportData(db, 'exportable')
   if (personalityData.hasAssessment) {

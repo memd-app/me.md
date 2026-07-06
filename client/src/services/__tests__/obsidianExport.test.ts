@@ -4,6 +4,7 @@ import { drizzle } from 'drizzle-orm/sql-js'
 import * as schema from '@/db/schema'
 import { CREATE_TABLES_SQL } from '@/db/database'
 import { generateInsightNote, generateObsidianNotes, slugify, toFrontmatter } from '../obsidianExport'
+import { parseFacetsResponse, PROFILE_FACETS, upsertProfileFacets } from '../profileSynthesis'
 
 vi.mock('@/db/persistence', () => ({
   scheduleSave: vi.fn(),
@@ -21,6 +22,7 @@ describe('obsidian export service', () => {
   })
 
   beforeEach(() => {
+    db.run('DELETE FROM profile_facets')
     db.run('DELETE FROM assessment_results')
     db.run('DELETE FROM assessment_attempts')
     db.run('DELETE FROM insights')
@@ -260,6 +262,8 @@ describe('obsidian export service', () => {
     expect(result.insightCount).toBe(0)
     expect(result.topicCount).toBe(0)
     expect(result.hasPersonality).toBe(false)
+    expect(result.hasFacets).toBe(false)
+    expect(result.facetCount).toBe(0)
   })
 
   it('includes Big Five note and index link when personality data exists', () => {
@@ -291,5 +295,48 @@ describe('obsidian export service', () => {
     expect(paths).toContain('me.md/Personality/Big Five.md')
     expect(index?.content).toContain('## Personality')
     expect(index?.content).toContain('[[Big Five]]')
+  })
+
+  it('emits profile facet notes and index links when facets exist', () => {
+    const facets = parseFacetsResponse(JSON.stringify({
+      facets: PROFILE_FACETS.map(facet => ({
+        key: facet.key,
+        body: `- *strongly held*: ${facet.title} body.\n\n### Tensions & open questions\nNo contradictions surfaced in current evidence.`,
+      })),
+    }))
+    upsertProfileFacets(db, facets, '2026-07-06T12:00:00.000Z', 5)
+
+    const result = generateObsidianNotes(db)
+    const paths = result.notes.map(note => note.path)
+    const index = result.notes.find(note => note.path === 'me.md/Me - Index.md')
+
+    expect(result.hasFacets).toBe(true)
+    expect(result.facetCount).toBe(5)
+    for (const facet of PROFILE_FACETS) {
+      const note = result.notes.find(item => item.path === `me.md/Profile/${facet.title}.md`)
+      expect(paths).toContain(`me.md/Profile/${facet.title}.md`)
+      expect(note?.content).toContain(`title: "${facet.title}"`)
+      expect(note?.content).toContain('type: "profile-facet"')
+      expect(note?.content).toContain(`# ${facet.title}`)
+      expect(note?.content).toContain(`${facet.title} body.`)
+      expect(index?.content).toContain(`- [[${facet.title}]]`)
+    }
+    expect(index?.content).toContain('## Profile')
+  })
+
+  it('omits profile facet notes when no facets exist', () => {
+    insertTopic('topic-work', 'Work')
+    insertInsight({
+      id: 'ins-work',
+      topicId: 'topic-work',
+      content: 'I keep decision logs.',
+    })
+
+    const result = generateObsidianNotes(db)
+    const paths = result.notes.map(note => note.path)
+    const index = result.notes.find(note => note.path === 'me.md/Me - Index.md')
+
+    expect(paths.some(path => path.startsWith('me.md/Profile/'))).toBe(false)
+    expect(index?.content).not.toContain('## Profile')
   })
 })

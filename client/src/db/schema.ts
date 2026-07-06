@@ -120,6 +120,15 @@ export const insights = sqliteTable('insights', {
   updatedAt: text('updated_at').default(sql`(datetime('now'))`),
 })
 
+export const profileFacets = sqliteTable('profile_facets', {
+  id: text('id').primaryKey(),
+  key: text('key').notNull(),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  generatedAt: text('generated_at').default(sql`(datetime('now'))`),
+  insightCount: integer('insight_count').default(0),
+})
+
 // Verification History
 export const verificationHistory = sqliteTable('verification_history', {
   id: text('id').primaryKey(),

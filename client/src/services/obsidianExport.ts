@@ -4,6 +4,7 @@ import type * as schema from '@/db/schema'
 import { insights, topics } from '@/db/schema'
 import { LOCAL_USER_ID } from '@/contexts/UserContext'
 import { generatePersonalityMarkdown, getPersonalityExportData } from '@/services/profile'
+import { getProfileFacets, type FacetRecord } from '@/services/profileSynthesis'
 import type { NoteStatus } from '@/services/vaultReconcile'
 
 type Db = SQLJsDatabase<typeof schema>
@@ -30,6 +31,8 @@ export interface ObsidianExportResult {
   insightCount: number
   topicCount: number
   hasPersonality: boolean
+  hasFacets: boolean
+  facetCount: number
 }
 
 interface InsightNoteData {
@@ -76,14 +79,18 @@ export function generateObsidianNotes(db: Db): ObsidianExportResult {
 
   const personalityData = getPersonalityExportData(db, 'exportable')
   const hasPersonality = personalityData.hasAssessment
+  const facets = getProfileFacets(db)
+  const hasFacets = facets.length > 0
 
-  if (rows.length === 0 && !hasPersonality) {
+  if (rows.length === 0 && !hasPersonality && !hasFacets) {
     return {
       rootFolder: ROOT_FOLDER,
       notes: [],
       insightCount: 0,
       topicCount: 0,
       hasPersonality,
+      hasFacets,
+      facetCount: 0,
     }
   }
 
@@ -116,7 +123,7 @@ export function generateObsidianNotes(db: Db): ObsidianExportResult {
   const groups = Array.from(topicGroups.values())
   const topicNotes = groups.map(group => makeTopicNote(group))
   const notes: ObsidianNote[] = [
-    makeIndexNote(groups, rows.length, hasPersonality),
+    makeIndexNote(groups, rows.length, hasPersonality, facets),
     ...topicNotes,
     ...insightNotes,
   ]
@@ -135,12 +142,30 @@ export function generateObsidianNotes(db: Db): ObsidianExportResult {
     notes.push(makeNote(`${ROOT_FOLDER}/Personality/Big Five.md`, content))
   }
 
+  for (const facet of facets) {
+    const content = [
+      toFrontmatter([
+        ['title', facet.title],
+        ['source', ROOT_FOLDER],
+        ['type', 'profile-facet'],
+      ]),
+      '',
+      `# ${facet.title}`,
+      '',
+      facet.body.trimEnd(),
+      '',
+    ].join('\n')
+    notes.push(makeNote(`${ROOT_FOLDER}/Profile/${facet.title}.md`, content))
+  }
+
   return {
     rootFolder: ROOT_FOLDER,
     notes,
     insightCount: rows.length,
     topicCount: groups.length,
     hasPersonality,
+    hasFacets,
+    facetCount: facets.length,
   }
 }
 
@@ -264,7 +289,7 @@ function makeTopicNote(group: TopicGroup): ObsidianNote {
   return makeNote(group.path, lines.join('\n'))
 }
 
-function makeIndexNote(groups: TopicGroup[], insightCount: number, hasPersonality: boolean): ObsidianNote {
+function makeIndexNote(groups: TopicGroup[], insightCount: number, hasPersonality: boolean, facets: FacetRecord[]): ObsidianNote {
   const lines = [
     toFrontmatter([
       ['title', 'Me - Index'],
@@ -286,6 +311,12 @@ function makeIndexNote(groups: TopicGroup[], insightCount: number, hasPersonalit
 
   if (hasPersonality) {
     lines.push('## Personality', '', '- [[Big Five]]', '')
+  }
+
+  if (facets.length > 0) {
+    lines.push('## Profile', '')
+    lines.push(...facets.map(facet => `- [[${facet.title}]]`))
+    lines.push('')
   }
 
   return makeNote(`${ROOT_FOLDER}/Me - Index.md`, lines.join('\n'))

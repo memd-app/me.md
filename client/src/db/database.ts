@@ -153,6 +153,14 @@ export const CREATE_TABLES_SQL = `
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   );
+  CREATE TABLE IF NOT EXISTS profile_facets (
+    id TEXT PRIMARY KEY,
+    key TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    generated_at TEXT DEFAULT (datetime('now')),
+    insight_count INTEGER DEFAULT 0
+  );
   CREATE TABLE IF NOT EXISTS verification_history (
     id TEXT PRIMARY KEY,
     insight_id TEXT NOT NULL REFERENCES insights(id) ON DELETE CASCADE,
