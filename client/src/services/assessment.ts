@@ -23,6 +23,7 @@ import { callAnthropic, isApiKeyConfigured } from './anthropic'
 import { extractJson } from './textCleaning'
 import { admitInsights, type ExtractedInsight } from './insightExtraction'
 import { applyInsightEvidenceAttachments, fetchExistingInsightRefs, logAdmissionDrops } from './admissionPersistence'
+import { enqueueVaultPendingWrites } from './vaultWriteThrough'
 
 // ============================================
 // Big Five library imports (CJS packages)
@@ -368,6 +369,7 @@ function storePersonalityInsights(
       evidenceSources: insight.evidenceSources.length > 0 ? JSON.stringify(insight.evidenceSources) : null,
     }).run()
   }
+  enqueueVaultPendingWrites(db, insightIds)
 
   scheduleSave()
   return { noteId, insightIds }

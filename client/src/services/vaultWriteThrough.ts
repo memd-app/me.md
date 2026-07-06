@@ -1,29 +1,42 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { LOCAL_USER_ID } from '@/contexts/UserContext'
 import { insights, topics } from '@/db/schema'
 import { ensurePermission as ensureVaultPermission } from '@/services/obsidianSync'
 import {
+  STATUS_DIRS,
   generateInsightNote,
-  generateNotesForInsight,
   generateObsidianNotes,
   stableHash,
   type InsightGenRow,
 } from '@/services/obsidianExport'
 import { loadVaultHandle as loadStoredVaultHandle } from '@/services/vaultHandle'
-import { applyVaultBody, clearVaultSync, recordVaultSync } from '@/services/insights'
+import {
+  applyVaultBody,
+  clearVaultSync,
+  recordVaultSync,
+  rejectInsight,
+  reopenInsight,
+  verifyInsight,
+} from '@/services/insights'
 import { createFsaVaultFs, type VaultFs } from '@/services/vaultFs'
 import {
   assembleNote,
   classifyReconcile,
+  classifyStatusReconcile,
   extractInsightBody,
   extractInsightBodyRaw,
+  folderStatusFromPath,
   hashBody,
   normalizeBody,
+  noteStatusForDb,
   parseNote,
+  pickCanonicalLocation,
+  type NoteStatus,
+  type VaultNoteLocation,
 } from '@/services/vaultReconcile'
 
 type Db = any
-type VaultWriteKind = 'verify' | 'edit' | 'reject'
+type VaultWriteKind = 'verify' | 'edit' | 'reject' | 'pending'
 type JournalAction = VaultWriteKind | 'reconcile'
 type JournalOutcome =
   | 'written'
@@ -35,6 +48,12 @@ type JournalOutcome =
   | 'deferred:no-vault'
   | 'deferred:permission'
   | 'error'
+  | 'materialized'
+  | 'approved-from-vault'
+  | 'rejected-from-vault'
+  | 'dismissed'
+  | 'duplicate-note'
+  | 'attention'
 
 export interface VaultConflict {
   insightId: string
@@ -55,6 +74,27 @@ export interface ReconcileReport {
   conflicts: number
   movedRejected: number
   deferred: number
+  materialized: number
+  approvedFromVault: number
+  rejectedFromVault: number
+  pendingPulled: number
+  dismissed: number
+  attention: number
+}
+
+export type VaultAttentionKind = 'dismissed-in-vault' | 'backward-move' | 'duplicate-note'
+
+export interface VaultAttentionItem {
+  insightId: string
+  slug: string
+  kind: VaultAttentionKind
+  detectedAt: string
+  detail: {
+    fromStatus?: NoteStatus
+    dbStatus?: NoteStatus
+    duplicatePaths?: string[]
+    lastKnownPath?: string
+  }
 }
 
 export interface VaultWriteThroughDeps {
@@ -86,8 +126,10 @@ type VaultInsightRow = InsightGenRow & {
 const JOURNAL_KEY = 'memd.vault.journal'
 const PENDING_KEY = 'memd.vault.pendingWrites'
 const CONFLICTS_KEY = 'memd.vault.conflicts'
+const ATTENTION_KEY = 'memd.vault.attention'
 const JOURNAL_LIMIT = 500
-const INSIGHTS_DIR = 'me.md/Insights'
+const MATERIALIZE_BATCH_SIZE = 25
+const STATUS_ORDER: NoteStatus[] = ['verified', 'rejected', 'pending']
 
 const defaultDeps = {
   loadVaultHandle: loadStoredVaultHandle,
@@ -113,8 +155,10 @@ export async function runVaultWriteThrough(
 ): Promise<void> {
   const resolvedDeps = resolveDeps(deps)
   const row = getInsightRow(db, insightId)
-  const slug = row ? generateInsightNote(row).slug : null
-  const path = row ? generateInsightNote(row).note.path : null
+  const target = row ? targetStatusForWrite(row) : null
+  const generated = row && target ? generateInsightNote(row, target) : row ? generateInsightNote(row) : null
+  const slug = generated?.slug ?? null
+  const path = generated?.note.path ?? null
   const hashBefore = row?.vaultContentHash ?? null
 
   try {
@@ -139,6 +183,51 @@ export async function runVaultWriteThrough(
   }
 }
 
+export function enqueueVaultPendingWrites(
+  db: Db,
+  insightIds: string[],
+  deps?: VaultWriteThroughDeps,
+): void {
+  if (insightIds.length === 0) return
+  void runVaultPendingWrites(db, insightIds, deps)
+}
+
+async function runVaultPendingWrites(
+  db: Db,
+  insightIds: string[],
+  deps?: VaultWriteThroughDeps,
+): Promise<void> {
+  const resolvedDeps = resolveDeps(deps)
+
+  try {
+    const handle = await resolvedDeps.loadVaultHandle()
+    if (!handle) {
+      appendJournal(makeJournalEntry(resolvedDeps, 'pending', 'batch', null, null, 'deferred:no-vault', null, null))
+      return
+    }
+
+    const permission = await handle.queryPermission({ mode: 'readwrite' })
+    if (permission !== 'granted') {
+      setPendingVaultWrites([...getPendingVaultWrites(), ...insightIds])
+      appendJournal(makeJournalEntry(resolvedDeps, 'pending', 'batch', null, null, 'deferred:permission', null, null))
+      return
+    }
+
+    const fs = resolvedDeps.createVaultFs(handle)
+    for (const insightId of insightIds) {
+      try {
+        await writePendingNote(db, fs, insightId, resolvedDeps)
+      } catch {
+        addPendingVaultWrite(insightId)
+        appendJournal(makeJournalEntry(resolvedDeps, 'pending', insightId, null, null, 'error', null, null))
+      }
+    }
+  } catch {
+    setPendingVaultWrites([...getPendingVaultWrites(), ...insightIds])
+    appendJournal(makeJournalEntry(resolvedDeps, 'pending', 'batch', null, null, 'error', null, null))
+  }
+}
+
 export async function reconcileVault(
   db: Db,
   handle: FileSystemDirectoryHandle,
@@ -151,93 +240,117 @@ export async function reconcileVault(
 
   const fs = resolvedDeps.createVaultFs(handle)
   const report = emptyReport()
-  await drainPendingWrites(db, fs, resolvedDeps)
+  await drainPendingWrites(db, fs, resolvedDeps, report)
 
-  const rows = getExportableInsightRows(db)
+  const rows = getVaultManagedInsightRows(db)
+  const rowById = new Map(rows.map(row => [row.id, row]))
+  const locationsById = await scanVaultNotes(fs)
+  const canonicalById = new Map<string, VaultNoteLocation>()
+  const activeAttention = new Set<string>()
+  const materializeRows: VaultInsightRow[] = []
+
+  for (const [insightId, locations] of locationsById) {
+    const row = rowById.get(insightId)
+    if (!row) continue
+
+    const picked = pickCanonicalLocation(locations, status => generateInsightNote(row, status).note.path)
+    canonicalById.set(insightId, picked.winner)
+
+    if (picked.losers.length > 0) {
+      const generated = generateInsightNote(row, noteStatusForDb(row.verificationStatus) ?? picked.winner.folderStatus)
+      const item = makeAttentionItem(row, generated.slug, 'duplicate-note', resolvedDeps, {
+        duplicatePaths: picked.losers.map(location => location.path),
+      })
+      upsertVaultAttention(item)
+      activeAttention.add(attentionKey(item))
+      report.attention += picked.losers.length
+      appendJournal(makeJournalEntry(
+        resolvedDeps,
+        'reconcile',
+        row.id,
+        generated.slug,
+        picked.winner.path,
+        'duplicate-note',
+        row.vaultContentHash,
+        null,
+      ))
+    }
+  }
+
   for (const row of rows) {
-    const generated = generateInsightNote(row)
-    const disk = await readInsightDiskContent(fs, generated.note.path, row.id)
-    const merged = assembleNote(row, row.content)
-    const decision = classifyReconcile({
-      dbBody: row.content,
-      diskContent: disk.content,
-      baseBodyHash: row.vaultBodyHash,
-      dbContentHash: merged.contentHash,
-      lastContentHash: row.vaultContentHash,
-    })
+    const dbStatus = noteStatusForDb(row.verificationStatus)
+    if (!dbStatus) continue
 
-    switch (decision) {
+    const location = canonicalById.get(row.id) ?? null
+    const decision = classifyStatusReconcile({
+      dbStatus,
+      folderStatus: location?.folderStatus ?? null,
+      everMaterialized: row.vaultSyncedAt !== null,
+    })
+    const generated = generateInsightNote(row, dbStatus)
+
+    switch (decision.kind) {
       case 'noop':
+        removeVaultConflict(row.id)
         break
-      case 'adopt':
-        if (disk.content !== null) {
-          recordVaultSync(db, row.id, {
-            contentHash: stableHash(disk.content),
-            bodyHash: hashBody(extractInsightBody(disk.content)),
-            syncedAt: resolvedDeps.now(),
-          })
-          report.adopted += 1
-          appendJournal(makeJournalEntry(
-            resolvedDeps,
-            'reconcile',
-            row.id,
-            generated.slug,
-            disk.path,
-            'adopted',
-            row.vaultContentHash,
-            stableHash(disk.content),
-          ))
-        }
+      case 'materialize':
+        materializeRows.push(row)
         break
-      case 'metadata': {
-        const rawBody = disk.content === null ? row.content : extractInsightBodyRaw(disk.content)
-        const restamped = assembleNote(row, rawBody)
-        await writeInsightNote(db, fs, row.id, generated.note.path, restamped.content, restamped.contentHash, restamped.bodyHash, resolvedDeps)
-        report.updated += 1
-        appendJournal(makeJournalEntry(resolvedDeps, 'reconcile', row.id, generated.slug, generated.note.path, 'written', row.vaultContentHash, restamped.contentHash))
+      case 'dismissed': {
+        const item = makeAttentionItem(row, generated.slug, 'dismissed-in-vault', resolvedDeps, {
+          lastKnownPath: generated.note.path,
+        })
+        upsertVaultAttention(item)
+        activeAttention.add(attentionKey(item))
+        report.dismissed += 1
+        appendJournal(makeJournalEntry(resolvedDeps, 'reconcile', row.id, generated.slug, generated.note.path, 'dismissed', row.vaultContentHash, null))
         break
       }
-      case 'app-wins':
-        await writeInsightNote(db, fs, row.id, generated.note.path, merged.content, merged.contentHash, merged.bodyHash, resolvedDeps)
-        report.updated += 1
-        appendJournal(makeJournalEntry(resolvedDeps, 'reconcile', row.id, generated.slug, generated.note.path, 'written', row.vaultContentHash, merged.contentHash))
+      case 'attention-backward': {
+        const item = makeAttentionItem(row, generated.slug, 'backward-move', resolvedDeps, {
+          fromStatus: location?.folderStatus ?? undefined,
+          dbStatus,
+        })
+        upsertVaultAttention(item)
+        activeAttention.add(attentionKey(item))
+        report.attention += 1
+        appendJournal(makeJournalEntry(resolvedDeps, 'reconcile', row.id, generated.slug, location?.path ?? null, 'attention', row.vaultContentHash, null))
         break
-      case 'recreate':
+      }
+      case 'apply-verify':
+        if (location) {
+          await applyVaultStatusTransition(db, fs, row, location, 'verified', report, resolvedDeps)
+        }
+        break
+      case 'apply-reject':
+        if (location) {
+          await applyVaultStatusTransition(db, fs, row, location, 'rejected', report, resolvedDeps)
+        }
+        break
+      case 'recreate': {
+        const merged = assembleNote(row, row.content, 'verified')
         await writeInsightNote(db, fs, row.id, generated.note.path, merged.content, merged.contentHash, merged.bodyHash, resolvedDeps)
         report.recreated += 1
         appendJournal(makeJournalEntry(resolvedDeps, 'reconcile', row.id, generated.slug, generated.note.path, 'recreated', row.vaultContentHash, merged.contentHash))
         break
-      case 'vault-wins': {
-        if (disk.content === null) break
-        const vaultBody = extractInsightBody(disk.content)
-        applyVaultBody(db, row.id, vaultBody)
-        const pulledRow = { ...row, content: vaultBody }
-        const restamped = assembleNote(pulledRow, vaultBody)
-        await writeInsightNote(db, fs, row.id, generated.note.path, restamped.content, restamped.contentHash, restamped.bodyHash, resolvedDeps)
-        report.pulled += 1
-        appendJournal(makeJournalEntry(resolvedDeps, 'reconcile', row.id, generated.slug, generated.note.path, 'pulled', row.vaultContentHash, restamped.contentHash))
-        break
       }
-      case 'conflict': {
-        if (disk.content === null) break
-        const conflict: VaultConflict = {
-          insightId: row.id,
-          slug: generated.slug,
-          path: generated.note.path,
-          appBody: normalizeBody(row.content),
-          vaultBody: extractInsightBody(disk.content),
-          baseBodyHash: row.vaultBodyHash,
-          detectedAt: resolvedDeps.now(),
+      case 'in-place':
+        if (location) {
+          await applyInPlaceReconcile(db, fs, row, dbStatus, location, report, resolvedDeps)
         }
-        upsertVaultConflict(conflict)
-        report.conflicts += 1
-        appendJournal(makeJournalEntry(resolvedDeps, 'reconcile', row.id, generated.slug, generated.note.path, 'conflict', row.vaultContentHash, null))
         break
-      }
     }
   }
 
-  await writeSupportNotes(db, fs)
+  await materializePendingRows(db, fs, materializeRows, report, resolvedDeps)
+  pruneVaultAttention(activeAttention)
+
+  try {
+    await writeSupportNotes(db, fs)
+  } catch {
+    appendJournal(makeJournalEntry(resolvedDeps, 'reconcile', 'support', null, null, 'error', null, null))
+  }
+
   report.deferred = getPendingVaultWrites().length
   return report
 }
@@ -277,11 +390,67 @@ export async function resolveVaultConflict(
     applyVaultBody(db, conflict.insightId, body)
   }
 
-  const currentRow = choice === 'vault' ? { ...row, content: body } : row
-  const generated = generateInsightNote(currentRow)
-  const merged = assembleNote(currentRow, body)
-  await writeInsightNote(db, fs, conflict.insightId, generated.note.path, merged.content, merged.contentHash, merged.bodyHash, resolvedDeps)
+  const currentRow = getInsightRow(db, conflict.insightId) ?? { ...row, content: body }
+  const status = folderStatusFromPath(conflict.path) ?? noteStatusForDb(currentRow.verificationStatus) ?? 'verified'
+  const merged = assembleNote(currentRow, body, status)
+  await writeInsightNote(db, fs, conflict.insightId, conflict.path, merged.content, merged.contentHash, merged.bodyHash, resolvedDeps)
   removeVaultConflict(conflict.insightId)
+}
+
+export async function resolveVaultAttention(
+  db: Db,
+  handle: FileSystemDirectoryHandle,
+  item: VaultAttentionItem,
+  choice: string,
+  deps?: VaultWriteThroughDeps,
+): Promise<void> {
+  const resolvedDeps = resolveDeps(deps)
+  if (!(await resolvedDeps.ensurePermission(handle))) {
+    throw new Error('Permission to write to the vault was denied.')
+  }
+
+  const fs = resolvedDeps.createVaultFs(handle)
+  const row = getInsightRow(db, item.insightId)
+  if (!row) {
+    removeVaultAttention(item)
+    return
+  }
+
+  if (item.kind === 'dismissed-in-vault') {
+    if (choice === 'confirm-reject') {
+      rejectInsight(db, item.insightId, 'Dismissed in vault')
+      clearVaultSync(db, item.insightId)
+      appendJournal(makeJournalEntry(resolvedDeps, 'reconcile', item.insightId, item.slug, item.detail.lastKnownPath ?? null, 'rejected-from-vault', row.vaultContentHash, null))
+    } else if (choice === 're-materialize') {
+      await writePendingNote(db, fs, item.insightId, resolvedDeps)
+    }
+    removeVaultAttention(item)
+    return
+  }
+
+  if (item.kind === 'backward-move') {
+    const fromStatus = item.detail.fromStatus
+    const dbStatus = noteStatusForDb(row.verificationStatus)
+    if (choice === 'keep-current' && dbStatus) {
+      await moveNoteToStatus(db, row, dbStatus, fs, resolvedDeps, 'reconcile')
+    } else if (choice === 'apply-move' && fromStatus) {
+      if (fromStatus === 'verified') {
+        verifyInsight(db, item.insightId)
+      } else if (fromStatus === 'pending') {
+        reopenInsight(db, item.insightId)
+      } else {
+        rejectInsight(db, item.insightId, 'Rejected in vault')
+      }
+      const current = getInsightRow(db, item.insightId)
+      if (current) await moveNoteToStatus(db, current, fromStatus, fs, resolvedDeps, 'reconcile')
+    }
+    removeVaultAttention(item)
+    return
+  }
+
+  if (item.kind === 'duplicate-note' && choice === 'dismiss') {
+    removeVaultAttention(item)
+  }
 }
 
 export function getVaultJournal(): JournalEntry[] {
@@ -307,60 +476,289 @@ export function setVaultConflicts(conflicts: VaultConflict[]): void {
   storageSet(CONFLICTS_KEY, JSON.stringify(conflicts))
 }
 
+export function getVaultAttention(): VaultAttentionItem[] {
+  return readJson<VaultAttentionItem[]>(ATTENTION_KEY, [])
+}
+
+export function setVaultAttention(items: VaultAttentionItem[]): void {
+  storageSet(ATTENTION_KEY, JSON.stringify(items))
+}
+
 export function clearVaultStateForTests(): void {
   storageRemove(JOURNAL_KEY)
   storageRemove(PENDING_KEY)
   storageRemove(CONFLICTS_KEY)
+  storageRemove(ATTENTION_KEY)
 }
 
 async function writeCurrentInsightState(
   db: Db,
   insightId: string,
-  kind: VaultWriteKind | 'reconcile',
+  kind: JournalAction,
   fs: VaultFs,
   deps: Required<VaultWriteThroughDeps>,
 ): Promise<void> {
   const row = getInsightRow(db, insightId)
   if (!row) return
 
-  if (kind === 'reject' || row.verificationStatus === 'rejected' || row.privacyTier === 'never_export') {
-    await moveInsightToRejected(db, row, fs, deps)
+  const target = targetStatusForWrite(row)
+  if (!target) return
+
+  await moveNoteToStatus(db, row, target, fs, deps, kind)
+}
+
+function targetStatusForWrite(row: VaultInsightRow): NoteStatus | null {
+  if (row.privacyTier === 'never_export') return 'rejected'
+  return noteStatusForDb(row.verificationStatus)
+}
+
+async function moveNoteToStatus(
+  db: Db,
+  initialRow: VaultInsightRow,
+  target: NoteStatus,
+  fs: VaultFs,
+  deps: Required<VaultWriteThroughDeps>,
+  action: JournalAction,
+): Promise<void> {
+  let row = initialRow
+  const targetNote = generateInsightNote(row, target)
+  const targetPath = targetNote.note.path
+  const found = await findInsightNote(fs, row, target)
+  let resolvedBody = row.content
+
+  if (found?.content) {
+    const diskBodyRaw = extractInsightBodyRaw(found.content)
+    if (
+      hashBody(diskBodyRaw) !== row.vaultBodyHash
+      && normalizeBody(diskBodyRaw) !== normalizeBody(row.content)
+    ) {
+      applyVaultBody(db, row.id, extractInsightBody(found.content))
+      row = getInsightRow(db, row.id) ?? { ...row, content: extractInsightBody(found.content) }
+    }
+    resolvedBody = diskBodyRaw
+  }
+
+  if (found && found.path !== targetPath) {
+    await fs.move(found.path, targetPath)
+  }
+
+  if (target === 'rejected' && !found) {
+    clearVaultSync(db, row.id)
+    await writeSupportNotes(db, fs)
+    appendJournal(makeJournalEntry(deps, action, row.id, targetNote.slug, targetPath, 'moved-rejected', row.vaultContentHash, null))
     return
   }
 
-  if (!isExportable(row)) return
+  const currentRow = getInsightRow(db, row.id) ?? row
+  const assembled = assembleNote(currentRow, resolvedBody, target)
+  await fs.write(targetPath, assembled.content)
 
-  const notes = generateNotesForInsight(db, insightId)
-  await fs.write(notes.insight.path, notes.insight.content)
+  if (target === 'rejected') {
+    clearVaultSync(db, row.id)
+  } else {
+    recordVaultSync(db, row.id, {
+      contentHash: assembled.contentHash,
+      bodyHash: assembled.bodyHash,
+      syncedAt: deps.now(),
+    })
+  }
+
+  if (target === 'verified' || target === 'rejected') {
+    await writeSupportNotes(db, fs)
+  }
+
+  appendJournal(makeJournalEntry(
+    deps,
+    action,
+    row.id,
+    targetNote.slug,
+    targetPath,
+    target === 'rejected' ? 'moved-rejected' : 'written',
+    row.vaultContentHash,
+    target === 'rejected' ? null : assembled.contentHash,
+  ))
+}
+
+async function applyInPlaceReconcile(
+  db: Db,
+  fs: VaultFs,
+  row: VaultInsightRow,
+  dbStatus: NoteStatus,
+  location: VaultNoteLocation,
+  report: ReconcileReport,
+  deps: Required<VaultWriteThroughDeps>,
+): Promise<void> {
+  const generated = generateInsightNote(row, dbStatus)
+
+  if (dbStatus === 'rejected') {
+    const restamped = assembleNote(row, extractInsightBodyRaw(location.content), 'rejected')
+    if (restamped.content !== location.content.replace(/\r\n?/g, '\n')) {
+      await fs.write(location.path, restamped.content)
+      report.updated += 1
+      appendJournal(makeJournalEntry(deps, 'reconcile', row.id, generated.slug, location.path, 'written', row.vaultContentHash, null))
+    }
+    removeVaultConflict(row.id)
+    return
+  }
+
+  const merged = assembleNote(row, row.content, dbStatus)
+  const decision = classifyReconcile({
+    dbBody: row.content,
+    diskContent: location.content,
+    baseBodyHash: row.vaultBodyHash,
+    dbContentHash: merged.contentHash,
+    lastContentHash: row.vaultContentHash,
+  })
+
+  switch (decision) {
+    case 'noop':
+      removeVaultConflict(row.id)
+      break
+    case 'adopt':
+      recordVaultSync(db, row.id, {
+        contentHash: stableHash(location.content),
+        bodyHash: hashBody(extractInsightBody(location.content)),
+        syncedAt: deps.now(),
+      })
+      report.adopted += 1
+      appendJournal(makeJournalEntry(deps, 'reconcile', row.id, generated.slug, location.path, 'adopted', row.vaultContentHash, stableHash(location.content)))
+      break
+    case 'metadata': {
+      const restamped = assembleNote(row, extractInsightBodyRaw(location.content), dbStatus)
+      await writeInsightNote(db, fs, row.id, location.path, restamped.content, restamped.contentHash, restamped.bodyHash, deps)
+      report.updated += 1
+      appendJournal(makeJournalEntry(deps, 'reconcile', row.id, generated.slug, location.path, 'written', row.vaultContentHash, restamped.contentHash))
+      break
+    }
+    case 'app-wins':
+      await writeInsightNote(db, fs, row.id, location.path, merged.content, merged.contentHash, merged.bodyHash, deps)
+      report.updated += 1
+      appendJournal(makeJournalEntry(deps, 'reconcile', row.id, generated.slug, location.path, 'written', row.vaultContentHash, merged.contentHash))
+      break
+    case 'recreate':
+      await writeInsightNote(db, fs, row.id, generated.note.path, merged.content, merged.contentHash, merged.bodyHash, deps)
+      report.recreated += 1
+      appendJournal(makeJournalEntry(deps, 'reconcile', row.id, generated.slug, generated.note.path, 'recreated', row.vaultContentHash, merged.contentHash))
+      break
+    case 'vault-wins': {
+      const vaultBody = extractInsightBody(location.content)
+      applyVaultBody(db, row.id, vaultBody)
+      const currentRow = getInsightRow(db, row.id) ?? { ...row, content: vaultBody }
+      const restamped = assembleNote(currentRow, vaultBody, dbStatus)
+      await writeInsightNote(db, fs, row.id, location.path, restamped.content, restamped.contentHash, restamped.bodyHash, deps)
+      if (dbStatus === 'pending') report.pendingPulled += 1
+      else report.pulled += 1
+      appendJournal(makeJournalEntry(deps, 'reconcile', row.id, generated.slug, location.path, 'pulled', row.vaultContentHash, restamped.contentHash))
+      break
+    }
+    case 'conflict':
+      upsertVaultConflict({
+        insightId: row.id,
+        slug: generated.slug,
+        path: location.path,
+        appBody: normalizeBody(row.content),
+        vaultBody: extractInsightBody(location.content),
+        baseBodyHash: row.vaultBodyHash,
+        detectedAt: deps.now(),
+      })
+      report.conflicts += 1
+      appendJournal(makeJournalEntry(deps, 'reconcile', row.id, generated.slug, location.path, 'conflict', row.vaultContentHash, null))
+      break
+  }
+}
+
+async function applyVaultStatusTransition(
+  db: Db,
+  fs: VaultFs,
+  initialRow: VaultInsightRow,
+  location: VaultNoteLocation,
+  target: 'verified' | 'rejected',
+  report: ReconcileReport,
+  deps: Required<VaultWriteThroughDeps>,
+): Promise<void> {
+  let row = initialRow
+  const diskBodyRaw = extractInsightBodyRaw(location.content)
+  const diskBody = extractInsightBody(location.content)
+  if (
+    hashBody(diskBodyRaw) !== row.vaultBodyHash
+    && normalizeBody(diskBodyRaw) !== normalizeBody(row.content)
+  ) {
+    applyVaultBody(db, row.id, diskBody)
+    row = getInsightRow(db, row.id) ?? { ...row, content: diskBody }
+  }
+
+  if (target === 'verified') {
+    verifyInsight(db, row.id)
+  } else {
+    rejectInsight(db, row.id, 'Rejected in vault')
+  }
+
+  const currentRow = getInsightRow(db, row.id) ?? row
+  const restamped = assembleNote(currentRow, diskBodyRaw, target)
+  await fs.write(location.path, restamped.content)
+
+  if (target === 'verified') {
+    recordVaultSync(db, row.id, {
+      contentHash: restamped.contentHash,
+      bodyHash: restamped.bodyHash,
+      syncedAt: deps.now(),
+    })
+    report.approvedFromVault += 1
+    appendJournal(makeJournalEntry(deps, 'reconcile', row.id, generateInsightNote(currentRow, target).slug, location.path, 'approved-from-vault', row.vaultContentHash, restamped.contentHash))
+  } else {
+    clearVaultSync(db, row.id)
+    report.rejectedFromVault += 1
+    appendJournal(makeJournalEntry(deps, 'reconcile', row.id, generateInsightNote(currentRow, target).slug, location.path, 'rejected-from-vault', row.vaultContentHash, null))
+  }
+
+  await writeSupportNotes(db, fs)
+  removeVaultConflict(row.id)
+}
+
+async function materializePendingRows(
+  db: Db,
+  fs: VaultFs,
+  rows: VaultInsightRow[],
+  report: ReconcileReport,
+  deps: Required<VaultWriteThroughDeps>,
+): Promise<void> {
+  for (let index = 0; index < rows.length; index += MATERIALIZE_BATCH_SIZE) {
+    const batch = rows.slice(index, index + MATERIALIZE_BATCH_SIZE)
+    for (const row of batch) {
+      try {
+        const wrote = await writePendingNote(db, fs, row.id, deps)
+        if (wrote) report.materialized += 1
+      } catch {
+        addPendingVaultWrite(row.id)
+        appendJournal(makeJournalEntry(deps, 'reconcile', row.id, generateInsightNote(row, 'pending').slug, generateInsightNote(row, 'pending').note.path, 'error', row.vaultContentHash, null))
+      }
+    }
+    if (index + MATERIALIZE_BATCH_SIZE < rows.length) {
+      await new Promise(resolve => setTimeout(resolve, 0))
+    }
+  }
+}
+
+async function writePendingNote(
+  db: Db,
+  fs: VaultFs,
+  insightId: string,
+  deps: Required<VaultWriteThroughDeps>,
+): Promise<boolean> {
+  const row = getInsightRow(db, insightId)
+  if (!row || row.verificationStatus !== 'unverified' || row.privacyTier !== 'exportable') {
+    return false
+  }
+
+  const generated = generateInsightNote(row, 'pending')
+  await fs.write(generated.note.path, generated.note.content)
   recordVaultSync(db, insightId, {
-    contentHash: notes.insight.hash,
+    contentHash: generated.note.hash,
     bodyHash: hashBody(row.content),
     syncedAt: deps.now(),
   })
-  await fs.write(notes.topic.path, notes.topic.content)
-  await fs.write(notes.index.path, notes.index.content)
-  appendJournal(makeJournalEntry(deps, kind, insightId, generateInsightNote(row).slug, notes.insight.path, 'written', row.vaultContentHash, notes.insight.hash))
-}
-
-async function moveInsightToRejected(
-  db: Db,
-  row: VaultInsightRow,
-  fs: VaultFs,
-  deps: Required<VaultWriteThroughDeps>,
-): Promise<void> {
-  const generated = generateInsightNote(row)
-  const sourcePath = generated.note.path
-  const rejectedPath = sourcePath.replace('me.md/Insights/', 'me.md/Rejected/')
-  const existing = await fs.read(sourcePath)
-
-  if (existing !== null) {
-    await fs.move(sourcePath, rejectedPath)
-    await fs.write(rejectedPath, stampRejected(existing, row))
-  }
-
-  clearVaultSync(db, row.id)
-  await writeSupportNotes(db, fs)
-  appendJournal(makeJournalEntry(deps, 'reject', row.id, generated.slug, rejectedPath, 'moved-rejected', row.vaultContentHash, null))
+  appendJournal(makeJournalEntry(deps, 'pending', insightId, generated.slug, generated.note.path, 'materialized', row.vaultContentHash, generated.note.hash))
+  return true
 }
 
 async function writeInsightNote(
@@ -383,7 +781,7 @@ async function writeInsightNote(
 
 async function writeSupportNotes(db: Db, fs: VaultFs): Promise<void> {
   const result = generateObsidianNotes(db)
-  const supportNotes = result.notes.filter(note => !note.path.startsWith('me.md/Insights/'))
+  const supportNotes = result.notes.filter(note => !Object.values(STATUS_DIRS).some(dir => note.path.startsWith(`${dir}/`)))
   for (const note of supportNotes) {
     await fs.write(note.path, note.content)
   }
@@ -393,13 +791,25 @@ async function drainPendingWrites(
   db: Db,
   fs: VaultFs,
   deps: Required<VaultWriteThroughDeps>,
+  report?: ReconcileReport,
 ): Promise<void> {
   const pending = getPendingVaultWrites()
   const stillPending: string[] = []
 
   for (const insightId of pending) {
     try {
+      const before = getInsightRow(db, insightId)
       await writeCurrentInsightState(db, insightId, 'reconcile', fs, deps)
+      const after = getInsightRow(db, insightId)
+      if (
+        report
+        && before?.verificationStatus === 'unverified'
+        && before.privacyTier === 'exportable'
+        && before.vaultSyncedAt === null
+        && after?.vaultSyncedAt !== null
+      ) {
+        report.materialized += 1
+      }
     } catch {
       stillPending.push(insightId)
       appendJournal(makeJournalEntry(deps, 'reconcile', insightId, null, null, 'error', null, null))
@@ -409,32 +819,56 @@ async function drainPendingWrites(
   setPendingVaultWrites(stillPending)
 }
 
-async function readInsightDiskContent(
+async function scanVaultNotes(fs: VaultFs): Promise<Map<string, VaultNoteLocation[]>> {
+  const byId = new Map<string, VaultNoteLocation[]>()
+
+  for (const [status, dir] of Object.entries(STATUS_DIRS) as Array<[NoteStatus, string]>) {
+    const names = await fs.list(dir)
+    for (const name of names) {
+      if (!name.endsWith('.md')) continue
+      const path = `${dir}/${name}`
+      const content = await fs.read(path)
+      if (content === null) continue
+      const id = frontmatterId(content)
+      if (!id) continue
+      const folderStatus = folderStatusFromPath(path)
+      if (!folderStatus || folderStatus !== status) continue
+      byId.set(id, [...(byId.get(id) ?? []), { path, folderStatus, content }])
+    }
+  }
+
+  return byId
+}
+
+async function findInsightNote(
   fs: VaultFs,
-  expectedPath: string,
-  insightId: string,
-): Promise<{ path: string; content: string | null }> {
-  const expected = await fs.read(expectedPath)
-  if (expected !== null) {
-    // Guard against an unrelated file occupying the expected path: the id must match.
-    const expectedId = frontmatterId(expected)
-    if (expectedId === null || expectedId === insightId) {
-      return { path: expectedPath, content: expected }
+  row: VaultInsightRow,
+  target: NoteStatus,
+): Promise<VaultNoteLocation | null> {
+  const statuses = [target, ...STATUS_ORDER.filter(status => status !== target)]
+  for (const status of statuses) {
+    const expectedPath = generateInsightNote(row, status).note.path
+    const content = await fs.read(expectedPath)
+    if (content !== null && frontmatterId(content) === row.id) {
+      return { path: expectedPath, folderStatus: status, content }
     }
   }
 
-  const names = await fs.list(INSIGHTS_DIR)
-  for (const name of names) {
-    if (!name.endsWith('.md')) continue
-    const path = `${INSIGHTS_DIR}/${name}`
-    if (path === expectedPath) continue
-    const content = await fs.read(path)
-    if (content !== null && frontmatterId(content) === insightId) {
-      return { path, content }
+  const locations: VaultNoteLocation[] = []
+  for (const [status, dir] of Object.entries(STATUS_DIRS) as Array<[NoteStatus, string]>) {
+    const names = await fs.list(dir)
+    for (const name of names) {
+      if (!name.endsWith('.md')) continue
+      const path = `${dir}/${name}`
+      const content = await fs.read(path)
+      if (content !== null && frontmatterId(content) === row.id) {
+        locations.push({ path, folderStatus: status, content })
+      }
     }
   }
 
-  return { path: expectedPath, content: null }
+  if (locations.length === 0) return null
+  return pickCanonicalLocation(locations, status => generateInsightNote(row, status).note.path).winner
 }
 
 function getInsightRow(db: Db, insightId: string): VaultInsightRow | null {
@@ -457,7 +891,7 @@ function getInsightRow(db: Db, insightId: string): VaultInsightRow | null {
     .get() ?? null
 }
 
-function getExportableInsightRows(db: Db): VaultInsightRow[] {
+function getVaultManagedInsightRows(db: Db): VaultInsightRow[] {
   return db.select({
     id: insights.id,
     content: insights.content,
@@ -475,15 +909,10 @@ function getExportableInsightRows(db: Db): VaultInsightRow[] {
     .leftJoin(topics, eq(insights.topicId, topics.id))
     .where(and(
       eq(insights.userId, LOCAL_USER_ID),
-      eq(insights.verificationStatus, 'verified'),
       eq(insights.privacyTier, 'exportable'),
+      inArray(insights.verificationStatus, ['unverified', 'verified', 're_verification_pending', 'rejected']),
     ))
     .all()
-}
-
-function stampRejected(existingContent: string, row: VaultInsightRow): string {
-  const merged = assembleNote(row, extractInsightBodyRaw(existingContent))
-  return merged.content.replace('\nsource: "me.md"', '\nstatus: "rejected"\nsource: "me.md"')
 }
 
 function frontmatterId(content: string): string | null {
@@ -491,10 +920,6 @@ function frontmatterId(content: string): string | null {
   const id = parsed.frontmatter.find(([key]) => key === 'id')?.[1]
   if (!id) return null
   return id.replace(/^"(.*)"$/, '$1')
-}
-
-function isExportable(row: VaultInsightRow): boolean {
-  return row.verificationStatus === 'verified' && row.privacyTier === 'exportable'
 }
 
 function emptyReport(): ReconcileReport {
@@ -507,6 +932,12 @@ function emptyReport(): ReconcileReport {
     conflicts: 0,
     movedRejected: 0,
     deferred: 0,
+    materialized: 0,
+    approvedFromVault: 0,
+    rejectedFromVault: 0,
+    pendingPulled: 0,
+    dismissed: 0,
+    attention: 0,
   }
 }
 
@@ -523,6 +954,41 @@ function upsertVaultConflict(conflict: VaultConflict): void {
 
 function removeVaultConflict(insightId: string): void {
   setVaultConflicts(getVaultConflicts().filter(conflict => conflict.insightId !== insightId))
+}
+
+function makeAttentionItem(
+  row: VaultInsightRow,
+  slug: string,
+  kind: VaultAttentionKind,
+  deps: Required<VaultWriteThroughDeps>,
+  detail: VaultAttentionItem['detail'],
+): VaultAttentionItem {
+  return {
+    insightId: row.id,
+    slug,
+    kind,
+    detectedAt: deps.now(),
+    detail,
+  }
+}
+
+function upsertVaultAttention(item: VaultAttentionItem): void {
+  setVaultAttention([
+    ...getVaultAttention().filter(existing => attentionKey(existing) !== attentionKey(item)),
+    item,
+  ])
+}
+
+function removeVaultAttention(item: VaultAttentionItem): void {
+  setVaultAttention(getVaultAttention().filter(existing => attentionKey(existing) !== attentionKey(item)))
+}
+
+function pruneVaultAttention(activeKeys: Set<string>): void {
+  setVaultAttention(getVaultAttention().filter(item => activeKeys.has(attentionKey(item))))
+}
+
+function attentionKey(item: Pick<VaultAttentionItem, 'insightId' | 'kind'>): string {
+  return `${item.insightId}:${item.kind}`
 }
 
 function appendJournal(entry: JournalEntry): void {

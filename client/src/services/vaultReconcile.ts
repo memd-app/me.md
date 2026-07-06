@@ -1,4 +1,6 @@
-import { generateInsightNote, stableHash, type InsightGenRow } from '@/services/obsidianExport'
+import { STATUS_DIRS, generateInsightNote, stableHash, type InsightGenRow } from '@/services/obsidianExport'
+
+export type NoteStatus = 'pending' | 'verified' | 'rejected'
 
 export interface ParsedNote {
   frontmatter: Array<[string, string]>
@@ -28,6 +30,97 @@ export interface MergedNote {
   body: string
   contentHash: string
   bodyHash: string
+}
+
+export interface VaultNoteLocation {
+  path: string
+  folderStatus: NoteStatus
+  content: string
+}
+
+export type StatusReconcileDecision =
+  | { kind: 'in-place' }
+  | { kind: 'apply-verify' }
+  | { kind: 'apply-reject' }
+  | { kind: 'materialize' }
+  | { kind: 'recreate' }
+  | { kind: 'dismissed' }
+  | { kind: 'attention-backward' }
+  | { kind: 'noop' }
+
+export interface StatusClassifyInput {
+  dbStatus: NoteStatus
+  folderStatus: NoteStatus | null
+  everMaterialized: boolean
+}
+
+const STATUS_PRIORITY: Record<NoteStatus, number> = {
+  verified: 3,
+  rejected: 2,
+  pending: 1,
+}
+
+export function noteStatusForDb(verificationStatus: string | null): NoteStatus | null {
+  switch (verificationStatus) {
+    case 'unverified':
+      return 'pending'
+    case 'verified':
+    case 're_verification_pending':
+      return 'verified'
+    case 'rejected':
+      return 'rejected'
+    default:
+      return null
+  }
+}
+
+export function folderStatusFromPath(path: string): NoteStatus | null {
+  for (const [status, dir] of Object.entries(STATUS_DIRS) as Array<[NoteStatus, string]>) {
+    if (path.startsWith(`${dir}/`)) return status
+  }
+  return null
+}
+
+export function pickCanonicalLocation(
+  locations: VaultNoteLocation[],
+  expectedSlugPath: (status: NoteStatus) => string,
+): { winner: VaultNoteLocation; losers: VaultNoteLocation[] } {
+  if (locations.length === 0) {
+    throw new Error('Cannot choose a canonical note from an empty location set.')
+  }
+
+  const sorted = [...locations].sort((a, b) => {
+    const priorityDiff = STATUS_PRIORITY[b.folderStatus] - STATUS_PRIORITY[a.folderStatus]
+    if (priorityDiff !== 0) return priorityDiff
+
+    const aExpected = a.path === expectedSlugPath(a.folderStatus)
+    const bExpected = b.path === expectedSlugPath(b.folderStatus)
+    if (aExpected !== bExpected) return aExpected ? -1 : 1
+
+    return a.path.localeCompare(b.path)
+  })
+
+  return { winner: sorted[0], losers: sorted.slice(1) }
+}
+
+export function classifyStatusReconcile(input: StatusClassifyInput): StatusReconcileDecision {
+  if (input.dbStatus === 'pending') {
+    if (input.folderStatus === 'pending') return { kind: 'in-place' }
+    if (input.folderStatus === 'verified') return { kind: 'apply-verify' }
+    if (input.folderStatus === 'rejected') return { kind: 'apply-reject' }
+    return input.everMaterialized ? { kind: 'dismissed' } : { kind: 'materialize' }
+  }
+
+  if (input.dbStatus === 'verified') {
+    if (input.folderStatus === 'verified') return { kind: 'in-place' }
+    if (input.folderStatus === 'rejected') return { kind: 'apply-reject' }
+    if (input.folderStatus === 'pending') return { kind: 'attention-backward' }
+    return { kind: 'recreate' }
+  }
+
+  if (input.folderStatus === 'rejected') return { kind: 'in-place' }
+  if (input.folderStatus === 'pending' || input.folderStatus === 'verified') return { kind: 'attention-backward' }
+  return { kind: 'noop' }
 }
 
 export function parseNote(content: string): ParsedNote {
@@ -116,8 +209,8 @@ export function classifyReconcile(input: ClassifyInput): ReconcileDecision {
   return 'conflict'
 }
 
-export function assembleNote(row: InsightGenRow, resolvedBody: string): MergedNote {
-  const generated = generateInsightNote(row).note.content.replace(/\r\n?/g, '\n')
+export function assembleNote(row: InsightGenRow, resolvedBody: string, status: NoteStatus = 'verified'): MergedNote {
+  const generated = generateInsightNote(row, status).note.content.replace(/\r\n?/g, '\n')
   const frontmatter = getFrontmatterBlock(generated)
   const trailer = getMachineTrailer(generated)
   const body = trimOuterBlankLines(resolvedBody.replace(/\r\n?/g, '\n'))

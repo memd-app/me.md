@@ -3,7 +3,7 @@ import initSqlJs from 'sql.js'
 import { drizzle } from 'drizzle-orm/sql-js'
 import * as schema from '@/db/schema'
 import { CREATE_TABLES_SQL } from '@/db/database'
-import { generateObsidianNotes, slugify, toFrontmatter } from '../obsidianExport'
+import { generateInsightNote, generateObsidianNotes, slugify, toFrontmatter } from '../obsidianExport'
 
 vi.mock('@/db/persistence', () => ({
   scheduleSave: vi.fn(),
@@ -139,6 +139,7 @@ describe('obsidian export service', () => {
     expect(frontmatter).toContain('topic: "Communication"')
     expect(frontmatter).toContain('confidence: 82')
     expect(frontmatter).toContain('verified: "2026-06-12"')
+    expect(frontmatter).toContain('status: "verified"')
     expect(frontmatter).toContain('source: "me.md"')
     expect(frontmatter).toContain('id: "ins-frontmatter"')
     expect(note?.content).toContain('Topic: [[Topic - Communication]]')
@@ -147,6 +148,31 @@ describe('obsidian export service', () => {
       ['title', 'Needs: quotes # and "slashes" \\ ok'],
       ['confidence', 82],
     ])).toContain('title: "Needs: quotes # and \\"slashes\\" \\\\ ok"')
+  })
+
+  it('generates status-specific insight paths with stable slugs', () => {
+    const row = {
+      id: 'ins-status-path',
+      content: 'I review pending notes in Obsidian.',
+      confidenceScore: 77,
+      verifiedAt: null,
+      updatedAt: '2026-07-06T10:00:00.000Z',
+      topicId: 'topic-work',
+      topicTitle: 'Work',
+    }
+
+    const pending = generateInsightNote(row, 'pending')
+    const verified = generateInsightNote(row, 'verified')
+    const rejected = generateInsightNote(row, 'rejected')
+
+    expect(pending.slug).toBe(verified.slug)
+    expect(rejected.slug).toBe(verified.slug)
+    expect(pending.note.path).toBe(`me.md/Pending/${pending.slug}.md`)
+    expect(verified.note.path).toBe(`me.md/Insights/${verified.slug}.md`)
+    expect(rejected.note.path).toBe(`me.md/Rejected/${rejected.slug}.md`)
+    expect(pending.note.content).toContain('status: "pending"')
+    expect(verified.note.content).toContain('status: "verified"')
+    expect(rejected.note.content).toContain('status: "rejected"')
   })
 
   it('regenerates byte-identical notes and hashes for unchanged data', () => {

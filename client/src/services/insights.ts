@@ -366,6 +366,38 @@ export function rejectInsight(db: Db, id: string, reason?: string) {
   }
 }
 
+export function reopenInsight(db: Db, id: string): void {
+  const userId = LOCAL_USER_ID
+
+  const insight = db.select().from(insights).where(
+    and(eq(insights.id, id), eq(insights.userId, userId))
+  ).get()
+
+  if (!insight) {
+    throw new Error('Insight not found')
+  }
+
+  const now = new Date().toISOString()
+
+  db.update(insights).set({
+    verificationStatus: 'unverified',
+    verifiedAt: null,
+    reVerifyAt: null,
+    reVerifyInterval: null,
+    updatedAt: now,
+  }).where(eq(insights.id, id)).run()
+
+  db.insert(verificationHistory).values({
+    id: crypto.randomUUID(),
+    insightId: id,
+    action: 'reopened',
+    previousContent: insight.content,
+    newContent: insight.content,
+  }).run()
+
+  scheduleSave()
+}
+
 /**
  * Edit an insight's content or privacy tier.
  * Supports optimistic concurrency control via expectedUpdatedAt.

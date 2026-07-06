@@ -7,9 +7,13 @@ import { getExportStatus, exportAsMarkdown, exportAsJson } from '@/services/prof
 import { generateObsidianNotes } from '@/services/obsidianExport';
 import { isFileSystemAccessSupported, pickVaultDirectory } from '@/services/obsidianSync';
 import {
+  getVaultAttention,
   getVaultConflicts,
   reconcileVault,
+  resolveVaultAttention,
   resolveVaultConflict,
+  type ReconcileReport,
+  type VaultAttentionItem,
   type VaultConflict,
 } from '@/services/vaultWriteThrough';
 import { createStoreZip } from '@/services/zipStore';
@@ -17,6 +21,26 @@ import { loadVaultHandle, saveVaultHandle } from '@/services/vaultHandle';
 import { PageHeader } from '@/components/ui';
 
 type ExportFormat = 'markdown' | 'json' | 'both';
+
+function formatSyncSummary(summary: ReconcileReport): string {
+  const segments = [
+    summary.created > 0 ? `${summary.created} created` : null,
+    summary.updated > 0 ? `${summary.updated} updated` : null,
+    summary.pulled > 0 ? `${summary.pulled} pulled` : null,
+    summary.recreated > 0 ? `${summary.recreated} recreated` : null,
+    summary.materialized > 0 ? `${summary.materialized} materialized` : null,
+    summary.approvedFromVault > 0 ? `${summary.approvedFromVault} approved in vault` : null,
+    summary.rejectedFromVault > 0 ? `${summary.rejectedFromVault} rejected in vault` : null,
+    summary.pendingPulled > 0 ? `${summary.pendingPulled} pending pulled` : null,
+    summary.dismissed > 0 ? `${summary.dismissed} dismissed` : null,
+    summary.attention > 0 ? `${summary.attention} attention` : null,
+    summary.conflicts > 0 ? `${summary.conflicts} conflict${summary.conflicts === 1 ? '' : 's'}` : null,
+  ].filter(Boolean)
+
+  return segments.length > 0
+    ? `Synced to me.md: ${segments.join(', ')}.`
+    : 'Synced to me.md: no changes.'
+}
 
 export default function ExportPage() {
   const { user } = useUser();
@@ -30,6 +54,7 @@ export default function ExportPage() {
   const [zipping, setZipping] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [conflicts, setConflicts] = useState<VaultConflict[]>(() => getVaultConflicts());
+  const [attention, setAttention] = useState<VaultAttentionItem[]>(() => getVaultAttention());
   const fsaSupported = isFileSystemAccessSupported();
 
   // Export readiness state
@@ -63,6 +88,7 @@ export default function ExportPage() {
 
   useEffect(() => {
     setConflicts(getVaultConflicts());
+    setAttention(getVaultAttention());
   }, []);
 
   const downloadBlob = (blob: Blob, filename: string) => {
@@ -135,8 +161,6 @@ export default function ExportPage() {
   );
 
   const handleSync = async () => {
-    if (!hasExportableData()) return;
-
     try {
       setSyncing(true);
       setStatus(null);
@@ -149,9 +173,10 @@ export default function ExportPage() {
       const summary = await reconcileVault(db, handle);
       setVaultReconnectNeeded(false);
       setConflicts(getVaultConflicts());
+      setAttention(getVaultAttention());
       setStatus({
         type: 'success',
-        message: `Synced to me.md: ${summary.created} created, ${summary.updated} updated, ${summary.pulled} pulled, ${summary.recreated} recreated, ${summary.conflicts} conflict${summary.conflicts === 1 ? '' : 's'}.`,
+        message: formatSyncSummary(summary),
       });
     } catch (err) {
       if (isAbortError(err)) return;
@@ -177,6 +202,7 @@ export default function ExportPage() {
       await resolveVaultConflict(db, handle, conflict, choice);
       setVaultReconnectNeeded(false);
       setConflicts(getVaultConflicts());
+      setAttention(getVaultAttention());
       setStatus({
         type: 'success',
         message: choice === 'app' ? 'Kept the app version and updated the vault.' : 'Kept the vault version and updated the app.',
@@ -186,6 +212,32 @@ export default function ExportPage() {
       setStatus({
         type: 'error',
         message: err instanceof Error ? err.message : 'Failed to resolve the vault conflict. Please try again.',
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleResolveAttention = async (item: VaultAttentionItem, choice: string) => {
+    try {
+      setSyncing(true);
+      setStatus(null);
+
+      let handle = await loadVaultHandle();
+      if (!handle) handle = await pickVaultDirectory();
+      if (!handle) return;
+
+      await saveVaultHandle(handle);
+      await resolveVaultAttention(db, handle, item, choice);
+      setVaultReconnectNeeded(false);
+      setConflicts(getVaultConflicts());
+      setAttention(getVaultAttention());
+      setStatus({ type: 'success', message: 'Vault attention item resolved.' });
+    } catch (err) {
+      if (isAbortError(err)) return;
+      setStatus({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Failed to resolve the vault attention item. Please try again.',
       });
     } finally {
       setSyncing(false);
@@ -254,6 +306,12 @@ export default function ExportPage() {
       description: 'Download both Markdown and JSON files',
     },
   ];
+
+  const attentionDetail = (item: VaultAttentionItem) => {
+    if (item.kind === 'duplicate-note') return item.detail.duplicatePaths?.join(', ') || 'Duplicate note'
+    if (item.kind === 'dismissed-in-vault') return item.detail.lastKnownPath || 'Missing pending note'
+    return `${item.detail.dbStatus ?? 'current'} → ${item.detail.fromStatus ?? 'unknown'}`
+  };
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -493,6 +551,82 @@ export default function ExportPage() {
                           </div>
                         </div>
                       </details>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {attention.length > 0 && (
+              <div className="mt-6 border-t border-rule dark:border-dark-border pt-5">
+                <h3 className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-3">
+                  Needs attention
+                </h3>
+                <div className="divide-y divide-rule dark:divide-dark-border">
+                  {attention.map((item) => (
+                    <div key={`${item.insightId}:${item.kind}`} className="py-4 first:pt-0 last:pb-0">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-ink dark:text-gray-100 truncate">
+                            {item.slug}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {attentionDetail(item)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {item.kind === 'dismissed-in-vault' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleResolveAttention(item, 'confirm-reject')}
+                                disabled={syncing}
+                                className="btn-secondary text-sm"
+                              >
+                                Confirm reject
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleResolveAttention(item, 're-materialize')}
+                                disabled={syncing}
+                                className="btn-primary text-sm"
+                              >
+                                Re-materialize
+                              </button>
+                            </>
+                          )}
+                          {item.kind === 'backward-move' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleResolveAttention(item, 'keep-current')}
+                                disabled={syncing}
+                                className="btn-secondary text-sm"
+                              >
+                                Keep current status
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleResolveAttention(item, 'apply-move')}
+                                disabled={syncing}
+                                className="btn-primary text-sm"
+                              >
+                                Apply move
+                              </button>
+                            </>
+                          )}
+                          {item.kind === 'duplicate-note' && (
+                            <button
+                              type="button"
+                              onClick={() => handleResolveAttention(item, 'dismiss')}
+                              disabled={syncing}
+                              className="btn-secondary text-sm"
+                            >
+                              Dismiss
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>

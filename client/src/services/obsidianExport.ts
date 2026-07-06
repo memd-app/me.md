@@ -4,12 +4,19 @@ import type * as schema from '@/db/schema'
 import { insights, topics } from '@/db/schema'
 import { LOCAL_USER_ID } from '@/contexts/UserContext'
 import { generatePersonalityMarkdown, getPersonalityExportData } from '@/services/profile'
+import type { NoteStatus } from '@/services/vaultReconcile'
 
 type Db = SQLJsDatabase<typeof schema>
 
 const ROOT_FOLDER = 'me.md'
 const GENERAL_TOPIC = 'General'
 const FORBIDDEN_PATH_CHARS = /[\/\\:#^|\[\]?*<>"`\x00-\x1F\x7F]/g
+
+export const STATUS_DIRS: Record<NoteStatus, string> = {
+  pending: `${ROOT_FOLDER}/Pending`,
+  verified: `${ROOT_FOLDER}/Insights`,
+  rejected: `${ROOT_FOLDER}/Rejected`,
+}
 
 export interface ObsidianNote {
   path: string
@@ -137,7 +144,7 @@ export function generateObsidianNotes(db: Db): ObsidianExportResult {
   }
 }
 
-export function generateInsightNote(row: InsightGenRow): { slug: string; note: ObsidianNote } {
+export function generateInsightNote(row: InsightGenRow, status: NoteStatus = 'verified'): { slug: string; note: ObsidianNote } {
   const topicName = sanitizeTopicTitle(row.topicTitle ?? GENERAL_TOPIC)
   const topicLink = `Topic - ${topicName}`
   const title = deriveInsightTitle(row.content)
@@ -149,7 +156,7 @@ export function generateInsightNote(row: InsightGenRow): { slug: string; note: O
     ['confidence', Math.round(row.confidenceScore ?? 50)],
   ]
   if (verified) fields.push(['verified', verified])
-  fields.push(['source', ROOT_FOLDER], ['id', row.id])
+  fields.push(['status', status], ['source', ROOT_FOLDER], ['id', row.id])
 
   const content = [
     toFrontmatter(fields),
@@ -162,7 +169,7 @@ export function generateInsightNote(row: InsightGenRow): { slug: string; note: O
 
   return {
     slug,
-    note: makeNote(`${ROOT_FOLDER}/Insights/${slug}.md`, content),
+    note: makeNote(`${STATUS_DIRS[status]}/${slug}.md`, content),
   }
 }
 

@@ -24,6 +24,7 @@ import { extractInsights, admitInsights, type SourceType, type ExtractionContext
 import { cleanText, cleanTitle, stripFrontmatter } from './textCleaning'
 import { stableHash } from './obsidianExport'
 import { applyInsightEvidenceAttachments, fetchExistingInsightRefs, logAdmissionDrops } from './admissionPersistence'
+import { enqueueVaultPendingWrites } from './vaultWriteThrough'
 
 type Db = SQLJsDatabase<typeof schema>
 export const MAX_INSIGHTS_PER_NOTE = 8
@@ -598,6 +599,7 @@ export async function processImport(
       suggestedCategory: extracted.suggestedCategory,
     })
   }
+  enqueueVaultPendingWrites(db, savedInsights.map(insight => insight.id))
 
   // Mark import as processed
   db.update(importedFiles).set({

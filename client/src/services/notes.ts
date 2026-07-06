@@ -9,6 +9,7 @@ import {
 } from './ai'
 import { admitInsights, extractInsights, formatInterviewTranscript, type ExtractionContext } from './insightExtraction'
 import { applyInsightEvidenceAttachments, fetchExistingInsightRefs, logAdmissionDrops } from './admissionPersistence'
+import { enqueueVaultPendingWrites } from './vaultWriteThrough'
 type Db = any // Drizzle sql.js instance
 
 // ============================================
@@ -365,6 +366,7 @@ export async function distillSession(
     }).returning().get()
     savedInsights.push(saved)
   }
+  enqueueVaultPendingWrites(db, savedInsights.map(insight => insight.id))
 
   // Multi-bucket cross-topic extraction: score relevance to other topics
   const otherTopics = db.select().from(topics).where(
