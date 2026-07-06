@@ -6,14 +6,18 @@ import ApiErrorAlert from '@/components/ApiErrorAlert';
 import Modal from '@/components/common/Modal';
 import { Badge, Button, EmptyState, PageHeader, SectionHeading } from '@/components/ui';
 import { getInsightStats, getPendingInsights, getAllInsights, verifyInsight, rejectInsight, editInsight, getInsight } from '@/services/insights';
+import { isApiKeyConfigured } from '@/services/anthropic';
+import { reevaluatePendingInsights } from '@/services/queueReevaluate';
 import { enqueueVaultWrite } from '@/services/vaultWriteThrough';
 import { formatDateTime as sharedFormatDateTime, formatShortDate } from '@/utils/dateFormat';
 import { groupPendingInsights, NO_TOPIC_KEY, type InsightGroup } from '@/utils/reviewGrouping';
 import { computeNextActive, resolveTriageIntent } from '@/utils/reviewKeyboard';
 
 const BULK_CHUNK_SIZE = 20;
+const REEVALUATE_GROUP_KEY = '__queue_reevaluate__';
 
 type BulkKind = 'verify' | 'reject';
+type RunKind = BulkKind | 'reevaluate';
 
 interface Insight {
   id: string;
@@ -79,7 +83,7 @@ export default function VerificationPage() {
   const [activeGroupKey, setActiveGroupKey] = useState<string | null>(null);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const [bulk, setBulk] = useState<{
-    kind: BulkKind;
+    kind: RunKind;
     groupKey: string;
     groupName: string;
     total: number;
@@ -89,6 +93,7 @@ export default function VerificationPage() {
     kind: BulkKind;
     group: InsightGroup;
   } | null>(null);
+  const [confirmReevaluate, setConfirmReevaluate] = useState(false);
   const bulkCancelRef = useRef(false);
   const cardRefs = useRef(new Map<string, HTMLDivElement>());
   const previousVisibleIdsRef = useRef<string[]>([]);
@@ -277,6 +282,54 @@ export default function VerificationPage() {
     });
   }, [addToast, approveOne, bulk, pendingInsights, rejectOne]);
 
+  const runQueueReevaluate = useCallback(async () => {
+    if (bulk) return;
+
+    const total = pendingInsights.length;
+    if (total === 0) return;
+
+    setEditState(null);
+    bulkCancelRef.current = false;
+    setBulk({
+      kind: 'reevaluate',
+      groupKey: REEVALUATE_GROUP_KEY,
+      groupName: 'Queue',
+      total,
+      done: 0,
+    });
+
+    try {
+      const result = await reevaluatePendingInsights(db, {
+        onProgress: (done, nextTotal) => {
+          setBulk(current =>
+            current?.kind === 'reevaluate'
+              ? { ...current, done, total: nextTotal }
+              : current
+          );
+        },
+        isCancelled: () => bulkCancelRef.current,
+      });
+
+      const cancelled = bulkCancelRef.current;
+      const notEvaluated = Math.max(total - result.evaluated, 0);
+      const baseToast = `Filtered ${result.filtered} of ${total} — ${result.kept} kept.`;
+      addToast(
+        notEvaluated > 0 && !cancelled
+          ? `${baseToast} ${notEvaluated} could not be evaluated.`
+          : baseToast,
+        result.filtered > 0 ? 'warning' : 'success',
+      );
+
+      await fetchData();
+    } catch (err) {
+      console.error('Failed to re-evaluate queue:', err);
+      setError('Failed to re-evaluate queue');
+      addToast('Failed to re-evaluate queue', 'error');
+    } finally {
+      setBulk(null);
+    }
+  }, [addToast, bulk, db, fetchData, pendingInsights.length]);
+
   const handleStartEdit = useCallback((insight: Insight) => {
     if (bulk) return;
     setEditState({ insightId: insight.id, editedContent: insight.content, expectedUpdatedAt: insight.updatedAt });
@@ -388,7 +441,7 @@ export default function VerificationPage() {
         key: e.key,
         hasActiveCard: !!activeCardId && el === activeCardEl,
         isEditing: editState !== null,
-        isConfirmOpen: confirm !== null,
+        isConfirmOpen: confirm !== null || confirmReevaluate,
         isBulkRunning: bulk !== null,
         targetIsFormField: !!el && (
           ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable
@@ -425,6 +478,7 @@ export default function VerificationPage() {
     activeCardId,
     bulk,
     confirm,
+    confirmReevaluate,
     editState,
     focusCard,
     handleApprove,
@@ -520,6 +574,12 @@ export default function VerificationPage() {
     { key: 'neverExport', value: neverExportCount, label: 'Never export', note: 'Managed in Settings' },
   ];
   const confirmCount = confirm?.group.count ?? 0;
+  const hasPending = stats.pending > 0;
+  const reevaluateUsesAi = isApiKeyConfigured();
+  const queueReevaluateRun = bulk?.kind === 'reevaluate' ? bulk : null;
+  const queueReevaluatePercent = queueReevaluateRun && queueReevaluateRun.total > 0
+    ? Math.round((queueReevaluateRun.done / queueReevaluateRun.total) * 100)
+    : 0;
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -578,6 +638,33 @@ export default function VerificationPage() {
         )}
       </Modal>
 
+      <Modal
+        open={confirmReevaluate}
+        onClose={() => setConfirmReevaluate(false)}
+        title="Re-evaluate queue"
+        footer={(
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setConfirmReevaluate(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                setConfirmReevaluate(false);
+                void runQueueReevaluate();
+              }}
+            >
+              Re-evaluate {stats.pending}
+            </Button>
+          </>
+        )}
+      >
+        <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+          Re-evaluate {stats.pending} pending {insightNoun(stats.pending)} against the personhood filter. Items about systems or events rather than you will be moved to Rejected. {reevaluateUsesAi ? 'This uses your Anthropic API key.' : 'This uses the offline filter.'}
+        </p>
+      </Modal>
+
       {/* Error message */}
       {error && (
         <ApiErrorAlert
@@ -589,7 +676,21 @@ export default function VerificationPage() {
 
       {/* Queue status — editorial numerals, like the Desk's "At a glance" */}
       <section aria-label="Queue status" className="mb-10">
-        <SectionHeading className="mb-5">Queue status</SectionHeading>
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <SectionHeading>Queue status</SectionHeading>
+          {hasPending && (
+            <button
+              type="button"
+              onClick={() => {
+                if (!bulk) setConfirmReevaluate(true);
+              }}
+              disabled={bulk !== null}
+              className="text-[11px] uppercase tracking-[0.08em] font-semibold text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors disabled:opacity-50"
+            >
+              Re-evaluate queue
+            </button>
+          )}
+        </div>
         <div className="flex flex-wrap gap-y-6">
           {queueStats.map((item, idx) => (
             <div
@@ -610,6 +711,30 @@ export default function VerificationPage() {
             </div>
           ))}
         </div>
+        {queueReevaluateRun && (
+          <div className="mt-5 max-w-sm" aria-live="polite">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                {queueReevaluateRun.done} of {queueReevaluateRun.total}…
+              </span>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  bulkCancelRef.current = true;
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+            <div className="mt-2 h-px bg-rule dark:bg-dark-border">
+              <div
+                className="h-px bg-primary-500 transition-[width] duration-150"
+                style={{ width: `${queueReevaluatePercent}%` }}
+              />
+            </div>
+          </div>
+        )}
       </section>
 
       {groups.length > 0 && (
@@ -698,7 +823,10 @@ export default function VerificationPage() {
                         <Button
                           variant="secondary"
                           size="sm"
-                          onClick={() => setActiveGroupKey(group.key)}
+                          onClick={() => {
+                            setActiveGroupKey(group.key);
+                            requestAnimationFrame(() => focusCard(group.insightIds[0]));
+                          }}
                           disabled={bulk !== null}
                         >
                           Review individually

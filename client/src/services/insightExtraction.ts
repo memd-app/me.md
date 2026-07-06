@@ -230,6 +230,24 @@ export const KIND_TO_CATEGORY: Record<string, string> = {
 
 export const MIN_SELF_RELEVANCE = 60
 
+export const PERSONHOOD_KIND_LINES = [
+  '- belief: a conviction about how the world, people, or work functions. "Believes small teams outperform large ones."',
+  '- value: what they hold important and protect under pressure. "Values honesty over harmony when giving feedback."',
+  '- trait: a stable character attribute or disposition. "Approaches problems methodically rather than intuitively."',
+  '- habit: a recurring personal behavior pattern they own. "Writes every morning before opening any messages."',
+  '- preference: a durable like or dislike that shapes choices. "Prefers written async communication over meetings."',
+  '- goal: a personally held aspiration or direction. "Wants to move from consulting into building products."',
+  '- motivation: a driver, fear, or need that explains behavior. "Is driven by a fear of depending on things he cannot inspect."',
+  '- relationship_pattern: how they characteristically relate to people. "Withdraws rather than argues when trust is broken."',
+  '- self_assessment: their own judgment of strengths and limits. "Considers himself a strong starter but a weak finisher."',
+] as const
+
+export const SELF_RELEVANCE_CALIBRATION_LINES = [
+  '- 90-100: directly about who the person is (a belief, value, trait, or pattern they own).',
+  '- 50: an activity fact with weak personal signal ("maintains a personal knowledge vault").',
+  '- 20: about a system, project, tool, or event, not the person.',
+] as const
+
 /**
  * Split large content into processable chunks, breaking at sentence boundaries.
  */
