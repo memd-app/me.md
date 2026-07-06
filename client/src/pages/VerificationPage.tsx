@@ -205,7 +205,12 @@ export default function VerificationPage() {
   const runBulk = useCallback(async (kind: BulkKind, group: InsightGroup) => {
     if (bulk) return;
 
-    const ids = group.insightIds.slice();
+    // Only act on insights still pending (a single-card action may have raced the confirm dialog).
+    const pendingIdSet = new Set(pendingInsights.map(insight => insight.id));
+    const ids = group.insightIds.filter(id => pendingIdSet.has(id));
+    // A card being edited may be processed by this bulk run — clear the edit so
+    // the editor state can't outlive its unmounted card and disable arrow triage.
+    setEditState(prev => (prev && ids.includes(prev.insightId) ? null : prev));
     bulkCancelRef.current = false;
     setBulk({ kind, groupKey: group.key, groupName: group.name, total: ids.length, done: 0 });
 
