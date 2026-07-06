@@ -534,8 +534,10 @@ async function moveNoteToStatus(
     ) {
       applyVaultBody(db, row.id, extractInsightBody(found.content))
       row = getInsightRow(db, row.id) ?? { ...row, content: extractInsightBody(found.content) }
+      resolvedBody = diskBodyRaw
     }
-    resolvedBody = diskBodyRaw
+    // else: disk is unchanged since last sync — keep row.content so an
+    // in-app edit reaches the vault instead of being overwritten by the stale disk body.
   }
 
   if (found && found.path !== targetPath) {
