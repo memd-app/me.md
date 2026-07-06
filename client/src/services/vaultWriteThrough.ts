@@ -415,7 +415,13 @@ async function readInsightDiskContent(
   insightId: string,
 ): Promise<{ path: string; content: string | null }> {
   const expected = await fs.read(expectedPath)
-  if (expected !== null) return { path: expectedPath, content: expected }
+  if (expected !== null) {
+    // Guard against an unrelated file occupying the expected path: the id must match.
+    const expectedId = frontmatterId(expected)
+    if (expectedId === null || expectedId === insightId) {
+      return { path: expectedPath, content: expected }
+    }
+  }
 
   const names = await fs.list(INSIGHTS_DIR)
   for (const name of names) {
