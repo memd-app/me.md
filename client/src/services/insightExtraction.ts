@@ -568,6 +568,13 @@ export async function extractInsights(ctx: ExtractionContext): Promise<Extracted
         console.log(`[me.md:insight-extraction] Extraction complete: ${deduplicated.length} insights (${deduplicated.filter(i => i.extractionMethod === 'ai').length} AI, ${deduplicated.filter(i => i.extractionMethod === 'fallback').length} fallback)`)
         return deduplicated.slice(0, MAX_TOTAL_INSIGHTS)
       }
+
+      // The AI answered every chunk and found nothing. That verdict is the result;
+      // do not overrule it with rule-based extraction over the same content.
+      if (aiSuccessForChunks > 0 && fallbackUsedForChunks === 0) {
+        console.log('[me.md:insight-extraction] AI reviewed all content and found no genuine insights; honoring the empty result.')
+        return []
+      }
     } catch (error: unknown) {
       const err = error as { message?: string }
       console.warn(`[me.md:insight-extraction] AI extraction pipeline failed entirely, using full fallback: ${err.message || 'Unknown error'}`)

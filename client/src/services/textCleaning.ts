@@ -68,8 +68,8 @@ export function cleanTitle(input: string, fallback = 'Untitled note'): string {
  */
 export function isDeclarativeStatement(raw: string): boolean {
   const s = cleanText(raw).trim()
-  if (s.length < 25 || s.length > 500) return false
-  if (/[|`]/.test(raw)) return false // was a table/code row
+  if (s.length < 15 || s.length > 500) return false
+  if (/\|/.test(raw)) return false // was a table row (inline code is fine; cleanText strips backticks)
   if (/^\s*[-*_]{3,}\s*$/.test(raw)) return false // horizontal rule
   if (/^#{1,6}\s/.test(raw)) return false // heading
   if (/^\s*[-*+]\s+\[[ xX/-]\]/.test(raw) || /^\s*\[[ xX/-]\]/.test(raw)) return false // task line
@@ -77,7 +77,7 @@ export function isDeclarativeStatement(raw: string): boolean {
   if (/\?\s*$/.test(s)) return false // question, not a statement
   if (!/[a-z]{3,}/i.test(s)) return false // must contain real words
   const words = s.split(/\s+/)
-  if (words.length < 4) return false // needs subject + predicate room
+  if (words.length < 3) return false // needs subject + predicate room
   return true
 }
 
