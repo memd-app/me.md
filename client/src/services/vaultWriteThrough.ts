@@ -782,7 +782,8 @@ async function writeInsightNote(
 }
 
 async function writeSupportNotes(db: Db, fs: VaultFs): Promise<void> {
-  const result = generateObsidianNotes(db)
+  // Support notes never include insight bodies; skip the O(n^2) related-links pass.
+  const result = generateObsidianNotes(db, { skipRelated: true })
   const supportNotes = result.notes.filter(note => !Object.values(STATUS_DIRS).some(dir => note.path.startsWith(`${dir}/`)))
   for (const note of supportNotes) {
     await fs.write(note.path, note.content)

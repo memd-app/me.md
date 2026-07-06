@@ -205,7 +205,7 @@ async function evaluateWithAi(
       db.update(insights)
         .set({
           priorAlignment: verdict.priorAlignment,
-          kind: verdict.kind,
+          ...(verdict.kind ? { kind: verdict.kind } : {}),
           ...(verdict.confidence !== null ? { confidenceScore: verdict.confidence } : {}),
         })
         .where(eq(insights.id, batch[i].id)).run()

@@ -82,7 +82,7 @@ interface ExportRow {
   group: TopicGroup
 }
 
-export function generateObsidianNotes(db: Db): ObsidianExportResult {
+export function generateObsidianNotes(db: Db, opts?: { skipRelated?: boolean }): ObsidianExportResult {
   const rows = db.select({
     id: insights.id,
     content: insights.content,
@@ -149,7 +149,7 @@ export function generateObsidianNotes(db: Db): ObsidianExportResult {
 
   const groups = Array.from(topicGroups.values())
   const insightNotes = exportRows.map(({ row, group }) => {
-    const related = pickRelated(row, group.insights)
+    const related = opts?.skipRelated ? [] : pickRelated(row, group.insights)
     // Bulk zip exports can enrich insight note frontmatter. Live vault per-insight
     // writers pass rows without these optional fields, preserving phase-2 bytes.
     return generateInsightNote({
