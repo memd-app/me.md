@@ -472,6 +472,17 @@ export async function processImport(
   }))
 
   if (unifiedInsights.length === 0) {
+    // Mark processed so the content hash makes an identical re-import skip as 'unchanged'.
+    db.update(importedFiles).set({
+      processedContent: JSON.stringify({
+        ...processedContent,
+        processingStatus: 'processed',
+        processedInsightCount: 0,
+        processedAt: new Date().toISOString(),
+      }),
+    }).where(eq(importedFiles.id, importId)).run()
+    scheduleSave()
+
     return {
       message: 'No personal insights could be extracted from this content',
       importId,
