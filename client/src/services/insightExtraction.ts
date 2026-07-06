@@ -214,6 +214,22 @@ const MAX_INSIGHTS_PER_CHUNK = 15
 /** Maximum total insights across all chunks */
 const MAX_TOTAL_INSIGHTS = 30
 
+/** Maps the LLM wire-contract `kind` onto the existing 5-value category enum.
+ *  Downstream (DB columns, admitInsights, UI) sees only the category — untouched. */
+export const KIND_TO_CATEGORY: Record<string, string> = {
+  belief: 'perspectives',
+  value: 'identity',
+  trait: 'identity',
+  habit: 'experiences',
+  preference: 'perspectives',
+  goal: 'goals',
+  motivation: 'goals',
+  relationship_pattern: 'perspectives',
+  self_assessment: 'skills',
+}
+
+export const MIN_SELF_RELEVANCE = 60
+
 /**
  * Split large content into processable chunks, breaking at sentence boundaries.
  */
@@ -271,6 +287,36 @@ tool. An insight is a portable, first-person-true statement about this person th
 tool could use to act more like them.${who}
 </role>
 
+<what_counts_as_an_insight>
+An insight is durable self-knowledge — something about WHO THIS PERSON IS, not what they
+built, ran, shipped, or attended. Extract ONLY these kinds:
+- belief: a conviction about how the world, people, or work functions. "Believes small teams outperform large ones."
+- value: what they hold important and protect under pressure. "Values honesty over harmony when giving feedback."
+- trait: a stable character attribute or disposition. "Approaches problems methodically rather than intuitively."
+- habit: a recurring personal behavior pattern they own. "Writes every morning before opening any messages."
+- preference: a durable like or dislike that shapes choices. "Prefers written async communication over meetings."
+- goal: a personally held aspiration or direction. "Wants to move from consulting into building products."
+- motivation: a driver, fear, or need that explains behavior. "Is driven by a fear of depending on things he cannot inspect."
+- relationship_pattern: how they characteristically relate to people. "Withdraws rather than argues when trust is broken."
+- self_assessment: their own judgment of strengths and limits. "Considers himself a strong starter but a weak finisher."
+
+Do NOT extract — unless the statement reveals a durable personal pattern:
+- project/tool/system mechanics (pipelines, servers, configs, automations, repos)
+- biographical logistics (dates, addresses, schedules, job titles as bare facts)
+- third-party facts (statements about other people, companies, or tools)
+- event descriptions (things that happened once: attended, migrated, launched, fixed)
+
+Worked distinction: "Runs automated weekly harvest processes over his knowledge vault" is an
+EXCLUDED system fact — it describes machinery. The durable pattern it may reveal — "Builds
+redundant verification into systems he depends on — distrusts single sources of truth" — is
+an INCLUDED trait. When the content supports it, extract the second form; otherwise extract
+nothing.
+
+Litmus test — apply to every candidate before emitting it: Would this sentence belong in a
+psychological profile, not a resume or changelog? Would it still describe the person in a
+year? If either answer is no, do not emit it.
+</what_counts_as_an_insight>
+
 <rules>
 - Extract only what the content genuinely supports. It is correct to return an empty array
   when the content is impersonal, generic, or not about this person.
@@ -283,8 +329,16 @@ tool could use to act more like them.${who}
 
 <output_contract>
 Return a JSON array and nothing else — no prose, no code fences. Each element:
-{"content": string (<=300 chars, a full sentence), "confidenceScore": integer 50-95,
- "category": one of "identity"|"skills"|"experiences"|"perspectives"|"goals"}
+{"content": string (<=300 chars, a full sentence),
+ "confidenceScore": integer 50-95,
+ "kind": one of "belief"|"value"|"trait"|"habit"|"preference"|"goal"|"motivation"|"relationship_pattern"|"self_assessment",
+ "self_relevance": integer 0-100}
+self_relevance calibration — how much the statement is about the PERSON:
+- 90-100: directly about who the person is (a belief, value, trait, or pattern they own).
+- 50: an activity fact with weak personal signal ("maintains a personal knowledge vault").
+- 20: about a system, project, tool, or event, not the person.
+Items with self_relevance below 60 will be discarded; do not pad scores to survive the cut —
+prefer omitting the item.
 Empty input or no genuine insights -> return exactly: []
 </output_contract>`
 }
@@ -357,11 +411,13 @@ ${contentChunk}`
 ${deduplicationSection}
 <task>
 Extract ${insightRange} insights that are specific and grounded in what the content actually
-reveals. Prefer fewer, sharper insights over padding. Categorize each as identity, skills,
-experiences, perspectives, or goals.
+reveals. Prefer fewer, sharper insights over padding. Assign each insight a \`kind\` from the
+taxonomy and a \`self_relevance\` score per the calibration. Apply the litmus test:
+psychological profile, not resume or changelog; still true of the person in a year.
 
-Do not extract: statements true of anyone ("wants to be happy"), restated prompts, or vague
-emotional reactions with no substance.
+Do not extract: statements true of anyone ("wants to be happy"), restated prompts, vague
+emotional reactions with no substance, or facts about the person's systems, projects,
+tooling, or one-off events unless they reveal a durable personal pattern.
 </task>
 
 <confidence_calibration>
@@ -375,9 +431,40 @@ away from the actual engineering, which is the part I can't give up."
 -> {"content":"Chooses hands-on engineering over management, having declined promotions to
 stay technical","confidenceScore":88,"category":"perspectives"}  (emphatic + specific +
 evidenced by a concrete action = high band).
+confidenceScore measures evidence strength; self_relevance measures whether the statement is
+about the person at all. Score them independently.
 </confidence_calibration>
 
 Return the JSON array only.`
+}
+
+/** Exported for tests. Validates + normalizes raw parsed items from the LLM.
+ *  Returns kept insights (with category derived from kind) and the count dropped
+ *  by the personhood filter (invalid/missing kind or self_relevance < 60). */
+export function normalizeAiCandidates(
+  parsed: unknown[]
+): { kept: Array<{ content: string; confidenceScore: number; category: string }>; droppedByPersonhood: number } {
+  let droppedByPersonhood = 0
+  const kept = parsed
+    .filter((item): item is Record<string, unknown> =>
+      typeof item === 'object' && item !== null)
+    .filter(obj =>
+      typeof obj.content === 'string' && typeof obj.confidenceScore === 'number')
+    .filter(obj => {
+      const kindOk = typeof obj.kind === 'string' && obj.kind in KIND_TO_CATEGORY
+      const rel = obj.self_relevance
+      const relOk = typeof rel === 'number' && Number.isFinite(rel) && rel >= MIN_SELF_RELEVANCE
+      if (kindOk && relOk) return true
+      droppedByPersonhood += 1
+      return false
+    })
+    .map(obj => ({
+      content: (obj.content as string).substring(0, 500),
+      confidenceScore: Math.min(Math.max(obj.confidenceScore as number, 50), 95),
+      category: KIND_TO_CATEGORY[obj.kind as string],
+    }))
+    .slice(0, MAX_INSIGHTS_PER_CHUNK)
+  return { kept, droppedByPersonhood }
 }
 
 /**
@@ -407,26 +494,11 @@ async function callClaudeForInsights(
     const parsed = extractJson<unknown[]>(responseText)
     if (!Array.isArray(parsed)) return null
 
-    // Validate and normalize structure
-    const validCategories = new Set(['identity', 'skills', 'experiences', 'perspectives', 'goals'])
-
-    return parsed
-      .filter((item: unknown) => {
-        if (typeof item !== 'object' || item === null) return false
-        const obj = item as Record<string, unknown>
-        return typeof obj.content === 'string' && typeof obj.confidenceScore === 'number'
-      })
-      .map(item => {
-        const obj = item as { content: string; confidenceScore: number; category?: string }
-        return {
-          content: obj.content.substring(0, 500),
-          confidenceScore: Math.min(Math.max(obj.confidenceScore, 50), 95),
-          category: (typeof obj.category === 'string' && validCategories.has(obj.category))
-            ? obj.category
-            : 'identity',
-        }
-      })
-      .slice(0, MAX_INSIGHTS_PER_CHUNK)
+    const { kept, droppedByPersonhood } = normalizeAiCandidates(parsed)
+    if (droppedByPersonhood > 0) {
+      console.log(`[me.md:insight-extraction] Personhood filter dropped ${droppedByPersonhood} candidate(s) (self_relevance < ${MIN_SELF_RELEVANCE} or missing/invalid kind)`)
+    }
+    return kept
   } catch (error: unknown) {
     const err = error as { message?: string }
     console.warn(`[me.md:insight-extraction] Failed to parse AI extraction result: ${err.message || 'Unknown error'}`)
@@ -438,19 +510,46 @@ async function callClaudeForInsights(
 // Rule-Based Fallback Extraction
 // ============================================
 
+/** First-person / possessive self-reference. */
+export const FIRST_PERSON_RE =
+  /\b(i am|i'm|i was|i have|i've|i believe|i value|i prefer|i enjoy|i love|i hate|i fear|i want|i need|i always|i never|i tend to|i care about|i avoid|i struggle with|my|myself|mine)\b/i
+
+/** Third-person profile frames — vault notes often say "Prefers X" / "Believes Y".
+ *  Deliberately EXCLUDES bare "always|never" (only first-person "i always|i never" counts,
+ *  via FIRST_PERSON_RE) so "The server always restarts at midnight" cannot sneak through. */
+export const PROFILE_FRAME_RE =
+  /\b(believes?|values?|prefers?|enjoys?|loves?|hates?|fears?|avoids?|distrusts?|tends? to|cares? about|is (?:motivated|driven) by|aspires? to|strives? to|wants? to be|considers? (?:himself|herself|themselves))\b/i
+
+/** System / project / event vocabulary — the changelog signal. */
+export const SYSTEM_EVENT_RE =
+  /\b(runs?|running|ran|deploy(?:s|ed|ing)?|configur(?:es?|ed|ing)|install(?:s|ed|ing)?|automat(?:es?|ed|ing)|schedul(?:es?|ed|ing)|migrat(?:es?|ed|ing)|releas(?:es?|ed|ing)|pipelines?|cron|servers?|repos?|repositor(?:y|ies)|databases?|apis?|scripts?|workflows?|harvests?|backups?|v\d+(?:\.\d+)+)\b/i
+
+export type GateVerdict = 'self' | 'frame' | 'neutral' | 'system'
+
+/** Exported for tests. Precedence: self-reference beats system vocabulary —
+ *  "I run a weekly pipeline" is still a statement about the person. */
+export function selfReferenceGate(content: string): GateVerdict {
+  if (FIRST_PERSON_RE.test(content)) return 'self'
+  if (PROFILE_FRAME_RE.test(content)) return 'frame'
+  if (SYSTEM_EVENT_RE.test(content)) return 'system'
+  return 'neutral'
+}
+
 /**
- * Honest confidence for a rule-based fragment. We cannot assess conviction or consistency
- * without the model, so we report a low, fixed band that says "unverified pattern match":
+ * Honest confidence for a rule-based fragment. The personhood gate is purely lexical: it
+ * buys precision by dropping system/event facts at a recall cost for traits phrased like
+ * system facts. We report a low, fixed band that says "unverified pattern match":
  *   - 45: first-person self-statement ("I value...", "My approach is...")
- *   - 38: reasoning/preference signal without a clear first-person subject
- *   - 32: kept only because the source is curated (ChatGPT memory) -- weakest
+ *   - 38: third-person profile frame ("Prefers...", "Believes...")
+ *   - 34: mixed personal/system signal, or curated ChatGPT memory floor
+ *   - 32: neutral fallback floor
  * These are deliberately below the AI floor (50) so Review sorts them last and the
  * "Rule-based" badge is never contradicted by a confident-looking number.
  */
-function ruleBasedConfidence(statement: string, sourceType: SourceType): number {
-  const s = statement.toLowerCase()
-  if (/\b(i am|i'm|i believe|i value|i prefer|i always|i never|i tend to|my )\b/.test(s)) return 45
-  if (/\b(because|i think|i feel|i learned|i realized|important to me|matters to me)\b/.test(s)) return 38
+function ruleBasedConfidence(statement: string, sourceType: SourceType, verdict: GateVerdict): number {
+  if ((verdict === 'self' || verdict === 'frame') && SYSTEM_EVENT_RE.test(statement)) return 34
+  if (verdict === 'self') return 45
+  if (verdict === 'frame') return 38
   return sourceType === 'import_chatgpt' ? 34 : 32
 }
 
@@ -500,9 +599,11 @@ function extractInsightsFallback(ctx: ExtractionContext): ExtractedInsight[] {
     if (!isDeclarativeStatement(rawStatement)) return
     const content = cleanText(rawStatement).slice(0, 500).trim()
     if (content.length < 25) return
+    const verdict = selfReferenceGate(content)
+    if (verdict === 'system') return // pure system/event statement — not personhood
     results.push({
       content,
-      confidenceScore: ruleBasedConfidence(content, ctx.sourceType),
+      confidenceScore: ruleBasedConfidence(content, ctx.sourceType, verdict),
       category: category ?? categorizeStatement(content),
       extractionMethod: 'fallback',
     })
