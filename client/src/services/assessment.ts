@@ -343,6 +343,7 @@ function storePersonalityInsights(
   const candidates: ExtractedInsight[] = insightsResult.insights.map(insight => ({
     content: insight.claim,
     confidenceScore: insight.confidence,
+    kind: null,
     category: insight.category ?? 'identity',
     extractionMethod: 'ai',
     priorAlignment: 'novel',
@@ -369,6 +370,7 @@ function storePersonalityInsights(
       evidenceCount: insight.evidenceCount,
       evidenceSources: insight.evidenceSources.length > 0 ? JSON.stringify(insight.evidenceSources) : null,
       priorAlignment: insight.priorAlignment ?? 'novel',
+      kind: insight.kind ?? null,
     }).run()
   }
   enqueueVaultPendingWrites(db, insightIds)

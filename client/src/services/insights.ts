@@ -2,6 +2,7 @@ import { eq, and, desc, or } from 'drizzle-orm'
 import { scheduleSave } from '@/db/persistence'
 import { LOCAL_USER_ID } from '@/contexts/UserContext'
 import { insights, topics, verificationHistory, conceptNodes, conceptEdges } from '@/db/schema'
+import { KIND_LABELS } from '@/services/obsidianExport'
 
 type Db = any // Drizzle sql.js instance
 
@@ -89,6 +90,55 @@ export function getInsightStats(db: Db) {
   const rejected = allInsights.filter((i: any) => i.verificationStatus === 'rejected').length
 
   return { pending, verified, rejected, total: allInsights.length }
+}
+
+export function getGraphStats(db: Db): {
+  byKind: Array<{ kind: string | null; label: string; count: number }>
+  topicSizes: Array<{ title: string; count: number }>
+  verifiedTotal: number
+  topicTotal: number
+} {
+  const rows = db.select({
+    kind: insights.kind,
+    topicTitle: topics.title,
+  }).from(insights)
+    .leftJoin(topics, eq(insights.topicId, topics.id))
+    .where(and(
+      eq(insights.userId, LOCAL_USER_ID),
+      eq(insights.verificationStatus, 'verified'),
+    ))
+    .all()
+
+  const knownKinds = new Set(KIND_LABELS.map(([kind]) => kind))
+  const kindCounts = new Map<string | null, number>()
+  const topicCounts = new Map<string, number>()
+
+  for (const row of rows) {
+    const kind = typeof row.kind === 'string' && knownKinds.has(row.kind) ? row.kind : null
+    kindCounts.set(kind, (kindCounts.get(kind) ?? 0) + 1)
+
+    const topicTitle = row.topicTitle ?? 'General'
+    topicCounts.set(topicTitle, (topicCounts.get(topicTitle) ?? 0) + 1)
+  }
+
+  const byKind = KIND_LABELS
+    .map(([kind, label]) => ({ kind, label, count: kindCounts.get(kind) ?? 0 }))
+    .filter(item => item.count > 0) as Array<{ kind: string | null; label: string; count: number }>
+
+  const uncategorized = kindCounts.get(null) ?? 0
+  if (uncategorized > 0) {
+    byKind.push({ kind: null, label: 'Uncategorized', count: uncategorized })
+  }
+
+  const topicSizes = Array.from(topicCounts, ([title, count]) => ({ title, count }))
+    .sort((a, b) => b.count - a.count || a.title.localeCompare(b.title))
+
+  return {
+    byKind,
+    topicSizes,
+    verifiedTotal: rows.length,
+    topicTotal: topicSizes.length,
+  }
 }
 
 /**

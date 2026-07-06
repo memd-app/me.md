@@ -3,7 +3,15 @@ import initSqlJs from 'sql.js'
 import { drizzle } from 'drizzle-orm/sql-js'
 import * as schema from '@/db/schema'
 import { CREATE_TABLES_SQL } from '@/db/database'
-import { generateInsightNote, generateObsidianNotes, slugify, toFrontmatter } from '../obsidianExport'
+import {
+  KIND_LABELS,
+  RELATED_FLOOR,
+  generateInsightNote,
+  generateObsidianNotes,
+  pickRelated,
+  slugify,
+  toFrontmatter,
+} from '../obsidianExport'
 import { parseFacetsResponse, PROFILE_FACETS, upsertProfileFacets } from '../profileSynthesis'
 
 vi.mock('@/db/persistence', () => ({
@@ -53,6 +61,7 @@ describe('obsidian export service', () => {
     privacyTier?: string
     verifiedAt?: string | null
     updatedAt?: string | null
+    kind?: string | null
   }): void {
     db.run(`
       INSERT INTO insights (
@@ -64,7 +73,8 @@ describe('obsidian export service', () => {
         verification_status,
         privacy_tier,
         verified_at,
-        updated_at
+        updated_at,
+        kind
       )
       VALUES (
         ${sqlValue(params.id)},
@@ -75,7 +85,8 @@ describe('obsidian export service', () => {
         ${sqlValue(params.verificationStatus ?? 'verified')},
         ${sqlValue(params.privacyTier ?? 'exportable')},
         ${sqlValue(params.verifiedAt ?? '2026-06-12T09:30:00.000Z')},
-        ${sqlValue(params.updatedAt ?? '2026-06-13T09:30:00.000Z')}
+        ${sqlValue(params.updatedAt ?? '2026-06-13T09:30:00.000Z')},
+        ${sqlValue(params.kind ?? null)}
       )
     `)
   }
@@ -338,5 +349,194 @@ describe('obsidian export service', () => {
 
     expect(paths.some(path => path.startsWith('me.md/Profile/'))).toBe(false)
     expect(index?.content).not.toContain('## Profile')
+  })
+
+  it('groups topic MOC links by kind in canonical order with an other section', () => {
+    insertTopic('topic-communication', 'Communication')
+    insertInsight({
+      id: 'ins-kind-value',
+      topicId: 'topic-communication',
+      content: 'I value direct written feedback.',
+      confidenceScore: 94,
+      kind: 'value',
+    })
+    insertInsight({
+      id: 'ins-kind-belief',
+      topicId: 'topic-communication',
+      content: 'I believe small teams communicate faster.',
+      confidenceScore: 91,
+      kind: 'belief',
+    })
+    insertInsight({
+      id: 'ins-kind-trait',
+      topicId: 'topic-communication',
+      content: 'I approach disagreements methodically.',
+      confidenceScore: 88,
+      kind: 'trait',
+    })
+    insertInsight({
+      id: 'ins-kind-null',
+      topicId: 'topic-communication',
+      content: 'I keep open questions visible.',
+      confidenceScore: 85,
+    })
+
+    const topic = generateObsidianNotes(db).notes.find(note => note.path === 'me.md/Topics/Topic - Communication.md')
+
+    expect(KIND_LABELS.map(([, label]) => label)).toContain('Beliefs')
+    expect(topic?.content).toContain('### Beliefs')
+    expect(topic?.content).toContain('### Values')
+    expect(topic?.content).toContain('### Traits')
+    expect(topic?.content).toContain('### Other')
+    expect(topic?.content.indexOf('### Beliefs')).toBeLessThan(topic?.content.indexOf('### Values') ?? 0)
+    expect(topic?.content.indexOf('### Values')).toBeLessThan(topic?.content.indexOf('### Traits') ?? 0)
+    expect(topic?.content.indexOf('### Traits')).toBeLessThan(topic?.content.indexOf('### Other') ?? 0)
+    expect(topic?.content).toContain(`- [[${slugify('ins-kind-belief', 'I believe small teams communicate faster')}|I believe small teams communicate faster]]`)
+    expect(topic?.content).toContain(`- [[${slugify('ins-kind-null', 'I keep open questions visible')}|I keep open questions visible]]`)
+  })
+
+  it('keeps the flat topic MOC byte format when no insight has kind', () => {
+    insertTopic('topic-communication', 'Communication')
+    insertInsight({
+      id: 'ins-flat-1',
+      topicId: 'topic-communication',
+      content: 'I prefer concise updates.',
+      confidenceScore: 90,
+    })
+    insertInsight({
+      id: 'ins-flat-2',
+      topicId: 'topic-communication',
+      content: 'I write open questions down.',
+      confidenceScore: 80,
+    })
+
+    const topic = generateObsidianNotes(db).notes.find(note => note.path === 'me.md/Topics/Topic - Communication.md')
+
+    expect(topic?.content).toBe([
+      '---',
+      'title: "Communication"',
+      'source: "me.md"',
+      'type: "topic"',
+      '---',
+      '',
+      '# Communication',
+      '',
+      `- [[${slugify('ins-flat-1', 'I prefer concise updates')}|I prefer concise updates]]`,
+      `- [[${slugify('ins-flat-2', 'I write open questions down')}|I write open questions down]]`,
+      '',
+      '[[Me - Index]]',
+      '',
+    ].join('\n'))
+  })
+
+  it('picks related links deterministically and breaks equal scores by slug', () => {
+    const self = { id: 'self', content: 'I prefer concise written updates before review meetings.' }
+    const siblings = [
+      { id: 'b', content: 'Values compact written status notes.', slug: 'ins-bravo', title: 'Bravo' },
+      { id: 'a', content: 'Values compact written status notes.', slug: 'ins-alpha', title: 'Alpha' },
+      { id: 'self', content: self.content, slug: 'ins-self', title: 'Self' },
+    ]
+
+    const first = pickRelated(self, siblings)
+    const second = pickRelated(self, siblings)
+
+    expect(first).toEqual(second)
+    expect(first.map(item => item.slug)).toEqual(['ins-alpha', 'ins-bravo'])
+  })
+
+  it('excludes related candidates below the floor and at duplicate threshold', () => {
+    const self = { id: 'self', content: 'I prefer concise written updates before review meetings.' }
+    const related = pickRelated(self, [
+      { id: 'same', content: self.content, slug: 'ins-same', title: 'Same' },
+      { id: 'noise', content: 'zzzzzzzzzzzzzzzzzz', slug: 'ins-noise', title: 'Noise' },
+    ])
+
+    expect(RELATED_FLOOR).toBe(0.15)
+    expect(related).toEqual([])
+  })
+
+  it('serializes kind and related links as Obsidian frontmatter list properties', () => {
+    const row = {
+      id: 'ins-related',
+      content: 'I prefer concise written updates.',
+      confidenceScore: 91,
+      verifiedAt: '2026-07-06T10:00:00.000Z',
+      updatedAt: '2026-07-06T10:00:00.000Z',
+      topicId: 'topic-work',
+      topicTitle: 'Work',
+      kind: 'preference',
+      related: [
+        { slug: 'ins-alpha', title: 'Alpha "quote"' },
+        { slug: 'ins-beta', title: 'Beta [[link|alias]]' },
+      ],
+    }
+
+    const { note } = generateInsightNote(row)
+
+    expect(note.content).toContain([
+      'confidence: 91',
+      'kind: "preference"',
+      'related:',
+      '  - "[[ins-alpha|Alpha \\"quote\\"]]"',
+      '  - "[[ins-beta|Beta link alias]]"',
+      'verified: "2026-07-06"',
+    ].join('\n'))
+  })
+
+  it('keeps generateInsightNote byte-identical when optional graph fields are absent', () => {
+    const row = {
+      id: 'ins-parity',
+      content: 'I prefer direct feedback.',
+      confidenceScore: 82,
+      verifiedAt: '2026-06-12T09:30:00.000Z',
+      updatedAt: '2026-06-13T09:30:00.000Z',
+      topicId: 'topic-communication',
+      topicTitle: 'Communication',
+    }
+    const { slug, note } = generateInsightNote(row)
+
+    expect(note.content).toBe([
+      '---',
+      'title: "I prefer direct feedback"',
+      'topic: "Communication"',
+      'confidence: 82',
+      'verified: "2026-06-12"',
+      'status: "verified"',
+      'source: "me.md"',
+      'id: "ins-parity"',
+      '---',
+      '',
+      'I prefer direct feedback.',
+      '',
+      'Topic: [[Topic - Communication]]',
+      '',
+    ].join('\n'))
+    expect(note.path).toBe(`me.md/Insights/${slug}.md`)
+    expect(note.content).not.toContain('kind:')
+    expect(note.content).not.toContain('related:')
+  })
+
+  it('orders index topics by size and summarizes linked profile facets', () => {
+    insertTopic('topic-work', 'Work')
+    insertTopic('topic-communication', 'Communication')
+    insertInsight({ id: 'ins-work-1', topicId: 'topic-work', content: 'I keep decision logs.' })
+    insertInsight({ id: 'ins-work-2', topicId: 'topic-work', content: 'I review commitments weekly.' })
+    insertInsight({ id: 'ins-communication-1', topicId: 'topic-communication', content: 'I prefer concise updates.' })
+    const facets = parseFacetsResponse(JSON.stringify({
+      facets: PROFILE_FACETS.map(facet => ({
+        key: facet.key,
+        body: `- *strongly held*: ${facet.title} body.\n\n### Tensions & open questions\nNo contradictions surfaced in current evidence.`,
+      })),
+    }))
+    upsertProfileFacets(db, facets, '2026-07-06T12:00:00.000Z', 5)
+
+    const index = generateObsidianNotes(db).notes.find(note => note.path === 'me.md/Me - Index.md')
+    const workLine = '- [[Topic - Work]] · 2 insights'
+    const communicationLine = '- [[Topic - Communication]] · 1 insight'
+
+    expect(index?.content).toContain('> Auto-generated from me.md. 3 verified insights · 2 topics · 5 profile facets.')
+    expect(index?.content).toContain(workLine)
+    expect(index?.content).toContain(communicationLine)
+    expect(index?.content.indexOf(workLine)).toBeLessThan(index?.content.indexOf(communicationLine) ?? 0)
   })
 })

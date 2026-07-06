@@ -5,6 +5,7 @@ function candidate(content: string, confidenceScore = 80): ExtractedInsight {
   return {
     content,
     confidenceScore,
+    kind: null,
     category: 'identity',
     extractionMethod: 'fallback',
     priorAlignment: 'novel',

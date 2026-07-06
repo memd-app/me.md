@@ -56,6 +56,7 @@ describe('normalizeAiCandidates', () => {
       {
         content: 'Approaches problems methodically rather than intuitively.',
         confidenceScore: 84,
+        kind: 'trait',
         category: KIND_TO_CATEGORY.trait,
         priorAlignment: 'novel',
       },
@@ -89,6 +90,7 @@ describe('normalizeAiCandidates', () => {
       {
         content: 'Considers himself a strong starter but a weak finisher.',
         confidenceScore: 86,
+        kind: 'self_assessment',
         category: KIND_TO_CATEGORY.self_assessment,
         priorAlignment: 'novel',
       },
@@ -130,12 +132,14 @@ describe('normalizeAiCandidates', () => {
       {
         content: 'Prefers direct disagreement over quiet consensus.',
         confidenceScore: 60,
+        kind: 'preference',
         category: KIND_TO_CATEGORY.preference,
         priorAlignment: 'tension',
       },
       {
         content: 'Values concise written communication.',
         confidenceScore: 80,
+        kind: 'value',
         category: KIND_TO_CATEGORY.value,
         priorAlignment: 'corroborated',
       },
@@ -235,6 +239,7 @@ describe('fallback extraction personhood gate', () => {
     expect(results).toContainEqual(expect.objectContaining({
       content: 'I value tools I can inspect and repair myself.',
       extractionMethod: 'fallback',
+      kind: null,
     }))
     expect(results.every(result => result.confidenceScore <= 45)).toBe(true)
   })

@@ -5,6 +5,7 @@ import { insights, topics } from '@/db/schema'
 import { LOCAL_USER_ID } from '@/contexts/UserContext'
 import { generatePersonalityMarkdown, getPersonalityExportData } from '@/services/profile'
 import { getProfileFacets, type FacetRecord } from '@/services/profileSynthesis'
+import { combinedScore, DUPLICATE_THRESHOLD } from '@/services/similarity'
 import type { NoteStatus } from '@/services/vaultReconcile'
 
 type Db = SQLJsDatabase<typeof schema>
@@ -18,6 +19,20 @@ export const STATUS_DIRS: Record<NoteStatus, string> = {
   verified: `${ROOT_FOLDER}/Insights`,
   rejected: `${ROOT_FOLDER}/Rejected`,
 }
+
+export const KIND_LABELS: ReadonlyArray<[kind: string, label: string]> = [
+  ['belief', 'Beliefs'],
+  ['value', 'Values'],
+  ['trait', 'Traits'],
+  ['habit', 'Habits'],
+  ['preference', 'Preferences'],
+  ['goal', 'Goals'],
+  ['motivation', 'Motivations'],
+  ['relationship_pattern', 'Relationship patterns'],
+  ['self_assessment', 'Self-assessments'],
+]
+
+export const RELATED_FLOOR = 0.15
 
 export interface ObsidianNote {
   path: string
@@ -36,9 +51,11 @@ export interface ObsidianExportResult {
 }
 
 interface InsightNoteData {
+  id: string
   slug: string
   title: string
   content: string
+  kind: string | null
 }
 
 interface TopicGroup {
@@ -56,6 +73,13 @@ export interface InsightGenRow {
   updatedAt: string | null
   topicId: string | null
   topicTitle: string | null
+  kind?: string | null
+  related?: Array<{ slug: string; title: string }>
+}
+
+interface ExportRow {
+  row: InsightGenRow
+  group: TopicGroup
 }
 
 export function generateObsidianNotes(db: Db): ObsidianExportResult {
@@ -67,6 +91,7 @@ export function generateObsidianNotes(db: Db): ObsidianExportResult {
     updatedAt: insights.updatedAt,
     topicId: insights.topicId,
     topicTitle: topics.title,
+    kind: insights.kind,
   }).from(insights)
     .leftJoin(topics, eq(insights.topicId, topics.id))
     .where(and(
@@ -95,7 +120,7 @@ export function generateObsidianNotes(db: Db): ObsidianExportResult {
   }
 
   const topicGroups = new Map<string, TopicGroup>()
-  const insightNotes: ObsidianNote[] = []
+  const exportRows: ExportRow[] = []
 
   for (const row of rows) {
     const topicName = sanitizeTopicTitle(row.topicTitle ?? GENERAL_TOPIC)
@@ -109,18 +134,30 @@ export function generateObsidianNotes(db: Db): ObsidianExportResult {
     }
 
     const title = deriveInsightTitle(row.content)
-    const { slug, note } = generateInsightNote(row)
+    const slug = slugify(row.id, title)
 
     const insightData: InsightNoteData = {
+      id: row.id,
       slug,
       title,
-      content: note.content,
+      content: row.content,
+      kind: row.kind ?? null,
     }
     group.insights.push(insightData)
-    insightNotes.push(note)
+    exportRows.push({ row, group })
   }
 
   const groups = Array.from(topicGroups.values())
+  const insightNotes = exportRows.map(({ row, group }) => {
+    const related = pickRelated(row, group.insights)
+    // Bulk zip exports can enrich insight note frontmatter. Live vault per-insight
+    // writers pass rows without these optional fields, preserving phase-2 bytes.
+    return generateInsightNote({
+      ...row,
+      kind: row.kind ?? null,
+      related,
+    }).note
+  })
   const topicNotes = groups.map(group => makeTopicNote(group))
   const notes: ObsidianNote[] = [
     makeIndexNote(groups, rows.length, hasPersonality, facets),
@@ -175,11 +212,18 @@ export function generateInsightNote(row: InsightGenRow, status: NoteStatus = 've
   const title = deriveInsightTitle(row.content)
   const slug = slugify(row.id, title)
   const verified = formatDate(row.verifiedAt ?? row.updatedAt)
-  const fields: Array<[string, string | number]> = [
+  const fields: Array<[string, string | number | string[]]> = [
     ['title', title],
     ['topic', topicName],
     ['confidence', Math.round(row.confidenceScore ?? 50)],
   ]
+  if (row.kind) fields.push(['kind', row.kind])
+  if (row.related && row.related.length > 0) {
+    fields.push([
+      'related',
+      row.related.map(item => `[[${item.slug}|${sanitizeWikiAlias(item.title)}]]`),
+    ])
+  }
   if (verified) fields.push(['verified', verified])
   fields.push(['status', status], ['source', ROOT_FOLDER], ['id', row.id])
 
@@ -198,47 +242,6 @@ export function generateInsightNote(row: InsightGenRow, status: NoteStatus = 've
   }
 }
 
-export function generateNotesForInsight(
-  db: Db,
-  insightId: string,
-): { insight: ObsidianNote; topic: ObsidianNote; index: ObsidianNote } {
-  const row = db.select({
-    id: insights.id,
-    content: insights.content,
-    confidenceScore: insights.confidenceScore,
-    verifiedAt: insights.verifiedAt,
-    updatedAt: insights.updatedAt,
-    topicId: insights.topicId,
-    topicTitle: topics.title,
-  }).from(insights)
-    .leftJoin(topics, eq(insights.topicId, topics.id))
-    .where(and(
-      eq(insights.id, insightId),
-      eq(insights.userId, LOCAL_USER_ID),
-      eq(insights.verificationStatus, 'verified'),
-      eq(insights.privacyTier, 'exportable'),
-    ))
-    .get()
-
-  if (!row) {
-    throw new Error('Insight is not verified and exportable.')
-  }
-
-  const { note: generatedInsight } = generateInsightNote(row)
-  const topicName = sanitizeTopicTitle(row.topicTitle ?? GENERAL_TOPIC)
-  const topicPath = `${ROOT_FOLDER}/Topics/Topic - ${topicName}.md`
-  const result = generateObsidianNotes(db)
-  const insight = result.notes.find(note => note.path === generatedInsight.path) ?? generatedInsight
-  const topic = result.notes.find(note => note.path === topicPath)
-  const index = result.notes.find(note => note.path === `${ROOT_FOLDER}/Me - Index.md`)
-
-  if (!topic || !index) {
-    throw new Error('Could not generate the insight note set.')
-  }
-
-  return { insight, topic, index }
-}
-
 export function slugify(id: string, title: string): string {
   const compactId = id.replace(/^(?:insight|ins)-/i, '').replace(/[^a-z0-9]/gi, '')
   const idFragment = (compactId.slice(0, 6) || stableHash(id).slice(0, 6)).toLowerCase()
@@ -248,8 +251,11 @@ export function slugify(id: string, title: string): string {
   return trimmed && trimmed !== '.' && trimmed !== '..' ? trimmed : `ins-${idFragment}`
 }
 
-export function toFrontmatter(fields: Array<[string, string | number]>): string {
-  const lines = fields.map(([key, value]) => {
+export function toFrontmatter(fields: Array<[string, string | number | string[]]>): string {
+  const lines = fields.flatMap(([key, value]) => {
+    if (Array.isArray(value)) {
+      return [`${key}:`, ...value.map(item => `  - "${escapeYamlString(item)}"`)]
+    }
     if (typeof value === 'number') return `${key}: ${value}`
     return `${key}: "${escapeYamlString(value)}"`
   })
@@ -272,6 +278,8 @@ export function stableHash(input: string): string {
 }
 
 function makeTopicNote(group: TopicGroup): ObsidianNote {
+  const linkInsight = (insight: InsightNoteData) => `- [[${insight.slug}|${sanitizeWikiAlias(insight.title)}]]`
+  const hasKind = group.insights.some(insight => insight.kind !== null)
   const lines = [
     toFrontmatter([
       ['title', group.title],
@@ -281,15 +289,30 @@ function makeTopicNote(group: TopicGroup): ObsidianNote {
     '',
     `# ${group.title}`,
     '',
-    ...group.insights.map(insight => `- [[${insight.slug}|${sanitizeWikiAlias(insight.title)}]]`),
-    '',
-    '[[Me - Index]]',
-    '',
   ]
+
+  if (!hasKind) {
+    lines.push(...group.insights.map(linkInsight), '')
+  } else {
+    for (const [kind, label] of KIND_LABELS) {
+      const section = group.insights.filter(insight => insight.kind === kind)
+      if (section.length === 0) continue
+      lines.push(`### ${label}`, ...section.map(linkInsight), '')
+    }
+
+    const other = group.insights.filter(insight => insight.kind === null)
+    if (other.length > 0) {
+      lines.push('### Other', ...other.map(linkInsight), '')
+    }
+  }
+
+  lines.push('[[Me - Index]]', '')
   return makeNote(group.path, lines.join('\n'))
 }
 
 function makeIndexNote(groups: TopicGroup[], insightCount: number, hasPersonality: boolean, facets: FacetRecord[]): ObsidianNote {
+  const topicGroups = [...groups].sort((a, b) => b.insights.length - a.insights.length || a.title.localeCompare(b.title))
+  const facetSummary = facets.length > 0 ? ` · ${formatCount(facets.length, 'profile facet')}` : ''
   const lines = [
     toFrontmatter([
       ['title', 'Me - Index'],
@@ -299,13 +322,13 @@ function makeIndexNote(groups: TopicGroup[], insightCount: number, hasPersonalit
     '',
     '# Me — Index',
     '',
-    `> Auto-generated from me.md. ${insightCount} verified insights across ${groups.length} topics.`,
+    `> Auto-generated from me.md. ${formatCount(insightCount, 'verified insight')} · ${formatCount(groups.length, 'topic')}${facetSummary}.`,
     '',
   ]
 
-  if (groups.length > 0) {
+  if (topicGroups.length > 0) {
     lines.push('## Topics', '')
-    lines.push(...groups.map(group => `- [[${group.link}]]`))
+    lines.push(...topicGroups.map(group => `- [[${group.link}]] · ${formatCount(group.insights.length, 'insight')}`))
     lines.push('')
   }
 
@@ -320,6 +343,26 @@ function makeIndexNote(groups: TopicGroup[], insightCount: number, hasPersonalit
   }
 
   return makeNote(`${ROOT_FOLDER}/Me - Index.md`, lines.join('\n'))
+}
+
+export function pickRelated(
+  self: { id: string; content: string },
+  siblings: Array<{ id: string; content: string; slug: string; title: string }>,
+): Array<{ slug: string; title: string }> {
+  return siblings
+    .filter(sibling => sibling.id !== self.id)
+    .map(sibling => ({
+      sibling,
+      score: combinedScore(self.content, sibling.content),
+    }))
+    .filter(item => item.score >= RELATED_FLOOR && item.score < DUPLICATE_THRESHOLD)
+    .sort((a, b) => b.score - a.score || a.sibling.slug.localeCompare(b.sibling.slug))
+    .slice(0, 3)
+    .map(({ sibling }) => ({ slug: sibling.slug, title: sibling.title }))
+}
+
+function formatCount(count: number, singular: string): string {
+  return `${count} ${singular}${count === 1 ? '' : 's'}`
 }
 
 function makeNote(path: string, content: string): ObsidianNote {

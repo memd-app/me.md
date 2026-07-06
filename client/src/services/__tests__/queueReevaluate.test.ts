@@ -144,7 +144,7 @@ describe('reevaluatePendingInsights', () => {
     expect(db.select().from(insights).where(eq(insights.id, 'ins-missing-kind')).get()?.verificationStatus).toBe('unverified')
   })
 
-  it('persists AI prior alignment and adjusted confidence for kept rows', async () => {
+  it('persists AI kind, prior alignment, and adjusted confidence for kept rows', async () => {
     mockIsApiKeyConfigured.mockReturnValue(true)
     mockCallAnthropic.mockResolvedValue(JSON.stringify([
       { index: 1, kind: 'preference', self_relevance: 90, prior_alignment: 'corroborated', confidence: 91 },
@@ -160,10 +160,12 @@ describe('reevaluatePendingInsights', () => {
 
     expect(result).toEqual({ evaluated: 2, filtered: 0, kept: 2, usedAi: true })
     expect(db.select().from(insights).where(eq(insights.id, 'ins-corroborated')).get()).toMatchObject({
+      kind: 'preference',
       priorAlignment: 'corroborated',
       confidenceScore: 91,
     })
     expect(db.select().from(insights).where(eq(insights.id, 'ins-tension')).get()).toMatchObject({
+      kind: 'trait',
       priorAlignment: 'tension',
       confidenceScore: 60,
     })

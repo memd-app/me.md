@@ -471,6 +471,7 @@ export async function processImport(
     suggestedCategory: i.category,
     extractionMethod: i.extractionMethod,
     priorAlignment: i.priorAlignment ?? 'novel',
+    kind: i.kind ?? null,
     evidenceCount: i.evidenceCount,
     evidenceSources: i.evidenceSources,
   }))
@@ -593,6 +594,7 @@ export async function processImport(
       evidenceCount: extracted.evidenceCount,
       evidenceSources: extracted.evidenceSources.length > 0 ? JSON.stringify(extracted.evidenceSources) : null,
       priorAlignment: extracted.priorAlignment ?? 'novel',
+      kind: extracted.kind ?? null,
     }).run()
 
     savedInsights.push({

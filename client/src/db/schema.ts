@@ -110,6 +110,7 @@ export const insights = sqliteTable('insights', {
   evidenceCount: integer('evidence_count').default(0),
   evidenceSources: text('evidence_sources'),
   priorAlignment: text('prior_alignment'),
+  kind: text('kind'),
   vaultContentHash: text('vault_content_hash'),
   vaultBodyHash: text('vault_body_hash'),
   vaultSyncedAt: text('vault_synced_at'),

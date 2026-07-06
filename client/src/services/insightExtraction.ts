@@ -46,6 +46,8 @@ export interface ExtractedInsight {
   content: string
   /** Confidence score 0-100 */
   confidenceScore: number
+  /** Personhood taxonomy kind from the LLM contract; fallback extraction cannot classify this honestly. */
+  kind: string | null
   /** Suggested category for the insight */
   category: string
   /** How the insight was extracted */
@@ -536,7 +538,7 @@ Return the JSON array only.`
  *  by the personhood filter (invalid/missing kind or self_relevance < 60). */
 export function normalizeAiCandidates(
   parsed: unknown[]
-): { kept: Array<{ content: string; confidenceScore: number; category: string; priorAlignment: PriorAlignment }>; droppedByPersonhood: number } {
+): { kept: Array<{ content: string; confidenceScore: number; kind: string; category: string; priorAlignment: PriorAlignment }>; droppedByPersonhood: number } {
   let droppedByPersonhood = 0
   const kept = parsed
     .filter((item): item is Record<string, unknown> =>
@@ -557,6 +559,7 @@ export function normalizeAiCandidates(
       return {
         content: (obj.content as string).substring(0, 500),
         confidenceScore: applyAlignmentCap(clamped, priorAlignment),
+        kind: obj.kind as string,
         category: KIND_TO_CATEGORY[obj.kind as string],
         priorAlignment,
       }
@@ -571,7 +574,7 @@ export function normalizeAiCandidates(
 async function callClaudeForInsights(
   systemPrompt: string,
   userPrompt: string
-): Promise<Array<{ content: string; confidenceScore: number; category: string; priorAlignment: PriorAlignment }> | null> {
+): Promise<Array<{ content: string; confidenceScore: number; kind: string; category: string; priorAlignment: PriorAlignment }> | null> {
   if (!isApiKeyConfigured()) return null
 
   try {
@@ -702,6 +705,7 @@ function extractInsightsFallback(ctx: ExtractionContext): ExtractedInsight[] {
     results.push({
       content,
       confidenceScore: ruleBasedConfidence(content, ctx.sourceType, verdict),
+      kind: null,
       category: category ?? categorizeStatement(content),
       extractionMethod: 'fallback',
       priorAlignment: 'novel',
@@ -810,7 +814,7 @@ const AI_RETRY_ATTEMPTS = 1
 async function callClaudeForInsightsWithRetry(
   systemPrompt: string,
   userPrompt: string
-): Promise<Array<{ content: string; confidenceScore: number; category: string; priorAlignment: PriorAlignment }> | null> {
+): Promise<Array<{ content: string; confidenceScore: number; kind: string; category: string; priorAlignment: PriorAlignment }> | null> {
   // First attempt
   const firstResult = await callClaudeForInsights(systemPrompt, userPrompt)
   if (firstResult) return firstResult

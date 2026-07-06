@@ -43,6 +43,7 @@ type Decision = 'keep' | 'filter'
 
 interface AiVerdict {
   decision: Decision
+  kind: string | null
   priorAlignment: PriorAlignment
   confidence: number | null
 }
@@ -157,6 +158,7 @@ function parseAiDecisions(responseText: string, batchSize: number): Map<number, 
 
     decisions.set(index - 1, {
       decision: relevance >= MIN_SELF_RELEVANCE ? 'keep' : 'filter',
+      kind,
       priorAlignment,
       confidence,
     })
@@ -194,7 +196,7 @@ async function evaluateWithAi(
     }
 
     for (let i = 0; i < batch.length; i += 1) {
-      const verdict = decisions.get(i) ?? { decision: 'keep' as const, priorAlignment: 'novel' as const, confidence: null }
+      const verdict = decisions.get(i) ?? { decision: 'keep' as const, kind: null, priorAlignment: 'novel' as const, confidence: null }
       if (verdict.decision === 'filter') {
         toFilter.push(batch[i])
         continue
@@ -203,6 +205,7 @@ async function evaluateWithAi(
       db.update(insights)
         .set({
           priorAlignment: verdict.priorAlignment,
+          kind: verdict.kind,
           ...(verdict.confidence !== null ? { confidenceScore: verdict.confidence } : {}),
         })
         .where(eq(insights.id, batch[i].id)).run()

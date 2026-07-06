@@ -14,7 +14,6 @@
     "@alheimsins/bigfive-calculate-score": "^3.0.3",
     "@bigfive-org/questions": "^1.2.1",
     "@bigfive-org/results": "^1.2.5",
-    "d3": "^7.9.0",
     "drizzle-orm": "^0.45.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -22,7 +21,6 @@
     "sql.js": "^1.14.1"
   },
   "devDependencies": {
-    "@types/d3": "^7.4.3",
     "@types/react": "^18.3.10",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.2",

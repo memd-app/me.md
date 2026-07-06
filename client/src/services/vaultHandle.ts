@@ -38,6 +38,13 @@ export async function loadVaultHandle(): Promise<FileSystemDirectoryHandle | nul
   })
 }
 
+export async function getVaultDisplayName(): Promise<string | null> {
+  const handle = await loadVaultHandle()
+  // Obsidian vault names normally match the picked root folder name. If a user
+  // picked a parent or subfolder, the graph page still shows a manual fallback.
+  return handle?.name ?? null
+}
+
 export async function clearVaultHandle(): Promise<void> {
   const idb = await openVaultDb()
   await new Promise<void>((resolve, reject) => {

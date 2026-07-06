@@ -366,6 +366,7 @@ export async function distillSession(
       evidenceCount: insight.evidenceCount,
       evidenceSources: insight.evidenceSources.length > 0 ? JSON.stringify(insight.evidenceSources) : null,
       priorAlignment: insight.priorAlignment ?? 'novel',
+      kind: insight.kind ?? null,
     }).returning().get()
     savedInsights.push(saved)
   }
