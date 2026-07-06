@@ -9,12 +9,17 @@ import {
   scanUploadedFiles,
   scanVaultDirectory,
   type NoteResult,
+  type NoteSkipReason,
   type ObsidianImportProgress,
   type VaultNoteFile,
 } from '@/services/obsidianImport'
 
 type Db = SQLJsDatabase<typeof schema>
 type Stage = 'idle' | 'scanning' | 'scoping' | 'importing' | 'done'
+
+const SKIP_REASON_LABELS: Partial<Record<NoteSkipReason, string>> = {
+  unchanged: 'Unchanged — already imported',
+}
 
 interface ObsidianImportPanelProps {
   db: Db
@@ -380,7 +385,7 @@ export default function ObsidianImportPanel({
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm text-gray-600 dark:text-gray-300 truncate">{result.path}</span>
                       <span className="text-[11px] uppercase tracking-[0.08em] font-sans font-medium text-gray-500 dark:text-gray-400 shrink-0">
-                        {result.truncated ? 'Truncated' : result.skipReason || result.status}
+                        {result.truncated ? 'Truncated' : result.skipReason ? SKIP_REASON_LABELS[result.skipReason] ?? result.skipReason : result.status}
                       </span>
                     </div>
                     {result.error && (

@@ -7,7 +7,8 @@ import {
   generateJsonContentAI,
   type DistillationContext,
 } from './ai'
-import { extractInsights, formatInterviewTranscript, type ExtractionContext } from './insightExtraction'
+import { admitInsights, extractInsights, formatInterviewTranscript, type ExtractionContext } from './insightExtraction'
+import { applyInsightEvidenceAttachments, fetchExistingInsightRefs, logAdmissionDrops } from './admissionPersistence'
 type Db = any // Drizzle sql.js instance
 
 // ============================================
@@ -322,15 +323,13 @@ export async function distillSession(
   }).returning().get()
 
   // Extract insights using the unified insight extraction service
-  const existingVerified = db.select({
-    content: insights.content,
-    confidenceScore: insights.confidenceScore,
-  }).from(insights).where(
-    and(eq(insights.userId, userId), eq(insights.verificationStatus, 'verified'))
-  ).all().map((i: any) => ({
-    content: i.content,
-    confidenceScore: i.confidenceScore ?? 50,
-  }))
+  const existing = fetchExistingInsightRefs(db)
+  const existingVerified = existing
+    .filter(ref => ref.verificationStatus === 'verified')
+    .map(ref => ({
+      content: ref.content,
+      confidenceScore: 50,
+    }))
 
   const transcript = formatInterviewTranscript(userMsgs, assistantMsgs)
   const extractionCtx: ExtractionContext = {
@@ -344,9 +343,12 @@ export async function distillSession(
   }
 
   const extractedInsights = await extractInsights(extractionCtx)
+  const admission = admitInsights(extractedInsights, existing, `session:${sessionId}`)
+  applyInsightEvidenceAttachments(db, admission.attach)
+  logAdmissionDrops(admission.drop)
   const savedInsights = []
 
-  for (const insight of extractedInsights) {
+  for (const insight of admission.admit) {
     const insightId = crypto.randomUUID()
     const saved = db.insert(insights).values({
       id: insightId,
@@ -358,6 +360,8 @@ export async function distillSession(
       extractionMethod: insight.extractionMethod || 'ai',
       verificationStatus: 'unverified',
       sourceSessionId: sessionId,
+      evidenceCount: insight.evidenceCount,
+      evidenceSources: insight.evidenceSources.length > 0 ? JSON.stringify(insight.evidenceSources) : null,
     }).returning().get()
     savedInsights.push(saved)
   }

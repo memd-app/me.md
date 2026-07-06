@@ -21,6 +21,8 @@ import { scheduleSave } from '@/db/persistence'
 import { LOCAL_USER_ID } from '@/contexts/UserContext'
 import { callAnthropic, isApiKeyConfigured } from './anthropic'
 import { extractJson } from './textCleaning'
+import { admitInsights, type ExtractedInsight } from './insightExtraction'
+import { applyInsightEvidenceAttachments, fetchExistingInsightRefs, logAdmissionDrops } from './admissionPersistence'
 
 // ============================================
 // Big Five library imports (CJS packages)
@@ -337,8 +339,19 @@ function storePersonalityInsights(
     selectedFormat: 'full_analysis',
   }).run()
 
+  const candidates: ExtractedInsight[] = insightsResult.insights.map(insight => ({
+    content: insight.claim,
+    confidenceScore: insight.confidence,
+    category: insight.category ?? 'identity',
+    extractionMethod: 'ai',
+  }))
+  const existing = fetchExistingInsightRefs(db)
+  const admission = admitInsights(candidates, existing, `assessment:${attemptId}`)
+  applyInsightEvidenceAttachments(db, admission.attach)
+  logAdmissionDrops(admission.drop)
+
   const insightIds: string[] = []
-  for (const insight of insightsResult.insights) {
+  for (const insight of admission.admit) {
     const insightId = crypto.randomUUID()
     insightIds.push(insightId)
     db.insert(insights).values({
@@ -346,11 +359,13 @@ function storePersonalityInsights(
       noteId,
       topicId,
       userId: LOCAL_USER_ID,
-      content: insight.claim,
-      confidenceScore: insight.confidence,
+      content: insight.content,
+      confidenceScore: insight.confidenceScore,
       verificationStatus: 'unverified',
       extractionMethod: 'ai',
       sourceSessionId: null,
+      evidenceCount: insight.evidenceCount,
+      evidenceSources: insight.evidenceSources.length > 0 ? JSON.stringify(insight.evidenceSources) : null,
     }).run()
   }
 

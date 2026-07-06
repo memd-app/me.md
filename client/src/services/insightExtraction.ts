@@ -13,6 +13,7 @@
  */
 
 import { callAnthropic, isApiKeyConfigured } from './anthropic'
+import { combinedScore, DUPLICATE_THRESHOLD, NEAR_DUP_THRESHOLD } from './similarity'
 import { cleanText, extractJson, isDeclarativeStatement, stripFrontmatter } from './textCleaning'
 
 // ============================================
@@ -47,6 +48,157 @@ export interface ExtractedInsight {
   category: string
   /** How the insight was extracted */
   extractionMethod: 'ai' | 'fallback'
+}
+
+export interface ExistingInsightRef {
+  id: string
+  content: string
+  verificationStatus: string
+  evidenceCount?: number
+}
+
+export interface AdmittedInsight extends ExtractedInsight {
+  evidenceCount: number
+  evidenceSources: string[]
+}
+
+export interface AttachTarget {
+  targetId: string
+  sourceRef: string
+  score: number
+}
+
+export interface DroppedCandidate {
+  content: string
+  reason: 'dup-verified' | 'dup-pending' | 'neardup-verified' | 'dup-batch' | 'cap'
+  score: number
+  matchedId?: string
+}
+
+export interface AdmissionResult {
+  admit: AdmittedInsight[]
+  attach: AttachTarget[]
+  drop: DroppedCandidate[]
+}
+
+type MatchSet = 'verified' | 'pending' | 'batch'
+
+interface Match {
+  set: MatchSet
+  score: number
+  id?: string
+  index?: number
+}
+
+const MATCH_SET_PRECEDENCE: Record<MatchSet, number> = {
+  verified: 3,
+  pending: 2,
+  batch: 1,
+}
+
+function betterGlobalMatch(a: Match | null, b: Match | null): Match | null {
+  if (!a) return b
+  if (!b) return a
+  if (b.score > a.score) return b
+  if (b.score < a.score) return a
+  return MATCH_SET_PRECEDENCE[b.set] > MATCH_SET_PRECEDENCE[a.set] ? b : a
+}
+
+function bestExistingMatch(candidate: ExtractedInsight, refs: ExistingInsightRef[], set: 'verified' | 'pending'): Match | null {
+  let best: Match | null = null
+
+  for (const ref of refs) {
+    const score = combinedScore(candidate.content, ref.content)
+    if (!best || score > best.score || (score === best.score && ref.id < (best.id ?? ''))) {
+      best = { set, score, id: ref.id }
+    }
+  }
+
+  return best
+}
+
+function bestBatchMatch(candidate: ExtractedInsight, admittedBatch: AdmittedInsight[]): Match | null {
+  let best: Match | null = null
+
+  for (let index = 0; index < admittedBatch.length; index += 1) {
+    const score = combinedScore(candidate.content, admittedBatch[index].content)
+    if (!best || score > best.score || (score === best.score && index < (best.index ?? Number.MAX_SAFE_INTEGER))) {
+      best = { set: 'batch', score, index }
+    }
+  }
+
+  return best
+}
+
+/**
+ * Deterministic, no DB, no LLM. `sourceRef` identifies this batch, e.g. `import:<id>`,
+ * `session:<id>`, `assessment:<id>` -- recorded on attaches/merges as evidence provenance.
+ */
+export function admitInsights(
+  candidates: ExtractedInsight[],
+  existing: ExistingInsightRef[],
+  sourceRef: string,
+): AdmissionResult {
+  const verified = existing.filter(ref => ref.verificationStatus === 'verified')
+  const pending = existing.filter(ref => ref.verificationStatus !== 'verified')
+  const admittedBatch: AdmittedInsight[] = []
+  const attach: AttachTarget[] = []
+  const drop: DroppedCandidate[] = []
+
+  for (const candidate of candidates) {
+    const best = [
+      bestExistingMatch(candidate, verified, 'verified'),
+      bestExistingMatch(candidate, pending, 'pending'),
+      bestBatchMatch(candidate, admittedBatch),
+    ].reduce<Match | null>((current, next) => betterGlobalMatch(current, next), null)
+
+    if (!best || best.score < NEAR_DUP_THRESHOLD) {
+      admittedBatch.push({ ...candidate, evidenceCount: 0, evidenceSources: [] })
+      continue
+    }
+
+    if (best.score >= DUPLICATE_THRESHOLD) {
+      drop.push({
+        content: candidate.content,
+        reason: best.set === 'verified' ? 'dup-verified' : best.set === 'pending' ? 'dup-pending' : 'dup-batch',
+        score: best.score,
+        matchedId: best.id,
+      })
+      continue
+    }
+
+    if (best.set === 'verified') {
+      drop.push({
+        content: candidate.content,
+        reason: 'neardup-verified',
+        score: best.score,
+        matchedId: best.id,
+      })
+      continue
+    }
+
+    if (best.set === 'pending' && best.id) {
+      attach.push({ targetId: best.id, sourceRef, score: best.score })
+      continue
+    }
+
+    if (best.set === 'batch' && best.index !== undefined) {
+      const matched = admittedBatch[best.index]
+      matched.evidenceCount += 1
+      matched.evidenceSources.push(sourceRef)
+      if (candidate.confidenceScore > matched.confidenceScore) {
+        matched.content = candidate.content
+        matched.confidenceScore = candidate.confidenceScore
+      }
+      drop.push({
+        content: candidate.content,
+        reason: 'dup-batch',
+        score: best.score,
+      })
+    }
+  }
+
+  return { admit: admittedBatch, attach, drop }
 }
 
 // ============================================

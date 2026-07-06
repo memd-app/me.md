@@ -107,6 +107,8 @@ export const insights = sqliteTable('insights', {
   privacyTier: text('privacy_tier').default('exportable'),
   extractionMethod: text('extraction_method').default('ai'),
   sourceSessionId: text('source_session_id').references(() => sessions.id),
+  evidenceCount: integer('evidence_count').default(0),
+  evidenceSources: text('evidence_sources'),
   verifiedAt: text('verified_at'),
   reVerifyAt: text('re_verify_at'),
   reVerifyInterval: integer('re_verify_interval'),
@@ -194,6 +196,7 @@ export const importedFiles = sqliteTable('imported_files', {
   filename: text('filename').notNull(),
   fileType: text('file_type'),
   processedContent: text('processed_content'),
+  contentHash: text('content_hash'),
   createdAt: text('created_at').default(sql`(datetime('now'))`),
 })
 

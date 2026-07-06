@@ -12,12 +12,19 @@ import {
   isOwnExport,
   isPlaceholderNote,
   isSkippedDirectory,
+  runObsidianImport,
   stripFrontmatter,
   type VaultNoteFile,
 } from '../obsidianImport'
+import { importedFiles, insights, notes, topics } from '@/db/schema'
 
 vi.mock('@/db/persistence', () => ({
   scheduleSave: vi.fn(),
+}))
+
+vi.mock('../anthropic', () => ({
+  isApiKeyConfigured: vi.fn().mockReturnValue(false),
+  callAnthropic: vi.fn(),
 }))
 
 describe('obsidian import service', () => {
@@ -35,17 +42,32 @@ describe('obsidian import service', () => {
     db.run('DELETE FROM assessment_results')
     db.run('DELETE FROM assessment_attempts')
     db.run('DELETE FROM insights')
+    db.run('DELETE FROM notes')
+    db.run('DELETE FROM sessions')
+    db.run('DELETE FROM imported_files')
     db.run('DELETE FROM topics')
     db.run('DELETE FROM users')
     db.run("INSERT OR IGNORE INTO users (id, name) VALUES ('local-user', 'Test User')")
   })
 
-  function note(path: string, name = path.split('/').pop()?.replace(/\.md$/i, '') ?? path): VaultNoteFile {
+  function note(
+    path: string,
+    name = path.split('/').pop()?.replace(/\.md$/i, '') ?? path,
+    content = 'I prefer direct, explicit feedback when working on software projects.',
+  ): VaultNoteFile {
     return {
       path,
       name,
       size: 100,
-      read: () => Promise.resolve('I prefer direct, explicit feedback when working on software projects.'),
+      read: () => Promise.resolve(content),
+    }
+  }
+
+  function importOpts() {
+    return {
+      onProgress: vi.fn(),
+      onNoteDone: vi.fn(),
+      isCancelled: vi.fn().mockReturnValue(false),
     }
   }
 
@@ -183,5 +205,46 @@ describe('obsidian import service', () => {
       ['Archive/Ideas.md', 'Archive/Ideas'],
       ['Daily/Today.md', 'Today'],
     ]))
+  })
+
+  it('skips an identical re-import as unchanged without adding insights or topics', async () => {
+    const files = [note('Journal/Today.md')]
+    const first = await runObsidianImport(db, files, importOpts())
+
+    expect(first).toMatchObject([{ status: 'imported' }])
+    const storedImport = db.select().from(importedFiles).all()[0]
+    expect(storedImport.contentHash).toMatch(/^[a-f0-9]{8}$/)
+    const insightCount = db.select().from(insights).all().length
+    const topicCount = db.select().from(topics).all().length
+    expect(insightCount).toBeGreaterThan(0)
+    expect(topicCount).toBe(1)
+
+    const second = await runObsidianImport(db, files, importOpts())
+
+    expect(second).toMatchObject([{ status: 'skipped', skipReason: 'unchanged' }])
+    expect(db.select().from(insights).all()).toHaveLength(insightCount)
+    expect(db.select().from(topics).all()).toHaveLength(topicCount)
+  })
+
+  it('groups imported notes under one topic per top-level folder', async () => {
+    const files = [
+      note('Alpha/First.md', 'First', 'I prefer direct feedback when planning project work.'),
+      note('Alpha/Second.md', 'Second', 'I document important tradeoffs before choosing an implementation path.'),
+      note('Beta/Only.md', 'Only', 'I revisit assumptions when a project changes direction.'),
+      note('Root.md', 'Root', 'I use weekly planning notes to track important decisions.'),
+    ]
+
+    const results = await runObsidianImport(db, files, importOpts())
+
+    expect(results.every(result => result.status === 'imported')).toBe(true)
+    const topicRows = db.select().from(topics).all()
+    expect(topicRows.map(topic => topic.title).sort()).toEqual(['Alpha', 'Beta', 'Imported Notes'])
+
+    const alphaTopicId = topicRows.find(topic => topic.title === 'Alpha')?.id
+    expect(alphaTopicId).toBeDefined()
+    const alphaNoteTopicIds = db.select().from(notes).all()
+      .filter(noteRow => noteRow.title === 'First' || noteRow.title === 'Second')
+      .map(noteRow => noteRow.topicId)
+    expect(alphaNoteTopicIds).toEqual([alphaTopicId, alphaTopicId])
   })
 })

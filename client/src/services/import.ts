@@ -20,10 +20,13 @@ import {
 } from '@/db/schema'
 import { scheduleSave } from '@/db/persistence'
 import { LOCAL_USER_ID } from '@/contexts/UserContext'
-import { extractInsights, type SourceType, type ExtractionContext } from './insightExtraction'
+import { extractInsights, admitInsights, type SourceType, type ExtractionContext, type AdmittedInsight, type DroppedCandidate } from './insightExtraction'
 import { cleanText, cleanTitle, stripFrontmatter } from './textCleaning'
+import { stableHash } from './obsidianExport'
+import { applyInsightEvidenceAttachments, fetchExistingInsightRefs, logAdmissionDrops } from './admissionPersistence'
 
 type Db = SQLJsDatabase<typeof schema>
+export const MAX_INSIGHTS_PER_NOTE = 8
 
 // ============================================
 // HTML/text helpers
@@ -174,12 +177,14 @@ export function importText(db: Db, text: string, title?: string) {
   const fileId = crypto.randomUUID()
   const displayTitle = cleanTitle(title || 'Pasted text', 'Pasted text')
   const summary = generateSummary(trimmedText)
+  const contentHash = stableHash(trimmedText)
 
   db.insert(importedFiles).values({
     id: fileId,
     userId: LOCAL_USER_ID,
     filename: displayTitle,
     fileType: 'text',
+    contentHash,
     processedContent: JSON.stringify({
       title: displayTitle,
       summary,
@@ -197,7 +202,31 @@ export function importText(db: Db, text: string, title?: string) {
 
   scheduleSave()
 
-  return { message: 'Text imported successfully', id: fileId, title: displayTitle, summary }
+  return { message: 'Text imported successfully', id: fileId, title: displayTitle, summary, contentHash }
+}
+
+export function findProcessedImportByHash(db: Db, contentHash: string): { importId: string; topicId?: string } | null {
+  const rows = db.select({
+    id: importedFiles.id,
+    processedContent: importedFiles.processedContent,
+  }).from(importedFiles)
+    .where(and(eq(importedFiles.userId, LOCAL_USER_ID), eq(importedFiles.contentHash, contentHash)))
+    .all()
+
+  for (const row of rows) {
+    try {
+      const processedContent = row.processedContent ? JSON.parse(row.processedContent) : null
+      if (!processedContent || processedContent.processingStatus !== 'processed') continue
+      return {
+        importId: row.id,
+        topicId: typeof processedContent.processedTopicId === 'string' ? processedContent.processedTopicId : undefined,
+      }
+    } catch {
+      continue
+    }
+  }
+
+  return null
 }
 
 /**
@@ -364,7 +393,11 @@ export function getImportStatus(db: Db) {
 /**
  * Process an imported file and extract insights using AI.
  */
-export async function processImport(db: Db, importId: string) {
+export async function processImport(
+  db: Db,
+  importId: string,
+  options?: { topicId?: string; topicTitle?: string },
+) {
   const user = db.select().from(users).where(eq(users.id, LOCAL_USER_ID)).get()
   if (!user) throw new Error('User not found')
 
@@ -411,12 +444,10 @@ export async function processImport(db: Db, importId: string) {
     }
   }
 
-  // Gather existing verified insights for deduplication
-  const existingVerified = db.select({ content: insights.content, confidenceScore: insights.confidenceScore })
-    .from(insights)
-    .where(and(eq(insights.userId, LOCAL_USER_ID), eq(insights.verificationStatus, 'verified')))
-    .all()
-    .map(i => ({ content: i.content, confidenceScore: i.confidenceScore ?? 50 }))
+  const existing = fetchExistingInsightRefs(db)
+  const existingVerified = existing
+    .filter(ref => ref.verificationStatus === 'verified')
+    .map(ref => ({ content: ref.content, confidenceScore: 50 }))
 
   const extractionCtx: ExtractionContext = {
     content: contentText,
@@ -426,15 +457,21 @@ export async function processImport(db: Db, importId: string) {
   }
 
   const unifiedInsights = await extractInsights(extractionCtx)
+  const admission = admitInsights(unifiedInsights, existing, `import:${importId}`)
+  const { admitted, capDrops } = capAdmittedInsights(admission.admit)
+  applyInsightEvidenceAttachments(db, admission.attach)
+  logAdmissionDrops([...admission.drop, ...capDrops])
 
-  const extractedInsights = unifiedInsights.map(i => ({
+  const extractedInsights = admitted.map(i => ({
     content: i.content,
     confidenceScore: i.confidenceScore,
     suggestedCategory: i.category,
     extractionMethod: i.extractionMethod,
+    evidenceCount: i.evidenceCount,
+    evidenceSources: i.evidenceSources,
   }))
 
-  if (extractedInsights.length === 0) {
+  if (unifiedInsights.length === 0) {
     return {
       message: 'No personal insights could be extracted from this content',
       importId,
@@ -444,9 +481,30 @@ export async function processImport(db: Db, importId: string) {
     }
   }
 
+  if (extractedInsights.length === 0) {
+    db.update(importedFiles).set({
+      processedContent: JSON.stringify({
+        ...processedContent,
+        processingStatus: 'processed',
+        processedInsightCount: 0,
+        processedAt: new Date().toISOString(),
+      }),
+    }).where(eq(importedFiles.id, importId)).run()
+
+    scheduleSave()
+
+    return {
+      message: 'No new personal insights could be extracted from this content',
+      importId,
+      insightsExtracted: 0,
+      insights: [],
+      topicCreated: null,
+    }
+  }
+
   // Create topic, session, note, and insights
-  const topicTitle = cleanName.substring(0, 200)
-  const topicId = crypto.randomUUID()
+  let topicTitle = options?.topicTitle || cleanName.substring(0, 200)
+  let topicId = options?.topicId || crypto.randomUUID()
   const sessionId = crypto.randomUUID()
   const noteId = crypto.randomUUID()
 
@@ -464,18 +522,26 @@ export async function processImport(db: Db, importId: string) {
   }> = []
 
   // Create all records
-  db.insert(topics).values({
-    id: topicId,
-    userId: LOCAL_USER_ID,
-    title: topicTitle,
-    description: `Insights extracted from imported ${importedFile.fileType} content: "${importedFile.filename || 'Untitled'}"`,
-    tags: JSON.stringify(['imported', importedFile.fileType]),
-    status: 'extracted',
-    priority: 'medium',
-    intent: 'document',
-    isPreset: false,
-    presetCategory: dominantCategory as any,
-  }).run()
+  if (options?.topicId) {
+    const existingTopic = db.select({ title: topics.title }).from(topics)
+      .where(and(eq(topics.id, options.topicId), eq(topics.userId, LOCAL_USER_ID)))
+      .get()
+    topicTitle = options.topicTitle || existingTopic?.title || topicTitle
+    topicId = options.topicId
+  } else {
+    db.insert(topics).values({
+      id: topicId,
+      userId: LOCAL_USER_ID,
+      title: topicTitle,
+      description: `Insights extracted from imported ${importedFile.fileType} content: "${importedFile.filename || 'Untitled'}"`,
+      tags: JSON.stringify(['imported', importedFile.fileType]),
+      status: 'extracted',
+      priority: 'medium',
+      intent: 'document',
+      isPreset: false,
+      presetCategory: dominantCategory as any,
+    }).run()
+  }
 
   db.insert(sessions).values({
     id: sessionId,
@@ -509,6 +575,8 @@ export async function processImport(db: Db, importId: string) {
       extractionMethod: extracted.extractionMethod || 'ai',
       verificationStatus: 'unverified',
       sourceSessionId: sessionId,
+      evidenceCount: extracted.evidenceCount,
+      evidenceSources: extracted.evidenceSources.length > 0 ? JSON.stringify(extracted.evidenceSources) : null,
     }).run()
 
     savedInsights.push({
@@ -541,6 +609,20 @@ export async function processImport(db: Db, importId: string) {
     insights: savedInsights,
     topicCreated: { id: topicId, title: topicTitle },
     noteCreated: { id: noteId, title: noteTitle },
+  }
+}
+
+function capAdmittedInsights(admitted: AdmittedInsight[]): { admitted: AdmittedInsight[]; capDrops: DroppedCandidate[] } {
+  const sorted = [...admitted].sort((a, b) => b.confidenceScore - a.confidenceScore)
+  const kept = sorted.slice(0, MAX_INSIGHTS_PER_NOTE)
+  const overflow = sorted.slice(MAX_INSIGHTS_PER_NOTE)
+  return {
+    admitted: kept,
+    capDrops: overflow.map(item => ({
+      content: item.content,
+      reason: 'cap',
+      score: 0,
+    })),
   }
 }
 

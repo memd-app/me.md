@@ -141,6 +141,8 @@ export const CREATE_TABLES_SQL = `
     privacy_tier TEXT DEFAULT 'exportable',
     extraction_method TEXT DEFAULT 'ai',
     source_session_id TEXT REFERENCES sessions(id),
+    evidence_count INTEGER DEFAULT 0,
+    evidence_sources TEXT,
     verified_at TEXT,
     re_verify_at TEXT,
     re_verify_interval INTEGER,
@@ -213,6 +215,7 @@ export const CREATE_TABLES_SQL = `
     filename TEXT NOT NULL,
     file_type TEXT,
     processed_content TEXT,
+    content_hash TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   );
   CREATE TABLE IF NOT EXISTS assessment_attempts (
@@ -244,6 +247,25 @@ export const CREATE_TABLES_SQL = `
   PRAGMA foreign_keys = ON;
 `
 
+function columnExists(sqlDb: SqlJsDatabase, table: string, column: string): boolean {
+  const res = sqlDb.exec(`PRAGMA table_info(${table})`)
+  if (!res.length) return false
+  return res[0].values.some(row => row[1] === column)
+}
+
+const MIGRATIONS: Array<{ table: string; column: string; ddl: string }> = [
+  { table: 'insights', column: 'evidence_count', ddl: 'ALTER TABLE insights ADD COLUMN evidence_count INTEGER DEFAULT 0' },
+  { table: 'insights', column: 'evidence_sources', ddl: 'ALTER TABLE insights ADD COLUMN evidence_sources TEXT' },
+  { table: 'imported_files', column: 'content_hash', ddl: 'ALTER TABLE imported_files ADD COLUMN content_hash TEXT' },
+]
+
+function runMigrations(sqlDb: SqlJsDatabase): void {
+  for (const migration of MIGRATIONS) {
+    if (!columnExists(sqlDb, migration.table, migration.column)) sqlDb.run(migration.ddl)
+  }
+  sqlDb.run('CREATE INDEX IF NOT EXISTS idx_imported_files_hash ON imported_files(content_hash)')
+}
+
 // ---- Public API ----
 
 export async function initDatabase(): Promise<void> {
@@ -257,6 +279,7 @@ export async function initDatabase(): Promise<void> {
 
   // Create tables (IF NOT EXISTS — safe for existing databases)
   sqlDb.run(CREATE_TABLES_SQL)
+  runMigrations(sqlDb)
 
   // Wrap with Drizzle
   drizzleDb = drizzle(sqlDb, { schema })

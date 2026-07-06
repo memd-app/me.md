@@ -1,12 +1,17 @@
+import { and, eq } from 'drizzle-orm'
 import type { SQLJsDatabase } from 'drizzle-orm/sql-js'
 import type * as schema from '@/db/schema'
-import { importText, processImport } from './import'
+import { topics } from '@/db/schema'
+import { LOCAL_USER_ID } from '@/contexts/UserContext'
+import { findProcessedImportByHash, importText, processImport } from './import'
+import { stableHash } from './obsidianExport'
 
 type Db = SQLJsDatabase<typeof schema>
 
 // Mirrors ROOT_FOLDER in obsidianExport.ts (not exported there; that file is frozen).
 // A unit test asserts it matches generateObsidianNotes(db).rootFolder to prevent drift.
 export const SYNC_ROOT_FOLDER = 'me.md'
+export const ROOT_FOLDER_TOPIC_TITLE = 'Imported Notes'
 export const MAX_NOTE_BYTES = 5 * 1024 * 1024
 export const IMPORT_TEXT_CAP = 10_000
 
@@ -29,7 +34,7 @@ export interface ParsedNote {
   body: string
 }
 
-export type NoteSkipReason = 'empty' | 'placeholder' | 'own-export' | 'too-large' | 'unreadable'
+export type NoteSkipReason = 'empty' | 'placeholder' | 'own-export' | 'too-large' | 'unreadable' | 'unchanged'
 
 export interface NoteResult {
   path: string
@@ -235,97 +240,148 @@ export async function runObsidianImport(
 ): Promise<NoteResult[]> {
   const results: NoteResult[] = []
   const titles = assignTitles(files)
+  const groups = groupByTopFolder(files)
   let consecutivePermissionFailures = 0
+  let current = 0
 
   const record = (result: NoteResult) => {
     results.push(result)
     opts.onNoteDone(result)
   }
 
-  for (let index = 0; index < files.length; index += 1) {
-    if (opts.isCancelled()) break
+  outer:
+  for (const group of groups) {
+    let folderTopic: { id: string; title: string } | null = null
 
-    const file = files[index]
-    const title = titles.get(file.path) ?? file.name
-    opts.onProgress({ current: index + 1, total: files.length, filename: file.path })
+    for (const file of group.files) {
+      if (opts.isCancelled()) break outer
 
-    if (file.size > MAX_NOTE_BYTES) {
-      consecutivePermissionFailures = 0
-      record({ path: file.path, title, status: 'skipped', skipReason: 'too-large' })
-      continue
-    }
+      const title = titles.get(file.path) ?? file.name
+      current += 1
+      opts.onProgress({ current, total: files.length, filename: file.path })
 
-    let raw: string
-    try {
-      raw = await file.read()
-      consecutivePermissionFailures = 0
-    } catch (error) {
-      const message = getErrorMessage(error, 'Could not read note')
-      record({ path: file.path, title, status: 'failed', skipReason: 'unreadable', error: message })
-
-      if (isNamedDomError(error, 'NotAllowedError')) {
-        consecutivePermissionFailures += 1
-        if (consecutivePermissionFailures >= 3) {
-          record({
-            path: 'Vault permission',
-            title: 'Vault permission revoked',
-            status: 'failed',
-            skipReason: 'unreadable',
-            error: PERMISSION_REVOKED_MESSAGE,
-          })
-          break
-        }
-      } else {
+      if (file.size > MAX_NOTE_BYTES) {
         consecutivePermissionFailures = 0
+        record({ path: file.path, title, status: 'skipped', skipReason: 'too-large' })
+        continue
       }
-      continue
-    }
 
-    if (isLikelyBinary(raw)) {
-      record({ path: file.path, title, status: 'skipped', skipReason: 'unreadable' })
-      continue
-    }
+      let raw: string
+      try {
+        raw = await file.read()
+        consecutivePermissionFailures = 0
+      } catch (error) {
+        const message = getErrorMessage(error, 'Could not read note')
+        record({ path: file.path, title, status: 'failed', skipReason: 'unreadable', error: message })
 
-    const { frontmatter, body } = stripFrontmatter(raw)
+        if (isNamedDomError(error, 'NotAllowedError')) {
+          consecutivePermissionFailures += 1
+          if (consecutivePermissionFailures >= 3) {
+            record({
+              path: 'Vault permission',
+              title: 'Vault permission revoked',
+              status: 'failed',
+              skipReason: 'unreadable',
+              error: PERMISSION_REVOKED_MESSAGE,
+            })
+            break outer
+          }
+        } else {
+          consecutivePermissionFailures = 0
+        }
+        continue
+      }
 
-    if (isOwnExport(frontmatter)) {
-      record({ path: file.path, title, status: 'skipped', skipReason: 'own-export' })
-      continue
-    }
+      if (isLikelyBinary(raw)) {
+        record({ path: file.path, title, status: 'skipped', skipReason: 'unreadable' })
+        continue
+      }
 
-    if (body.trim() === '') {
-      record({ path: file.path, title, status: 'skipped', skipReason: 'empty' })
-      continue
-    }
+      const { frontmatter, body } = stripFrontmatter(raw)
 
-    if (isPlaceholderNote(body)) {
-      record({ path: file.path, title, status: 'skipped', skipReason: 'placeholder' })
-      continue
-    }
+      if (isOwnExport(frontmatter)) {
+        record({ path: file.path, title, status: 'skipped', skipReason: 'own-export' })
+        continue
+      }
 
-    try {
-      const { id } = importText(db, body, title)
-      const processed = await processImport(db, id)
-      record({
-        path: file.path,
-        title,
-        status: 'imported',
-        importId: id,
-        insights: processed.insights || [],
-        topicCreated: processed.topicCreated ?? undefined,
-        truncated: body.trim().length > IMPORT_TEXT_CAP,
-      })
-    } catch (error) {
-      record({
-        path: file.path,
-        title,
-        status: 'failed',
-        error: getErrorMessage(error, 'Failed to import note'),
-      })
+      if (body.trim() === '') {
+        record({ path: file.path, title, status: 'skipped', skipReason: 'empty' })
+        continue
+      }
+
+      if (isPlaceholderNote(body)) {
+        record({ path: file.path, title, status: 'skipped', skipReason: 'placeholder' })
+        continue
+      }
+
+      // FNV-1a is non-crypto; rare collisions can only skip a re-import as unchanged.
+      const contentHash = stableHash(body.trim())
+      if (findProcessedImportByHash(db, contentHash)) {
+        record({ path: file.path, title, status: 'skipped', skipReason: 'unchanged' })
+        continue
+      }
+
+      try {
+        folderTopic ??= resolveFolderTopic(db, group.folder)
+        const { id } = importText(db, body, title)
+        const processed = await processImport(db, id, {
+          topicId: folderTopic.id,
+          topicTitle: folderTopic.title,
+        })
+        record({
+          path: file.path,
+          title,
+          status: 'imported',
+          importId: id,
+          insights: processed.insights || [],
+          topicCreated: processed.topicCreated ?? folderTopic,
+          truncated: body.trim().length > IMPORT_TEXT_CAP,
+        })
+      } catch (error) {
+        record({
+          path: file.path,
+          title,
+          status: 'failed',
+          error: getErrorMessage(error, 'Failed to import note'),
+        })
+      }
     }
   }
 
   return results
+}
+
+function topicTitleFor(folder: string): string {
+  // Folder rename = new topic by title; existing notes are not reconciled across renamed folders.
+  return folder === '' ? ROOT_FOLDER_TOPIC_TITLE : folder
+}
+
+function resolveFolderTopic(db: Db, folder: string): { id: string; title: string } {
+  const title = topicTitleFor(folder)
+  const existingTopic = db.select({ id: topics.id, title: topics.title })
+    .from(topics)
+    .where(and(eq(topics.userId, LOCAL_USER_ID), eq(topics.title, title)))
+    .get()
+
+  if (existingTopic) return existingTopic
+
+  const topicId = crypto.randomUUID()
+  db.insert(topics).values({
+    id: topicId,
+    userId: LOCAL_USER_ID,
+    title,
+    description: folder === ''
+      ? 'Imported Obsidian notes from the vault root.'
+      : `Imported Obsidian notes from the ${folder} folder.`,
+    tags: JSON.stringify(['imported', 'obsidian', folder || 'root']),
+    status: 'extracted',
+    priority: 'medium',
+    intent: 'document',
+    isPreset: false,
+    presetCategory: 'identity',
+  }).run()
+
+  return { id: topicId, title }
 }
 
 function isImportablePath(path: string): boolean {
