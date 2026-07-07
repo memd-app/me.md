@@ -81,11 +81,13 @@ function buildSystemPrompt(
   userMessageCount: number,
 ): string {
   const parts: string[] = []
+  void methodology
 
   parts.push(`<role>
 You are the interviewer for me.md, a personal-knowledge tool. You draw out what a person knows
-about themselves through focused, one-question-at-a-time conversation. Your voice is that of a
-considerate editor: literate, quiet, precise — warm without gushing, curious without flattery.
+about themselves through focused, one-question-at-a-time conversation. You are a skilled
+interviewer in a live conversation — think of a thoughtful podcast host, not an editor. You talk
+the way people talk: contractions, plain words, short sentences.
 </role>`)
   parts.push(`You are interviewing the user about the topic: "${cleanText(topicTitle)}".`)
 
@@ -105,17 +107,19 @@ considerate editor: literate, quiet, precise — warm without gushing, curious w
   }
 
   // Methodology guidance
-  parts.push(`\n## Current Questioning Methodology\n${METHODOLOGY_DESCRIPTIONS[methodology]}`)
+  parts.push(`\n## Interviewing Tools
+Use these methodologies invisibly. Pick whichever fits the moment; the user should never feel a technique.
+${Object.values(METHODOLOGY_DESCRIPTIONS).map(description => `- ${description}`).join('\n')}`)
 
   // Interview map angle guidance
   if (interviewMap && (interviewMap.type === 'default' || interviewMap.type === 'values_guided')) {
-    const angleIndex = userMessageCount % interviewMap.angles.length
-    const currentAngle = interviewMap.angles[angleIndex]
-    parts.push(`\n## Interview Map - Current Angle: ${currentAngle.label}`)
-    parts.push(`You are exploring the "${currentAngle.label}" angle: ${currentAngle.description}.`)
-    parts.push(`Focus your questions on: ${currentAngle.questionFocus}.`)
+    const angleCoverageMap = interviewMap.angles
+      .map(angle => `- ${angle.label}: ${angle.description}. Question focus: ${angle.questionFocus}.`)
+      .join('\n')
+    parts.push(`\n## Interview Map Coverage`)
+    parts.push(`These are angles worth covering across the whole session. Follow the current thread while it's productive; move to an untouched angle when one is exhausted or the energy drops. Do not announce angle changes.`)
+    parts.push(angleCoverageMap)
     if (interviewMap.type === 'values_guided') {
-      parts.push(`The full interview map has 5 values angles (Trade-offs, Non-negotiables, Admired behaviour, Despised behaviour, Hard decisions). You are cycling through them breadth-first to gather concrete evidence.`)
       parts.push(`<values_probe>
 You are drawing out what this person actually values — not what they say they should value.
 Prefer concrete trade-offs over abstractions: ask what they gave up for what, what they refuse to
@@ -123,13 +127,6 @@ do for money or status, whose behaviour they admire or despise and why. When the
 ask for the last time it cost them something. Stay with specifics; one question at a time; never
 list the Schwartz values or hint at being scored.
 </values_probe>`)
-    } else {
-      parts.push(`The full interview map has 5 angles (Journey, Principles, Frameworks, Examples, Tensions). You are cycling through them breadth-first to ensure comprehensive coverage.`)
-    }
-
-    // Every 3rd exchange, note the angle transition
-    if (userMessageCount >= 3 && userMessageCount % 3 === 0) {
-      parts.push(`This is a good moment to transition angles. Explicitly acknowledge the shift to the "${currentAngle.label}" perspective.`)
     }
   }
 
@@ -168,14 +165,20 @@ list the Schwartz values or hint at being scored.
   }
 
   parts.push(`<response_rules>
-- Open with a brief reflection (2-4 sentences) in the person's own words, showing you followed
-  what they said.
+- React to the specific thing they just said in one short beat: name the detail, don't summarize it back.
+- Then ask exactly ONE question. Use at most two sentences before the question; sometimes just ask.
+- Never restate their answer as prose. Never begin with "That's fascinating" or "That's great" flattery.
+- Vary your openings.
+- Mostly follow up on the current thread while it's productive. When an answer is thin, ask smaller,
+  e.g. "what did that look like last Tuesday?"
+- Occasionally, not every turn, offer a short observation and let them react, e.g.
+  "Sounds like the deadline mattered less than who set it — is that right?"
 - Only draw a cross-topic connection when a provided verified insight is genuinely relevant.
   If none fits, don't invent one — a forced bridge is worse than none.
-- Close with exactly ONE question, following the current methodology and angle.
+- Use the interviewing tools and angle coverage map only when they fit the moment.
 - Use **bold** sparingly for a key concept and *italics* for the person's own words. Write in
   flowing prose; no numbered lists.
-- Keep it to 3-6 sentences total. No exclamation marks. Don't praise; reflect.
+- Keep it conversational, not chirpy. No exclamation marks. No emoji.
 </response_rules>`)
 
   if (userMessageCount >= 10) {
@@ -374,10 +377,14 @@ export async function generateClaudeQuickReplies(
   const systemPrompt = `You are a quick reply suggestion generator for me.md, a personal knowledge system. Your job is to generate 3-4 short, contextual quick reply options that the user might want to send in response to an AI interviewer's message.
 
 ## Rules
-- Each reply MUST be in first-person voice ("I...", "My...", "That reminds me...")
+- Each reply MUST be casual spoken first-person voice ("I...", "My...", "That reminds me...")
+- Use contractions where they fit naturally
 - Each reply MUST be 1-2 sentences, under 15 words
 - Replies should be CONTEXTUALLY relevant to what the interviewer just asked or discussed
+- Match the user's own diction from the visible history; if they write tersely, suggest terse replies
 - Provide a MIX of reply types: one that agrees/affirms, one that offers a specific example, one that goes deeper or challenges, and optionally one that redirects
+- At most one reply may be a deflection or redirect
+- Never use headline-case; write like something the user would actually send
 - Do NOT use generic phrases like "Tell me more" — these are USER replies, not interviewer prompts
 - Do NOT number the replies or add labels
 
