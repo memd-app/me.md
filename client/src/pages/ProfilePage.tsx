@@ -6,11 +6,9 @@ import ApiErrorAlert from '@/components/ApiErrorAlert';
 import { formatDateTime } from '@/utils/dateFormat';
 import { getProfileSummary, regenerateProfile, exportAsMarkdown } from '@/services/profile';
 import { getLatestAssessment } from '@/services/assessment';
-import { isApiKeyConfigured } from '@/services/anthropic';
 import {
   getFacetStaleness,
   getProfileFacets,
-  synthesizeFacets,
   type FacetRecord,
 } from '@/services/profileSynthesis';
 import { useToast } from '@/contexts/ToastContext';
@@ -128,8 +126,7 @@ export default function ProfilePage() {
   const [exporting, setExporting] = useState(false);
   const [assessmentData, setAssessmentData] = useState<AssessmentLatest | null>(null);
   const [facets, setFacets] = useState<FacetRecord[]>([]);
-  const [facetStaleness, setFacetStaleness] = useState<{ insightCount: number; generatedAt: string | null; verifiedSince: number } | null>(null);
-  const [synthesizing, setSynthesizing] = useState(false);
+  const [, setFacetStaleness] = useState<{ insightCount: number; generatedAt: string | null; verifiedSince: number } | null>(null);
   const previousInsightCount = useRef<number | null>(null);
   const isMounted = useRef(true);
   const { addToast } = useToast();
@@ -232,25 +229,6 @@ export default function ProfilePage() {
     }
   };
 
-  const handleSynthesize = async () => {
-    if (!user || !hasAnyInsights) return;
-    if (!isApiKeyConfigured()) {
-      addToast('Add your Anthropic API key in Settings to generate the analysis.', 'warning');
-      return;
-    }
-
-    try {
-      setSynthesizing(true);
-      const nextFacets = await synthesizeFacets(db);
-      setFacets(nextFacets);
-      setFacetStaleness(getFacetStaleness(db));
-    } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Could not generate the analysis', 'error');
-    } finally {
-      setSynthesizing(false);
-    }
-  };
-
   const handleCopyFacet = async (facet: FacetRecord) => {
     try {
       await navigator.clipboard.writeText(facet.body);
@@ -294,14 +272,6 @@ export default function ProfilePage() {
 
   const hasAnyInsights = summary !== null && summary.totalVerifiedInsights > 0;
   const hasFacets = facets.length > 0;
-  const canSynthesize = hasAnyInsights && isApiKeyConfigured();
-  const synthesizeTitle = !hasAnyInsights
-    ? 'Verify insights to generate a profile analysis.'
-    : !canSynthesize
-      ? 'Add your Anthropic API key in Settings to generate the analysis.'
-      : hasFacets
-        ? 'Regenerate profile analysis'
-        : 'Generate profile analysis';
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -444,27 +414,13 @@ export default function ProfilePage() {
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-5">
           <div>
             <SectionHeading>Profile analysis</SectionHeading>
-            {hasFacets && facetStaleness && (
-              <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-                Based on {facetStaleness.insightCount} verified insight{facetStaleness.insightCount !== 1 ? 's' : ''}
-                {' '}&middot; generated {facetStaleness.generatedAt ? formatDateTime(facetStaleness.generatedAt) : 'unknown date'}
-                {facetStaleness.verifiedSince > 0 && (
-                  <>
-                    {' '}&middot; {facetStaleness.verifiedSince} verified since
-                  </>
-                )}
-              </p>
-            )}
           </div>
-          <Button
-            onClick={handleSynthesize}
-            disabled={!canSynthesize}
-            loading={synthesizing}
-            title={synthesizeTitle}
-            className="shrink-0"
+          <Link
+            to="/app/about"
+            className="text-sm font-semibold text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors whitespace-nowrap shrink-0"
           >
-            {synthesizing ? 'Analyzing…' : hasFacets ? 'Regenerate' : 'Generate analysis'}
-          </Button>
+            Read it on About me &rarr;
+          </Link>
         </div>
 
         {!hasAnyInsights ? (
@@ -500,7 +456,14 @@ export default function ProfilePage() {
           </div>
         ) : (
           <p className="font-serif italic text-gray-500 dark:text-gray-400">
-            Generate an agent-usable analysis from your verified insights.
+            Your portrait hasn't been written yet —{' '}
+            <Link
+              to="/app/about"
+              className="font-sans text-sm not-italic font-semibold text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+            >
+              start on About me
+            </Link>
+            .
           </p>
         )}
       </section>

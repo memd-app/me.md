@@ -7,6 +7,7 @@ import OnboardingGuard from '@/components/auth/OnboardingGuard';
 import AppLayout from '@/components/layout/AppLayout';
 import OnboardingPage from '@/pages/OnboardingPage';
 import DashboardPage from '@/pages/DashboardPage';
+import AboutMePage from '@/pages/AboutMePage';
 import TopicsPage from '@/pages/TopicsPage';
 import ProfilePage from '@/pages/ProfilePage';
 import VerificationPage from '@/pages/VerificationPage';
@@ -67,6 +68,7 @@ function App() {
           >
             <Route index element={<Navigate to="/app/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="about" element={<AboutMePage />} />
             <Route path="topics" element={<TopicsPage />} />
             <Route path="topics/new" element={<CreateTopicPage />} />
             <Route path="topics/:id" element={<TopicDetailPage />} />

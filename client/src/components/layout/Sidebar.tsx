@@ -20,6 +20,7 @@ const navGroups: NavGroup[] = [
   {
     label: null,
     items: [
+      { to: '/app/about', label: 'About me' },
       { to: '/app/dashboard', label: 'Desk' },
       { to: '/app/review', label: 'Review', badge: true },
       { to: '/app/chat', label: 'Converse' },
