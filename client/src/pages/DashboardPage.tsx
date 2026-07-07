@@ -7,6 +7,8 @@ import { formatActivityDate, formatRelativeTime } from '@/utils/dateFormat';
 import { getDashboardStats, getActivityData } from '@/services/dashboard';
 import { getLatestAssessment } from '@/services/assessment';
 import { getSessions } from '@/services/sessions';
+import { BACKUP_NUDGE_DISMISSED_KEY, shouldShowBackupNudge } from '@/services/backupNudge';
+import { loadVaultHandle } from '@/services/vaultHandle';
 import { SectionHeading, EmptyState } from '@/components/ui';
 
 interface CategoryCompleteness {
@@ -86,6 +88,22 @@ function ActivityLine({ item }: { item: ActivityItem }) {
   );
 }
 
+function readBackupNudgeDismissed(): boolean {
+  try {
+    return localStorage.getItem(BACKUP_NUDGE_DISMISSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function storeBackupNudgeDismissed(): void {
+  try {
+    localStorage.setItem(BACKUP_NUDGE_DISMISSED_KEY, '1');
+  } catch {
+    // No persistence available; this runtime will fall back to in-memory dismissal.
+  }
+}
+
 export default function DashboardPage() {
   const { user } = useUser();
   const db = useDatabase();
@@ -95,6 +113,8 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fetchVersion, setFetchVersion] = useState(0);
+  const [hasVaultHandle, setHasVaultHandle] = useState<boolean | null>(null);
+  const [backupNudgeDismissed, setBackupNudgeDismissed] = useState(() => readBackupNudgeDismissed());
   const [assessmentStatus, setAssessmentStatus] = useState<AssessmentStatus>({
     hasTaken: false,
     lastCompletedAt: null,
@@ -152,6 +172,25 @@ export default function DashboardPage() {
     return () => controller.abort();
   }, [fetchDashboard, fetchVersion]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void loadVaultHandle()
+      .then((handle) => {
+        if (!cancelled) setHasVaultHandle(handle !== null);
+      })
+      .catch(() => {
+        if (!cancelled) setHasVaultHandle(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const dismissBackupNudge = useCallback(() => {
+    storeBackupNudgeDismissed();
+    setBackupNudgeDismissed(true);
+  }, []);
+
   // Determine if user is brand new (no data at all)
   const isNewUser = !isLoading && stats && stats.topics === 0 && stats.sessions === 0 && stats.insights === 0;
 
@@ -193,6 +232,9 @@ export default function DashboardPage() {
 
   // Insights awaiting a verify/reject decision — derived from already-fetched stats.
   const pendingInsightsCount = stats ? Math.max(stats.insights - stats.verifiedInsights - stats.rejectedInsights, 0) : 0;
+  const verifiedInsightCount = stats?.verifiedInsights ?? 0;
+  const showBackupNudge = !isLoading && hasVaultHandle !== null
+    && shouldShowBackupNudge(verifiedInsightCount, hasVaultHandle, backupNudgeDismissed);
 
   const dateline = new Date().toLocaleDateString(undefined, {
     weekday: 'long',
@@ -242,6 +284,39 @@ export default function DashboardPage() {
           ? "Let’s start your first conversation."
           : 'Your knowledge, gathered one conversation at a time.'}
       </p>
+
+      {showBackupNudge && (
+        <section
+          aria-label="Storage backup notice"
+          className="mb-8 border-y border-rule dark:border-dark-border bg-panel dark:bg-dark-card px-4 py-3 sm:px-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+        >
+          <p className="text-sm text-gray-600 dark:text-gray-300 max-w-2xl">
+            You have {verifiedInsightCount} verified insights stored only in this browser. Download a backup or
+            connect an Obsidian vault to keep them safe.
+          </p>
+          <div className="flex flex-wrap items-center gap-4">
+            <Link
+              to="/app/settings#database-backup"
+              className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-primary-600 dark:text-primary-400 hover:text-ink dark:hover:text-gray-100 transition-colors"
+            >
+              Backup settings
+            </Link>
+            <Link
+              to="/app/export"
+              className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-primary-600 dark:text-primary-400 hover:text-ink dark:hover:text-gray-100 transition-colors"
+            >
+              Vault
+            </Link>
+            <button
+              type="button"
+              onClick={dismissBackupNudge}
+              className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 hover:text-ink dark:hover:text-gray-100 transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+        </section>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] xl:gap-14 gap-10">
         {/* LEAD COLUMN */}

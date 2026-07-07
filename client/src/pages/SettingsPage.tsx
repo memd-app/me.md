@@ -1,8 +1,10 @@
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useEffect } from 'react'
 import type { ReactNode } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useUser } from '@/contexts/UserContext'
 import { useTheme } from '@/contexts/ThemeContext'
 import { downloadDatabase, downloadForMCP, importDatabaseFile } from '@/db/persistence'
+import { getStorageDurability, type StorageDurability } from '@/services/storage'
 import { formatFullDate } from '@/utils/dateFormat'
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning'
 import ApiKeyForm from '@/components/ApiKeyForm'
@@ -19,6 +21,20 @@ const SETTINGS_TABS = [
 ] as const
 
 type SettingsTabId = (typeof SETTINGS_TABS)[number]['id']
+
+const DATABASE_BACKUP_HASH = '#database-backup'
+
+const STORAGE_STATUS_COPY: Record<Exclude<StorageDurability, 'unknown'>, string> = {
+  persistent: 'Storage: persistent. The browser will not evict this data under disk pressure.',
+  'best-effort': 'Storage: best-effort. The browser may clear this data under disk pressure — download a backup or connect a vault.',
+}
+
+function getInitialSettingsTab(): SettingsTabId {
+  if (typeof window !== 'undefined' && window.location.hash === DATABASE_BACKUP_HASH) {
+    return 'database'
+  }
+  return 'profile'
+}
 
 /**
  * The editorial small-caps tab row with an amber underline on the active
@@ -67,6 +83,20 @@ function StatusLine({ status }: { status: { type: 'success' | 'error'; message: 
   )
 }
 
+function StorageDurabilityLine({ durability }: { durability: StorageDurability }) {
+  if (durability === 'unknown') return null
+  return (
+    <div className="mb-4">
+      <p className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-1">
+        Storage
+      </p>
+      <p className="text-sm text-gray-600 dark:text-gray-300 max-w-2xl">
+        {STORAGE_STATUS_COPY[durability]}
+      </p>
+    </div>
+  )
+}
+
 /** Hairline-topped aside for supplementary notes — replaces the old colored info panels. */
 function Aside({ children }: { children: ReactNode }) {
   return (
@@ -98,9 +128,10 @@ const PROFILE_FIELDS: EditableField[] = [
 // Main Settings Page
 // ============================================
 export default function SettingsPage() {
+  const location = useLocation()
   const { user, updateUser } = useUser()
   const { theme, setTheme } = useTheme()
-  const [activeTab, setActiveTab] = useState<SettingsTabId>('profile')
+  const [activeTab, setActiveTab] = useState<SettingsTabId>(() => getInitialSettingsTab())
 
   // Profile editing state
   const [editingField, setEditingField] = useState<string | null>(null)
@@ -109,6 +140,7 @@ export default function SettingsPage() {
 
   // Database state
   const [dbStatus, setDbStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [storageDurability, setStorageDurability] = useState<StorageDurability>('unknown')
   const [importing, setImporting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   // UI-only: puts "Clear all data" into its red confirmation treatment
@@ -127,6 +159,37 @@ export default function SettingsPage() {
   }, [editingField, editValue])
 
   useUnsavedChangesWarning(isDirty)
+
+  useEffect(() => {
+    let cancelled = false
+    void getStorageDurability().then((durability) => {
+      if (!cancelled) setStorageDurability(durability)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (location.hash === DATABASE_BACKUP_HASH) {
+      setActiveTab('database')
+    }
+  }, [location.hash])
+
+  useEffect(() => {
+    if (activeTab !== 'database' || location.hash !== DATABASE_BACKUP_HASH) return
+    const scrollToBackup = () => {
+      document.getElementById('database-backup')?.scrollIntoView({ block: 'start' })
+    }
+
+    if (typeof window.requestAnimationFrame !== 'function') {
+      scrollToBackup()
+      return
+    }
+
+    const frame = window.requestAnimationFrame(scrollToBackup)
+    return () => window.cancelAnimationFrame(frame)
+  }, [activeTab, location.hash])
 
   // ---- Profile helpers ----
 
@@ -383,11 +446,14 @@ export default function SettingsPage() {
       {activeTab === 'database' && (
         <div className="space-y-10">
           {/* Export section */}
-          <div>
+          <div id="database-backup">
             <SectionHeading className="mb-3">Export data</SectionHeading>
             <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
               Download your entire database as a SQLite file. Use this for backups or to transfer your data.
+              Clearing browsing data deletes the local database, so keep a backup outside the browser.
             </p>
+
+            <StorageDurabilityLine durability={storageDurability} />
 
             <StatusLine status={dbStatus} />
 

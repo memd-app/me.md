@@ -5,6 +5,7 @@ import type * as schema from '@/db/schema'
 import { users } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { maybeAutoReconcile } from '@/services/vaultWriteThrough'
+import { getStorageDurability } from '@/services/storage'
 
 interface DatabaseContextType {
   db: DrizzleDb<typeof schema> | null
@@ -34,6 +35,7 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
         const nextDb = getDb()
         setDb(nextDb)
         setIsLoading(false)
+        void getStorageDurability()
 
         const hasUser = nextDb.select({ id: users.id }).from(users).where(eq(users.id, 'local-user')).get()
         if (hasUser) {
