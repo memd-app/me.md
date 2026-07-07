@@ -1528,7 +1528,7 @@ export default function SessionPage() {
   }
 
   return (
-    <div className={`flex flex-col ${isFullscreen ? 'fixed inset-0 z-[60] bg-paper dark:bg-dark-bg' : 'h-[calc(100vh-4rem)] sm:h-full max-w-4xl mx-auto -m-4 sm:-m-6'}`}>
+    <div className={`flex flex-col ${isFullscreen ? 'fixed inset-0 z-[60] bg-paper dark:bg-dark-bg' : 'h-[calc(100vh-4rem)] sm:h-full -m-4 sm:-m-6'}`}>
       {/* Session header with breadcrumb */}
       <div className="flex items-center justify-between px-3 sm:px-6 py-2 sm:py-3 bg-paper dark:bg-dark-bg border-b border-rule dark:border-dark-border shrink-0">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -1768,7 +1768,7 @@ export default function SessionPage() {
       )}
 
       {/* Messages area */}
-      <div className={`flex-1 overflow-y-auto px-3 sm:px-8 py-6 space-y-7 ${isFullscreen ? 'max-w-3xl mx-auto w-full' : ''}`} role="log" aria-label="Interview transcript" aria-live="polite">
+      <div className={`flex-1 overflow-y-auto px-3 sm:px-8 py-6 space-y-7 max-w-3xl mx-auto w-full`} role="log" aria-label="Interview transcript" aria-live="polite">
         {messages.map((message, i) => (
           <MessageBubble
             key={message.id}
@@ -1888,7 +1888,7 @@ export default function SessionPage() {
 
       {/* Quick replies */}
       {quickReplies.length > 0 && isSessionActive && !isSending && !isDistilling && !isSessionPaused && (
-        <div className={`px-3 sm:px-8 py-2 sm:pl-[4.75rem] flex flex-wrap gap-2 shrink-0 ${isFullscreen ? 'max-w-3xl mx-auto w-full' : ''}`} role="group" aria-label="Quick reply options">
+        <div className={`px-3 sm:px-8 py-2 sm:pl-[4.75rem] flex flex-wrap gap-2 shrink-0 max-w-3xl mx-auto w-full`} role="group" aria-label="Quick reply options">
           {quickReplies.map((reply, index) => (
             <button
               key={index}
@@ -1905,7 +1905,7 @@ export default function SessionPage() {
 
       {/* Error banner with retry button */}
       {error && (
-        <div className={`px-6 py-2 shrink-0 ${isFullscreen ? 'max-w-4xl mx-auto w-full' : ''}`}>
+        <div className={`px-6 py-2 shrink-0 max-w-3xl mx-auto w-full`}>
           <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
@@ -1958,7 +1958,7 @@ export default function SessionPage() {
 
       {/* Input area */}
       {isSessionActive && !isDistilling && (
-        <div className={`px-3 sm:px-8 py-3 sm:py-4 bg-paper dark:bg-dark-bg border-t border-rule dark:border-dark-border shrink-0 ${isFullscreen ? 'max-w-3xl mx-auto w-full' : ''}`}>
+        <div className={`px-3 sm:px-8 py-3 sm:py-4 bg-paper dark:bg-dark-bg border-t border-rule dark:border-dark-border shrink-0 max-w-3xl mx-auto w-full`}>
           <form onSubmit={handleSubmit} className="flex items-end gap-2 sm:gap-3">
             <div className="flex-1 relative">
               <label htmlFor="session-message-input" className="sr-only">Type your response</label>
