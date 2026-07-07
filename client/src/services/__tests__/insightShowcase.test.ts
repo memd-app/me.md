@@ -143,6 +143,12 @@ describe('extractStandfirst', () => {
     expect(extractStandfirst(body)).toBe('Directness matters in how decisions get made.')
   })
 
+  it('returns the first sentence from a portrait essay opening', () => {
+    const body = 'You choose careful directness when ambiguity would otherwise sprawl. The next sentence belongs in the body, not the standfirst.'
+
+    expect(extractStandfirst(body)).toBe('You choose careful directness when ambiguity would otherwise sprawl.')
+  })
+
   it('returns null for empty or missing body', () => {
     expect(extractStandfirst(null)).toBeNull()
     expect(extractStandfirst('### Heading\n\n> - **')).toBeNull()

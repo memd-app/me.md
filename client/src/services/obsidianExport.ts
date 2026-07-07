@@ -180,7 +180,7 @@ export function generateObsidianNotes(db: Db, opts?: { skipRelated?: boolean }):
   }
 
   for (const facet of facets) {
-    const content = [
+    const lines = [
       toFrontmatter([
         ['title', facet.title],
         ['source', ROOT_FOLDER],
@@ -191,8 +191,11 @@ export function generateObsidianNotes(db: Db, opts?: { skipRelated?: boolean }):
       '',
       facet.body.trimEnd(),
       '',
-    ].join('\n')
-    notes.push(makeNote(`${ROOT_FOLDER}/Profile/${facet.title}.md`, content))
+    ]
+    if (facet.agentBrief) {
+      lines.push('## Agent brief', '', facet.agentBrief.trimEnd(), '')
+    }
+    notes.push(makeNote(`${ROOT_FOLDER}/Profile/${facet.title}.md`, lines.join('\n')))
   }
 
   return {

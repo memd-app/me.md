@@ -231,7 +231,7 @@ export default function ProfilePage() {
 
   const handleCopyFacet = async (facet: FacetRecord) => {
     try {
-      await navigator.clipboard.writeText(facet.body);
+      await navigator.clipboard.writeText(facet.agentBrief ?? facet.body);
       addToast('Facet copied to clipboard');
     } catch {
       addToast('Could not copy facet', 'error');

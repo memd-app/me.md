@@ -44,7 +44,8 @@ describe('profile synthesis service', () => {
       facets: keys.map(key => ({
         key,
         title: 'Wrong title from model',
-        body: `- *usually*: ${key} body.\n\n### Tensions & open questions\nNo contradictions surfaced in current evidence.`,
+        portrait: `You return to ${key} as a pattern of attention. The evidence suggests this is less a slogan than a repeated way of choosing what gets protected.`,
+        agent_brief: `- *usually*: ${key} body.\n\n### Tensions & open questions\nNo contradictions surfaced in current evidence.`,
       })),
     }
   }
@@ -102,7 +103,11 @@ describe('profile synthesis service', () => {
       ].join('\n'))
 
       expect(parsed).toEqual([
-        expect.objectContaining({ key: 'identity_values', title: 'Identity & Values' }),
+        expect.objectContaining({
+          key: 'identity_values',
+          title: 'Identity & Values',
+          agentBrief: expect.stringContaining('### Tensions & open questions'),
+        }),
       ])
     })
 
@@ -116,35 +121,41 @@ describe('profile synthesis service', () => {
       expect(parsed.map(facet => facet.key)).toEqual(['work_style_ethics', 'decision_making'])
     })
 
-    it('drops unknown keys and empty bodies', () => {
+    it('drops unknown keys and empty portraits', () => {
       const parsed = parseFacetsResponse(JSON.stringify({
         facets: [
-          { key: 'unknown', title: 'Unknown', body: 'Should drop' },
-          { key: 'identity_values', title: 'Identity & Values', body: '   ' },
-          { key: 'communication_style', title: 'Communication Style', body: 'Keep this' },
+          { key: 'unknown', title: 'Unknown', portrait: 'Should drop', agent_brief: 'Brief' },
+          { key: 'identity_values', title: 'Identity & Values', portrait: '   ', agent_brief: 'Brief' },
+          { key: 'communication_style', title: 'Communication Style', portrait: 'Keep this', agent_brief: 'Brief' },
         ],
       }))
 
-      expect(parsed).toEqual([{ key: 'communication_style', title: 'Communication Style', body: 'Keep this' }])
+      expect(parsed).toEqual([{ key: 'communication_style', title: 'Communication Style', body: 'Keep this', agentBrief: 'Brief' }])
     })
 
     it('normalizes titles from canonical facet keys', () => {
       const parsed = parseFacetsResponse(JSON.stringify({
-        facets: [{ key: 'decision_making', title: 'Model supplied title', body: 'Use evidence carefully.' }],
+        facets: [{
+          key: 'decision_making',
+          title: 'Model supplied title',
+          portrait: 'Use evidence carefully.',
+          agent_brief: '- *strongly held*: Use evidence carefully.\n\n### Tensions & open questions\nNo contradictions surfaced in current evidence.',
+        }],
       }))
 
       expect(parsed[0]).toEqual({
         key: 'decision_making',
         title: 'Decision-Making',
         body: 'Use evidence carefully.',
+        agentBrief: '- *strongly held*: Use evidence carefully.\n\n### Tensions & open questions\nNo contradictions surfaced in current evidence.',
       })
     })
 
     it('throws when no usable facets are present', () => {
       expect(() => parseFacetsResponse(JSON.stringify({
         facets: [
-          { key: 'unknown', body: 'Nope' },
-          { key: 'identity_values', body: '' },
+          { key: 'unknown', portrait: 'Nope' },
+          { key: 'identity_values', portrait: '' },
         ],
       }))).toThrow('Profile synthesis returned no usable facets')
     })
@@ -153,6 +164,38 @@ describe('profile synthesis service', () => {
       const parsed = parseFacetsResponse(JSON.stringify(facetPayload(['identity_values', 'behavioral_patterns'])))
 
       expect(parsed.map(facet => facet.key)).toEqual(['identity_values', 'behavioral_patterns'])
+    })
+
+    it('falls back to null when agent_brief is missing', () => {
+      const parsed = parseFacetsResponse(JSON.stringify({
+        facets: [{ key: 'identity_values', portrait: 'You choose directness when the evidence is thin.' }],
+      }))
+
+      expect(parsed).toEqual([{
+        key: 'identity_values',
+        title: 'Identity & Values',
+        body: 'You choose directness when the evidence is thin.',
+        agentBrief: null,
+      }])
+    })
+
+    it('repairs truncated new-shape responses and preserves closed portraits', () => {
+      const completeFacets = PROFILE_FACETS.slice(0, 4).map(facet => JSON.stringify({
+        key: facet.key,
+        title: facet.title,
+        portrait: `${facet.title} portrait stays complete.`,
+        agent_brief: `${facet.title} brief.\n\n### Tensions & open questions\nNo contradictions surfaced in current evidence.`,
+      }))
+      const truncatedFacet = `{"key":"decision_making","title":"Decision-Making","portrait":"Decision-Making portrait stays complete.","agent_brief":"- *usually*: truncated`
+      const parsed = parseFacetsResponse(`{"facets":[${[...completeFacets, truncatedFacet].join(',')}`)
+
+      expect(parsed.map(facet => facet.key)).toEqual(PROFILE_FACETS.map(facet => facet.key))
+      expect(parsed[parsed.length - 1]).toEqual({
+        key: 'decision_making',
+        title: 'Decision-Making',
+        body: 'Decision-Making portrait stays complete.',
+        agentBrief: null,
+      })
     })
   })
 
@@ -167,7 +210,8 @@ describe('profile synthesis service', () => {
     const updated = parseFacetsResponse(JSON.stringify({
       facets: PROFILE_FACETS.map(facet => ({
         key: facet.key,
-        body: `Updated ${facet.key}`,
+        portrait: `Updated ${facet.key}`,
+        agent_brief: facet.key === 'decision_making' ? '' : `Brief ${facet.key}`,
       })),
     }))
     upsertProfileFacets(db, updated, '2026-07-06T13:00:00.000Z', 7)
@@ -178,6 +222,7 @@ describe('profile synthesis service', () => {
       key: facet.key,
       title: facet.title,
       body: `Updated ${facet.key}`,
+      agentBrief: facet.key === 'decision_making' ? null : `Brief ${facet.key}`,
       generatedAt: '2026-07-06T13:00:00.000Z',
       insightCount: 7,
     })))

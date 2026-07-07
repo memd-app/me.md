@@ -159,6 +159,7 @@ export const CREATE_TABLES_SQL = `
     key TEXT NOT NULL,
     title TEXT NOT NULL,
     body TEXT NOT NULL,
+    agent_brief TEXT,
     generated_at TEXT DEFAULT (datetime('now')),
     insight_count INTEGER DEFAULT 0
   );
@@ -275,6 +276,7 @@ const MIGRATIONS: Array<{ table: string; column: string; ddl: string }> = [
   { table: 'insights', column: 'vault_body_hash', ddl: 'ALTER TABLE insights ADD COLUMN vault_body_hash TEXT' },
   { table: 'insights', column: 'vault_synced_at', ddl: 'ALTER TABLE insights ADD COLUMN vault_synced_at TEXT' },
   { table: 'imported_files', column: 'content_hash', ddl: 'ALTER TABLE imported_files ADD COLUMN content_hash TEXT' },
+  { table: 'profile_facets', column: 'agent_brief', ddl: 'ALTER TABLE profile_facets ADD COLUMN agent_brief TEXT' },
 ]
 
 function runMigrations(sqlDb: SqlJsDatabase): void {

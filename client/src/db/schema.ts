@@ -126,6 +126,7 @@ export const profileFacets = sqliteTable('profile_facets', {
   key: text('key').notNull(),
   title: text('title').notNull(),
   body: text('body').notNull(),
+  agentBrief: text('agent_brief'),
   generatedAt: text('generated_at').default(sql`(datetime('now'))`),
   insightCount: integer('insight_count').default(0),
 })

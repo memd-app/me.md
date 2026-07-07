@@ -310,9 +310,12 @@ describe('obsidian export service', () => {
 
   it('emits profile facet notes and index links when facets exist', () => {
     const facets = parseFacetsResponse(JSON.stringify({
-      facets: PROFILE_FACETS.map(facet => ({
+      facets: PROFILE_FACETS.map((facet, index) => ({
         key: facet.key,
-        body: `- *strongly held*: ${facet.title} body.\n\n### Tensions & open questions\nNo contradictions surfaced in current evidence.`,
+        portrait: `${facet.title} portrait body.`,
+        agent_brief: index === PROFILE_FACETS.length - 1
+          ? undefined
+          : `- *strongly held*: ${facet.title} brief.\n\n### Tensions & open questions\nNo contradictions surfaced in current evidence.`,
       })),
     }))
     upsertProfileFacets(db, facets, '2026-07-06T12:00:00.000Z', 5)
@@ -329,7 +332,13 @@ describe('obsidian export service', () => {
       expect(note?.content).toContain(`title: "${facet.title}"`)
       expect(note?.content).toContain('type: "profile-facet"')
       expect(note?.content).toContain(`# ${facet.title}`)
-      expect(note?.content).toContain(`${facet.title} body.`)
+      expect(note?.content).toContain(`${facet.title} portrait body.`)
+      if (facet.key === PROFILE_FACETS[PROFILE_FACETS.length - 1]?.key) {
+        expect(note?.content).not.toContain('## Agent brief')
+      } else {
+        expect(note?.content).toContain('## Agent brief')
+        expect(note?.content).toContain(`${facet.title} brief.`)
+      }
       expect(index?.content).toContain(`- [[${facet.title}]]`)
     }
     expect(index?.content).toContain('## Profile')
@@ -525,7 +534,8 @@ describe('obsidian export service', () => {
     const facets = parseFacetsResponse(JSON.stringify({
       facets: PROFILE_FACETS.map(facet => ({
         key: facet.key,
-        body: `- *strongly held*: ${facet.title} body.\n\n### Tensions & open questions\nNo contradictions surfaced in current evidence.`,
+        portrait: `${facet.title} portrait body.`,
+        agent_brief: `- *strongly held*: ${facet.title} brief.\n\n### Tensions & open questions\nNo contradictions surfaced in current evidence.`,
       })),
     }))
     upsertProfileFacets(db, facets, '2026-07-06T12:00:00.000Z', 5)
