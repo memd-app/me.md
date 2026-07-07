@@ -48,22 +48,6 @@ const DOMAIN_LABELS: Record<string, string> = {
   C: 'Conscientiousness',
 };
 
-const DOMAIN_COLORS: Record<string, string> = {
-  N: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300',
-  E: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-  O: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-  A: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
-  C: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
-};
-
-const DOMAIN_ICONS: Record<string, string> = {
-  N: '🧠',
-  E: '🗣️',
-  O: '🎨',
-  A: '🤝',
-  C: '📋',
-};
-
 const LIKERT_LABELS = [
   { value: 1, label: 'Very Inaccurate', short: '1' },
   { value: 2, label: 'Moderately Inaccurate', short: '2' },
@@ -409,13 +393,9 @@ export default function AssessmentPage() {
 
           {/* Five Domains Preview */}
           <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">The five domains</h3>
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(DOMAIN_LABELS).map(([key, label]) => (
-              <span key={key} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${DOMAIN_COLORS[key]}`}>
-                {DOMAIN_ICONS[key]} {label}
-              </span>
-            ))}
-          </div>
+          <p className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400">
+            {Object.values(DOMAIN_LABELS).join(' \u00b7 ')}
+          </p>
         </div>
 
         {/* Resume In-Progress Attempt */}
@@ -530,7 +510,6 @@ export default function AssessmentPage() {
     const allAnswered = answeredCount >= totalQuestions;
     const domainKey = question.domain;
     const domainLabel = DOMAIN_LABELS[domainKey] || domainKey;
-    const domainColor = DOMAIN_COLORS[domainKey] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
 
     return (
       <div className="max-w-2xl mx-auto px-4 py-6">
@@ -554,8 +533,8 @@ export default function AssessmentPage() {
 
           {/* Domain indicator */}
           <div className="flex items-center justify-between mt-3">
-            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${domainColor}`}>
-              {DOMAIN_ICONS[domainKey]} {domainLabel}
+            <span className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-primary-600 dark:text-primary-400">
+              {domainLabel}
             </span>
             {isSaving && (
               <span className="inline-flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
@@ -704,7 +683,6 @@ export default function AssessmentPage() {
         {/* Results Cards */}
         <div className={`space-y-4 transition-all duration-700 delay-300 ${showResults ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           {completionResults.map((result, index) => {
-            const domainColor = DOMAIN_COLORS[result.domain] || 'bg-gray-100 text-gray-800';
             const scorePercent = Math.round((result.score / 5) * 100);
 
             return (
@@ -715,8 +693,8 @@ export default function AssessmentPage() {
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${domainColor}`}>
-                      {DOMAIN_ICONS[result.domain]} {result.title || DOMAIN_LABELS[result.domain]}
+                    <span className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-primary-600 dark:text-primary-400">
+                      {result.title || DOMAIN_LABELS[result.domain]}
                     </span>
                   </div>
                   <span className="text-lg font-bold text-gray-900 dark:text-white">
