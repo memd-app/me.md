@@ -5,17 +5,19 @@ import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '@/contexts/ToastContext';
 import { getAssessmentHistory, startAssessment, submitAnswers, completeAssessment } from '@/services/assessment';
+import { createSession } from '@/services/sessions';
+import { getOrCreateValuesTopic } from '@/services/values';
 
 // ============================================
 // Types
 // ============================================
 
-interface BigFiveQuestion {
+interface AssessmentQuestion {
   id: string;
   text: string;
   keyed: 'plus' | 'minus';
   domain: string;
-  facet: number;
+  facet?: number;
   num: number;
   choices: Array<{ color: number; score: number; text: string }>;
 }
@@ -26,6 +28,7 @@ interface AssessmentAttempt {
   startedAt?: string;
   completedAt?: string;
   answeredQuestions: number;
+  assessmentType?: string;
 }
 
 interface DomainScoreResult {
@@ -40,7 +43,7 @@ interface DomainScoreResult {
 // Constants
 // ============================================
 
-const DOMAIN_LABELS: Record<string, string> = {
+const BIG_FIVE_DOMAIN_LABELS: Record<string, string> = {
   N: 'Neuroticism',
   E: 'Extraversion',
   O: 'Openness to Experience',
@@ -48,13 +51,14 @@ const DOMAIN_LABELS: Record<string, string> = {
   C: 'Conscientiousness',
 };
 
-const LIKERT_LABELS = [
-  { value: 1, label: 'Very Inaccurate', short: '1' },
-  { value: 2, label: 'Moderately Inaccurate', short: '2' },
-  { value: 3, label: 'Neither Accurate Nor Inaccurate', short: '3' },
-  { value: 4, label: 'Moderately Accurate', short: '4' },
-  { value: 5, label: 'Very Accurate', short: '5' },
-];
+const RIASEC_DOMAIN_LABELS: Record<string, string> = {
+  R: 'Realistic',
+  I: 'Investigative',
+  A: 'Artistic',
+  S: 'Social',
+  E: 'Enterprising',
+  C: 'Conventional',
+};
 
 const AUTO_SAVE_INTERVAL = 10; // Save every 10 questions
 
@@ -80,7 +84,8 @@ export default function AssessmentPage() {
 
   // Test state
   const [attemptId, setAttemptId] = useState<string | null>(null);
-  const [questions, setQuestions] = useState<BigFiveQuestion[]>([]);
+  const [assessmentType, setAssessmentType] = useState<'bigfive' | 'riasec'>('bigfive');
+  const [questions, setQuestions] = useState<AssessmentQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -135,14 +140,15 @@ export default function AssessmentPage() {
   // Start new test
   // ============================================
 
-  const startNewTest = useCallback(async () => {
+  const startNewTest = useCallback(async (type: 'bigfive' | 'riasec' = 'bigfive') => {
     if (!user) return;
     setError(null);
 
     try {
-      const data = startAssessment(db);
+      const data = startAssessment(db, 'en', type);
       setAttemptId(data.attemptId);
       setQuestions(data.questions || []);
+      setAssessmentType(type);
       setAnswers({});
       setCurrentIndex(0);
       lastSaveIndexRef.current = 0;
@@ -157,6 +163,20 @@ export default function AssessmentPage() {
   // Resume in-progress test
   // ============================================
 
+  const startValuesSession = useCallback(async () => {
+    if (!user) return;
+    setError(null);
+
+    try {
+      const topic = getOrCreateValuesTopic(db);
+      const data = await createSession(db, topic.id);
+      navigate(`/app/sessions/${data.session.id}`);
+    } catch (err: any) {
+      setError(err.message);
+      addToast(err.message, 'error');
+    }
+  }, [user, db, addToast, navigate]);
+
   const resumeTest = useCallback(async () => {
     if (!user || !inProgressAttempt) return;
     setError(null);
@@ -165,10 +185,11 @@ export default function AssessmentPage() {
       // Start a new "view" with the same attempt - we need questions
       // The startAssessment creates a new attempt. For resume, we reload questions
       // and use the new attempt
-      const data = startAssessment(db);
+      const type = inProgressAttempt.assessmentType === 'riasec' ? 'riasec' : 'bigfive';
+      const data = startAssessment(db, 'en', type);
       // We use the NEW attempt but with the existing attempt's answers
       // Actually let's use the in-progress attemptId and just re-fetch the questions from the new response
-      const allQuestions: BigFiveQuestion[] = data.questions || [];
+      const allQuestions: AssessmentQuestion[] = data.questions || [];
 
       // Now fetch existing answers from the in-progress attempt's history data
       // The history endpoint already tells us how many answers we have
@@ -186,6 +207,7 @@ export default function AssessmentPage() {
       // Since the API created a new attempt, let's use it
       setAttemptId(data.attemptId);
       setQuestions(allQuestions);
+      setAssessmentType(type);
       setAnswers({});
       // Start from where the user left off in the old attempt (approximate)
       setCurrentIndex(0);
@@ -293,7 +315,11 @@ export default function AssessmentPage() {
 
       // Then complete the test
       const data = await completeAssessment(db, attemptId);
-      setCompletionResults(data.scores || []);
+      if (assessmentType === 'bigfive') {
+        setCompletionResults((data.scores || []) as DomainScoreResult[]);
+      } else {
+        setCompletionResults([]);
+      }
 
       // Navigate to the dedicated results page
       navigate(`/app/personality/${attemptId}/results`);
@@ -360,16 +386,17 @@ export default function AssessmentPage() {
             </svg>
           </div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            The Big Five
+            Personality
           </h1>
           <p className="text-lg text-gray-600 dark:text-gray-300">
-            A 120-question assessment of the five broad dimensions of personality.
+            Big Five, interests, and values assessments for the portrait.
           </p>
         </div>
 
+        <div className="grid gap-4 mb-6">
         {/* Test Description Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">About this assessment</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Big Five assessment</h2>
           <p className="text-gray-600 dark:text-gray-300 mb-4">
             The Big Five assessment measures five broad dimensions of personality using the
             validated IPIP NEO-PI-R questionnaire. You&apos;ll answer 120 questions
@@ -394,8 +421,43 @@ export default function AssessmentPage() {
           {/* Five Domains Preview */}
           <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">The five domains</h3>
           <p className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400">
-            {Object.values(DOMAIN_LABELS).join(' \u00b7 ')}
+            {Object.values(BIG_FIVE_DOMAIN_LABELS).join(' \u00b7 ')}
           </p>
+          <button
+            onClick={() => startNewTest('bigfive')}
+            className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl shadow-sm transition-all hover:shadow-md"
+          >
+            Start Big Five
+          </button>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Interest Profiler (RIASEC)</h2>
+          <p className="text-gray-600 dark:text-gray-300 mb-4">
+            A 60-item O*NET Interest Profiler short form that scores the six Holland interest scales.
+          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">60 items &middot; ~10 minutes</p>
+          <button
+            onClick={() => startNewTest('riasec')}
+            className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl shadow-sm transition-all hover:shadow-md"
+          >
+            Start Interest Profiler
+          </button>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Values</h2>
+          <p className="text-gray-600 dark:text-gray-300 mb-4">
+            A guided conversation about trade-offs, non-negotiables, admired behaviour, and hard decisions.
+          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Guided conversation &middot; ~8–12 questions</p>
+          <button
+            onClick={startValuesSession}
+            className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl shadow-sm transition-all hover:shadow-md"
+          >
+            Start Values
+          </button>
+        </div>
         </div>
 
         {/* Resume In-Progress Attempt */}
@@ -454,7 +516,7 @@ export default function AssessmentPage() {
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-900 dark:text-white">
-                        Completed Assessment
+                        Completed assessment
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
                         {attempt.completedAt
@@ -478,21 +540,9 @@ export default function AssessmentPage() {
           </div>
         )}
 
-        {/* Start Button */}
-        <div className="text-center">
-          <button
-            onClick={startNewTest}
-            className="inline-flex items-center gap-2 px-8 py-3 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl shadow-sm transition-all hover:shadow-md text-lg"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            {completedAttempts.length > 0 ? 'Take Again' : 'Start Test'}
-          </button>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
-            Your progress is saved automatically. You can leave and come back anytime.
-          </p>
-        </div>
+        <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-3">
+          Questionnaire progress is saved automatically. You can leave and come back anytime.
+        </p>
       </div>
     );
   }
@@ -509,7 +559,7 @@ export default function AssessmentPage() {
     const currentAnswer = answers[question.id];
     const allAnswered = answeredCount >= totalQuestions;
     const domainKey = question.domain;
-    const domainLabel = DOMAIN_LABELS[domainKey] || domainKey;
+    const domainLabel = (assessmentType === 'riasec' ? RIASEC_DOMAIN_LABELS : BIG_FIVE_DOMAIN_LABELS)[domainKey] || domainKey;
 
     return (
       <div className="max-w-2xl mx-auto px-4 py-6">
@@ -557,12 +607,12 @@ export default function AssessmentPage() {
 
         {/* Likert Scale */}
         <div className="space-y-2 mb-8">
-          {LIKERT_LABELS.map((option) => {
-            const isSelected = currentAnswer === option.value;
+          {question.choices.map((option) => {
+            const isSelected = currentAnswer === option.score;
             return (
               <button
-                key={option.value}
-                onClick={() => answerQuestion(option.value)}
+                key={option.score}
+                onClick={() => answerQuestion(option.score)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all duration-200 text-left
                   ${isSelected
                     ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 shadow-sm'
@@ -575,10 +625,10 @@ export default function AssessmentPage() {
                     : 'border-gray-300 dark:border-gray-500 text-gray-500 dark:text-gray-400'
                   }`}
                 >
-                  {option.short}
+                  {option.score}
                 </span>
                 <span className={`font-medium text-sm ${isSelected ? 'text-primary-700 dark:text-primary-300' : 'text-gray-700 dark:text-gray-300'}`}>
-                  {option.label}
+                  {option.text}
                 </span>
               </button>
             );
@@ -610,7 +660,7 @@ export default function AssessmentPage() {
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              Complete Assessment
+            {assessmentType === 'riasec' ? 'Complete Interest Profiler' : 'Complete Assessment'}
             </button>
           ) : (
             <button
@@ -673,7 +723,7 @@ export default function AssessmentPage() {
             </svg>
           </div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            Assessment Complete!
+            Assessment complete
           </h1>
           <p className="text-lg text-gray-600 dark:text-gray-300">
             Here&apos;s your Big Five personality profile
@@ -694,7 +744,7 @@ export default function AssessmentPage() {
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-primary-600 dark:text-primary-400">
-                      {result.title || DOMAIN_LABELS[result.domain]}
+                    {result.title || BIG_FIVE_DOMAIN_LABELS[result.domain]}
                     </span>
                   </div>
                   <span className="text-lg font-bold text-gray-900 dark:text-white">

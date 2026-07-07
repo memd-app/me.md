@@ -25,7 +25,7 @@ import { cleanText, cleanTitle, stripFrontmatter } from './textCleaning'
 import { stableHash } from './obsidianExport'
 import { applyInsightEvidenceAttachments, fetchExistingInsightRefs, logAdmissionDrops } from './admissionPersistence'
 import { enqueueVaultPendingWrites } from './vaultWriteThrough'
-import { getBigFiveSummaryLine } from './profile'
+import { getAssessmentSummary } from './profile'
 
 type Db = SQLJsDatabase<typeof schema>
 export const MAX_INSIGHTS_PER_NOTE = 8
@@ -456,7 +456,7 @@ export async function processImport(
     sourceType,
     topicTitle: cleanName,
     existingVerifiedInsights: existingVerified,
-    bigFiveSummary: getBigFiveSummaryLine(db) ?? undefined,
+    assessmentSummary: getAssessmentSummary(db) ?? undefined,
   }
 
   const unifiedInsights = await extractInsights(extractionCtx)

@@ -31,6 +31,8 @@ import { enqueueVaultPendingWrites } from './vaultWriteThrough'
 
 // Static questions data (pre-extracted from @bigfive-org/questions for browser compatibility)
 import bigFiveQuestionsEn from './bigfive-questions-en.json'
+import riasecQuestionsEn from './riasec-questions-en.json'
+import type { RiasecQuestion } from './riasec'
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — CJS package with no type declarations
 import calculateScoreFn from '@alheimsins/bigfive-calculate-score'
@@ -39,6 +41,7 @@ import calculateScoreFn from '@alheimsins/bigfive-calculate-score'
 import resultsLib from '@bigfive-org/results'
 
 type Db = SQLJsDatabase<typeof schema>
+export type AssessmentType = 'bigfive' | 'riasec' | 'values'
 
 // ============================================
 // Types
@@ -81,11 +84,15 @@ const FACET_LABELS: Record<string, string[]> = {
 // Big Five helpers
 // ============================================
 
-function getQuestionsList(_lang = 'en'): BigFiveQuestion[] {
+export function getQuestionsList(assessmentType: 'riasec', lang?: string): RiasecQuestion[]
+export function getQuestionsList(assessmentType?: 'bigfive', lang?: string): BigFiveQuestion[]
+export function getQuestionsList(assessmentType: AssessmentType = 'bigfive', _lang = 'en'): Array<BigFiveQuestion | RiasecQuestion> {
+  if (assessmentType === 'riasec') return riasecQuestionsEn as RiasecQuestion[]
   return bigFiveQuestionsEn as BigFiveQuestion[]
 }
 
-function getTestInfo(): { name: string; questions: number; time: number } {
+export function getTestInfo(assessmentType: AssessmentType = 'bigfive'): { name: string; questions: number; time: number } {
+  if (assessmentType === 'riasec') return { name: 'O*NET Interest Profiler (Short Form)', questions: 60, time: 10 }
   return { name: "Johnson's IPIP NEO-PI-R", questions: 120, time: 10 }
 }
 
@@ -182,11 +189,26 @@ interface PersonalityInsight {
   crossReference?: string
 }
 
-interface PersonalityInsightsResult {
-  insights: PersonalityInsight[]
+export interface AssessmentInsight {
+  category: string
+  claim: string
+  confidence: number
+  evidence?: string
+  crossReference?: string
+  extractionMethod?: 'ai' | 'fallback'
+  kind?: string | null
+  priorAlignment?: 'corroborated' | 'novel' | 'tension'
+}
+
+export interface AssessmentInsightsResult {
+  insights: AssessmentInsight[]
   agreements: string[]
   contradictions: string[]
   generated: boolean
+}
+
+interface PersonalityInsightsResult extends AssessmentInsightsResult {
+  insights: PersonalityInsight[]
 }
 
 async function generatePersonalityInsights(
@@ -291,14 +313,24 @@ Return the JSON object only.`
   }
 }
 
-function storePersonalityInsights(
+export function storeAssessmentInsights(
   db: Db,
   attemptId: string,
-  insightsResult: PersonalityInsightsResult,
+  insightsResult: AssessmentInsightsResult,
+  options: {
+    topicTitle: string
+    topicDescription: string
+    tags: string[]
+    notePrefix: string
+    noteIntro: string
+    sourceRef?: string
+    extraAnalysis?: string
+    contentJson?: string | null
+  },
 ): { noteId: string; insightIds: string[] } {
   let assessmentTopic = db.select()
     .from(topics)
-    .where(and(eq(topics.userId, LOCAL_USER_ID), eq(topics.title, 'Big Five Personality Assessment')))
+    .where(and(eq(topics.userId, LOCAL_USER_ID), eq(topics.title, options.topicTitle)))
     .get()
 
   if (!assessmentTopic) {
@@ -306,9 +338,9 @@ function storePersonalityInsights(
     assessmentTopic = db.insert(topics).values({
       id: topicId,
       userId: LOCAL_USER_ID,
-      title: 'Big Five Personality Assessment',
-      description: 'Personality insights generated from the Big Five (IPIP NEO-PI-R) assessment.',
-      tags: JSON.stringify(['personality', 'big-five', 'assessment', 'self-knowledge']),
+      title: options.topicTitle,
+      description: options.topicDescription,
+      tags: JSON.stringify(options.tags),
       status: 'extracted',
       priority: 'medium',
       intent: 'explore',
@@ -319,7 +351,9 @@ function storePersonalityInsights(
 
   const topicId = assessmentTopic!.id
   const noteId = crypto.randomUUID()
-  const insightSummary = insightsResult.insights.map(i => `- **${i.category}**: ${i.claim}`).join('\n')
+  const insightSummary = insightsResult.insights.length > 0
+    ? insightsResult.insights.map(i => `- **${i.category}**: ${i.claim}`).join('\n')
+    : '- No assessment insights were extracted.'
   const agreementsSummary = insightsResult.agreements.length > 0
     ? `\n\n## Agreements with Interview Insights\n${insightsResult.agreements.map(a => `- ${a}`).join('\n')}`
     : ''
@@ -327,29 +361,31 @@ function storePersonalityInsights(
     ? `\n\n## Contradictions with Interview Insights\n${insightsResult.contradictions.map(c => `- ${c}`).join('\n')}`
     : ''
 
-  const fullAnalysis = `# Big Five profile\n\nGenerated from Big Five assessment (attempt: ${attemptId}).\n\n## Key Insights\n${insightSummary}${agreementsSummary}${contradictionsSummary}`
+  const extraAnalysis = options.extraAnalysis?.trim() ? `\n\n${options.extraAnalysis.trim()}` : ''
+  const fullAnalysis = `# ${options.notePrefix}\n\n${options.noteIntro} (attempt: ${attemptId}).${extraAnalysis}\n\n## Key Insights\n${insightSummary}${agreementsSummary}${contradictionsSummary}`
 
   db.insert(notes).values({
     id: noteId,
-    sessionId: attemptId,
+    sessionId: null,
     topicId,
     userId: LOCAL_USER_ID,
-    title: `Big Five profile — ${new Date().toLocaleDateString()}`,
+    title: `${options.notePrefix} — ${new Date().toLocaleDateString()}`,
     contentFullAnalysis: fullAnalysis,
-    contentBriefSummary: `Big Five personality analysis with ${insightsResult.insights.length} insights generated.`,
+    contentBriefSummary: `${options.notePrefix} with ${insightsResult.insights.length} insights generated.`,
+    contentJson: options.contentJson ?? null,
     selectedFormat: 'full_analysis',
   }).run()
 
   const candidates: ExtractedInsight[] = insightsResult.insights.map(insight => ({
     content: insight.claim,
     confidenceScore: insight.confidence,
-    kind: null,
+    kind: insight.kind ?? null,
     category: insight.category ?? 'identity',
-    extractionMethod: 'ai',
-    priorAlignment: 'novel',
+    extractionMethod: insight.extractionMethod ?? 'ai',
+    priorAlignment: insight.priorAlignment ?? 'novel',
   }))
   const existing = fetchExistingInsightRefs(db)
-  const admission = admitInsights(candidates, existing, `assessment:${attemptId}`)
+  const admission = admitInsights(candidates, existing, options.sourceRef ?? `assessment:${attemptId}`)
   applyInsightEvidenceAttachments(db, admission.attach)
   logAdmissionDrops(admission.drop)
 
@@ -379,20 +415,37 @@ function storePersonalityInsights(
   return { noteId, insightIds }
 }
 
+function storePersonalityInsights(
+  db: Db,
+  attemptId: string,
+  insightsResult: PersonalityInsightsResult,
+): { noteId: string; insightIds: string[] } {
+  return storeAssessmentInsights(db, attemptId, insightsResult, {
+    topicTitle: 'Big Five Personality Assessment',
+    topicDescription: 'Personality insights generated from the Big Five (IPIP NEO-PI-R) assessment.',
+    tags: ['personality', 'big-five', 'assessment', 'self-knowledge'],
+    notePrefix: 'Big Five profile',
+    noteIntro: 'Generated from Big Five assessment',
+  })
+}
+
 // ============================================
 // Public API
 // ============================================
 
-export function startAssessment(db: Db, language = 'en') {
+export function startAssessment(db: Db, language = 'en', assessmentType: Exclude<AssessmentType, 'values'> = 'bigfive') {
   const attemptId = crypto.randomUUID()
   db.insert(assessmentAttempts).values({
     id: attemptId,
     userId: LOCAL_USER_ID,
+    assessmentType,
     status: 'in_progress',
   }).run()
 
-  const questions = getQuestionsList(language)
-  const testInfo = getTestInfo()
+  const questions = assessmentType === 'riasec'
+    ? getQuestionsList('riasec', language)
+    : getQuestionsList('bigfive', language)
+  const testInfo = getTestInfo(assessmentType)
 
   scheduleSave()
 
@@ -457,7 +510,7 @@ export function submitAnswers(
     .where(eq(assessmentAnswers.attemptId, attemptId))
     .all().length
 
-  const testInfo = getTestInfo()
+  const testInfo = getTestInfo((attempt.assessmentType ?? 'bigfive') as AssessmentType)
 
   scheduleSave()
 
@@ -477,18 +530,25 @@ export async function completeAssessment(db: Db, attemptId: string, language = '
 
   if (!attempt) throw new Error('Assessment attempt not found')
   if (attempt.status === 'completed') throw new Error('Assessment already completed')
+  if (attempt.assessmentType === 'riasec') {
+    const { completeRiasecAttempt } = await import('./riasec')
+    return completeRiasecAttempt(db, attemptId, language)
+  }
+  if (attempt.assessmentType === 'values') {
+    throw new Error('Values assessments are completed from the guided interview session.')
+  }
 
   const allAnswers = db.select()
     .from(assessmentAnswers)
     .where(eq(assessmentAnswers.attemptId, attemptId))
     .all()
 
-  const testInfo = getTestInfo()
+  const testInfo = getTestInfo('bigfive')
   if (allAnswers.length < testInfo.questions) {
     throw new Error(`Not all questions answered. Answered: ${allAnswers.length}/${testInfo.questions}`)
   }
 
-  const questions = getQuestionsList(language)
+  const questions = getQuestionsList('bigfive', language)
   const questionMap = new Map<string, { domain: string; facet: number }>()
   for (const q of questions) {
     questionMap.set(q.id, { domain: q.domain, facet: q.facet })
@@ -609,6 +669,7 @@ export function getAssessmentHistory(db: Db) {
 
     return {
       attemptId: attempt.id,
+      assessmentType: attempt.assessmentType ?? 'bigfive',
       status: attempt.status,
       startedAt: attempt.startedAt,
       completedAt: attempt.completedAt,
@@ -623,7 +684,11 @@ export function getAssessmentHistory(db: Db) {
 export function getLatestAssessment(db: Db, language = 'en') {
   const latestAttempt = db.select()
     .from(assessmentAttempts)
-    .where(and(eq(assessmentAttempts.userId, LOCAL_USER_ID), eq(assessmentAttempts.status, 'completed')))
+    .where(and(
+      eq(assessmentAttempts.userId, LOCAL_USER_ID),
+      eq(assessmentAttempts.status, 'completed'),
+      eq(assessmentAttempts.assessmentType, 'bigfive'),
+    ))
     .orderBy(desc(assessmentAttempts.completedAt))
     .limit(1)
     .get()
@@ -646,6 +711,7 @@ export function getLatestAssessment(db: Db, language = 'en') {
 
   return {
     attemptId: latestAttempt.id,
+    assessmentType: latestAttempt.assessmentType ?? 'bigfive',
     status: latestAttempt.status,
     startedAt: latestAttempt.startedAt,
     completedAt: latestAttempt.completedAt,
@@ -665,30 +731,21 @@ export function getLatestAssessment(db: Db, language = 'en') {
   }
 }
 
-export function getAttemptResults(db: Db, attemptId: string, language = 'en') {
+export function getAttemptMeta(db: Db, attemptId: string): { attemptId: string; assessmentType: AssessmentType; status: string } {
   const attempt = db.select()
     .from(assessmentAttempts)
     .where(and(eq(assessmentAttempts.id, attemptId), eq(assessmentAttempts.userId, LOCAL_USER_ID)))
     .get()
 
   if (!attempt) throw new Error('Assessment attempt not found')
-  if (attempt.status !== 'completed') throw new Error('Assessment not yet completed')
-
-  const storedResults = db.select()
-    .from(assessmentResults)
-    .where(eq(assessmentResults.attemptId, attemptId))
-    .all()
-
-  const scores = reconstructScores(storedResults)
-
-  let resultText: any[] = []
-  try {
-    resultText = getResultText(scores, language)
-  } catch (e: any) {
-    console.warn('[me.md:assessment] Could not generate result text:', e.message)
+  return {
+    attemptId: attempt.id,
+    assessmentType: (attempt.assessmentType ?? 'bigfive') as AssessmentType,
+    status: attempt.status ?? 'in_progress',
   }
+}
 
-  // Fetch AI-generated personality insights
+export function getAssessmentAiAnalysis(db: Db, attemptId: string, topicTitle: string) {
   let aiInsights: any[] = []
   let aiAgreements: string[] = []
   let aiContradictions: string[] = []
@@ -696,14 +753,17 @@ export function getAttemptResults(db: Db, attemptId: string, language = 'en') {
   try {
     const assessmentTopic = db.select()
       .from(topics)
-      .where(and(eq(topics.userId, LOCAL_USER_ID), eq(topics.title, 'Big Five Personality Assessment')))
+      .where(and(eq(topics.userId, LOCAL_USER_ID), eq(topics.title, topicTitle)))
       .get()
 
     if (assessmentTopic) {
-      const assessmentNote = db.select()
+      const assessmentNotes = db.select()
         .from(notes)
-        .where(and(eq(notes.sessionId, attemptId), eq(notes.topicId, assessmentTopic.id), eq(notes.userId, LOCAL_USER_ID)))
-        .get()
+        .where(and(eq(notes.topicId, assessmentTopic.id), eq(notes.userId, LOCAL_USER_ID)))
+        .all()
+      const assessmentNote = assessmentNotes.find(note =>
+        note.sessionId === attemptId || Boolean(note.contentFullAnalysis?.includes(`attempt: ${attemptId}`)),
+      )
 
       if (assessmentNote) {
         const noteInsights = db.select()
@@ -737,7 +797,44 @@ export function getAttemptResults(db: Db, attemptId: string, language = 'en') {
   }
 
   return {
+    insights: aiInsights,
+    agreements: aiAgreements,
+    contradictions: aiContradictions,
+    generated: aiInsights.length > 0,
+  }
+}
+
+export function getAttemptResults(db: Db, attemptId: string, language = 'en') {
+  const attempt = db.select()
+    .from(assessmentAttempts)
+    .where(and(eq(assessmentAttempts.id, attemptId), eq(assessmentAttempts.userId, LOCAL_USER_ID)))
+    .get()
+
+  if (!attempt) throw new Error('Assessment attempt not found')
+  if (attempt.status !== 'completed') throw new Error('Assessment not yet completed')
+  if ((attempt.assessmentType ?? 'bigfive') !== 'bigfive') {
+    throw new Error('This results getter only supports Big Five attempts')
+  }
+
+  const storedResults = db.select()
+    .from(assessmentResults)
+    .where(eq(assessmentResults.attemptId, attemptId))
+    .all()
+
+  const scores = reconstructScores(storedResults)
+
+  let resultText: any[] = []
+  try {
+    resultText = getResultText(scores, language)
+  } catch (e: any) {
+    console.warn('[me.md:assessment] Could not generate result text:', e.message)
+  }
+
+  const aiAnalysis = getAssessmentAiAnalysis(db, attemptId, 'Big Five Personality Assessment')
+
+  return {
     attemptId: attempt.id,
+    assessmentType: attempt.assessmentType ?? 'bigfive',
     status: attempt.status,
     startedAt: attempt.startedAt,
     completedAt: attempt.completedAt,
@@ -754,12 +851,7 @@ export function getAttemptResults(db: Db, attemptId: string, language = 'en') {
       },
     })),
     results: resultText,
-    aiAnalysis: {
-      insights: aiInsights,
-      agreements: aiAgreements,
-      contradictions: aiContradictions,
-      generated: aiInsights.length > 0,
-    },
+    aiAnalysis,
   }
 }
 
@@ -771,6 +863,13 @@ export async function generateInsightsForAttempt(db: Db, attemptId: string, lang
 
   if (!attempt) throw new Error('Assessment attempt not found')
   if (attempt.status !== 'completed') throw new Error('Assessment not yet completed')
+  if (attempt.assessmentType === 'riasec') {
+    const { generateInsightsForRiasecAttempt } = await import('./riasec')
+    return generateInsightsForRiasecAttempt(db, attemptId)
+  }
+  if (attempt.assessmentType === 'values') {
+    throw new Error('Values insights are generated when the guided assessment is completed.')
+  }
 
   const storedResults = db.select()
     .from(assessmentResults)

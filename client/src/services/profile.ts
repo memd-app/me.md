@@ -22,6 +22,8 @@ import {
 } from '@/db/schema'
 import { LOCAL_USER_ID } from '@/contexts/UserContext'
 import { getProfileFacets, type FacetRecord } from './profileSynthesis'
+import { getRiasecSummaryLine as getRiasecSummaryLineFromService } from './riasec'
+import { getValuesSummaryLine as getValuesSummaryLineFromService } from './values'
 
 type Db = SQLJsDatabase<typeof schema>
 
@@ -311,7 +313,11 @@ export interface PersonalityExportData {
 export function getPersonalityExportData(db: Db, privacyFilter: 'exportable' | 'all' = 'exportable'): PersonalityExportData {
   const completedAttempts = db.select()
     .from(assessmentAttempts)
-    .where(and(eq(assessmentAttempts.userId, LOCAL_USER_ID), eq(assessmentAttempts.status, 'completed')))
+    .where(and(
+      eq(assessmentAttempts.userId, LOCAL_USER_ID),
+      eq(assessmentAttempts.status, 'completed'),
+      eq(assessmentAttempts.assessmentType, 'bigfive'),
+    ))
     .orderBy(desc(assessmentAttempts.completedAt))
     .all()
 
@@ -396,6 +402,25 @@ export function getBigFiveSummaryLine(db: Db): string | null {
   return data.domainScores
     .map(d => `${d.domainLabel} ${d.score.toFixed(1)} (${d.level})`)
     .join(', ')
+}
+
+export function getRiasecSummaryLine(db: Db): string | null {
+  return getRiasecSummaryLineFromService(db)
+}
+
+export function getValuesSummaryLine(db: Db): string | null {
+  return getValuesSummaryLineFromService(db)
+}
+
+export function getAssessmentSummary(db: Db): string | null {
+  const lines: string[] = []
+  const bigFive = getBigFiveSummaryLine(db)
+  const riasec = getRiasecSummaryLine(db)
+  const values = getValuesSummaryLine(db)
+  if (bigFive) lines.push(`Big Five: ${bigFive}`)
+  if (riasec) lines.push(`Interests: ${riasec}`)
+  if (values) lines.push(`Values: ${values}`)
+  return lines.length > 0 ? lines.join('\n') : null
 }
 
 export function generatePersonalityMarkdown(data: PersonalityExportData): string {

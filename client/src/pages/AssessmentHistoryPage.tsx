@@ -25,6 +25,7 @@ interface DomainScore {
 interface HistoryAttempt {
   attemptId: string;
   status: string;
+  assessmentType?: string;
   startedAt: string;
   completedAt: string | null;
   answeredQuestions: number;
@@ -52,6 +53,12 @@ const DOMAIN_COLORS: Record<string, string> = {
 };
 
 const DOMAIN_ORDER = ['O', 'C', 'E', 'A', 'N'];
+
+function assessmentTypeLabel(type?: string): string {
+  if (type === 'riasec') return 'Interests';
+  if (type === 'values') return 'Values';
+  return 'Big Five';
+}
 
 // ============================================
 // Main Component
@@ -152,15 +159,14 @@ export default function AssessmentHistoryPage() {
       {/* Empty state */}
       {completedAttempts.length === 0 && (
         <div className="card p-8 text-center">
-          <span className="text-4xl block mb-3">📊</span>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            No Completed Assessments
+            No completed assessments
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
             Complete a Big Five personality assessment to start tracking your personality over time.
           </p>
           <Link to="/app/personality" className="btn-primary">
-            Take Your First Assessment
+            Take your first assessment
           </Link>
         </div>
       )}
@@ -179,7 +185,6 @@ export default function AssessmentHistoryPage() {
                     ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
                     : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
                 }`}>
-                  <span className="text-xl">{canRetest ? '✅' : '⏳'}</span>
                   <div className="flex-1">
                     <p className="text-sm font-medium text-gray-900 dark:text-white">
                       {canRetest
@@ -193,7 +198,7 @@ export default function AssessmentHistoryPage() {
                   </div>
                   {canRetest && (
                     <Link to="/app/personality" className="btn-primary text-xs whitespace-nowrap">
-                      Retake Now
+                      Retake now
                     </Link>
                   )}
                 </div>
@@ -238,20 +243,23 @@ export default function AssessmentHistoryPage() {
                                   ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
                                   : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
                               }`}>
-                                {isCompleted ? 'Completed' : 'In Progress'}
+                                {isCompleted ? 'Completed' : 'In progress'}
                               </span>
                               {idx === 0 && (
                                 <span className="text-xs px-2 py-0.5 rounded-full bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 font-medium">
                                   Latest
                                 </span>
                               )}
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300 font-medium">
+                                {assessmentTypeLabel(attempt.assessmentType)}
+                              </span>
                             </div>
                             <span className="text-xs text-gray-500 dark:text-gray-400">
                               {formatDate(attempt.completedAt || attempt.startedAt)}
                             </span>
                           </div>
 
-                          {isCompleted && attempt.domainScores.length > 0 && (
+                          {isCompleted && assessmentTypeLabel(attempt.assessmentType) === 'Big Five' && attempt.domainScores.length > 0 && (
                             <div className="flex items-center gap-2 mt-2">
                               {DOMAIN_ORDER.map(d => {
                                 const ds = attempt.domainScores.find(s => s.domain === d);
@@ -283,7 +291,7 @@ export default function AssessmentHistoryPage() {
                                 to={`/app/personality/${attempt.attemptId}/results`}
                                 className="text-xs text-primary-600 dark:text-primary-400 hover:underline"
                               >
-                                View Full Results
+                                View full results
                               </Link>
                             </div>
                           )}

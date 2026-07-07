@@ -235,6 +235,7 @@ export const CREATE_TABLES_SQL = `
   CREATE TABLE IF NOT EXISTS assessment_attempts (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    assessment_type TEXT DEFAULT 'bigfive',
     started_at TEXT DEFAULT (datetime('now')),
     completed_at TEXT,
     status TEXT DEFAULT 'in_progress'
@@ -256,10 +257,16 @@ export const CREATE_TABLES_SQL = `
     facet3_score REAL,
     facet4_score REAL,
     facet5_score REAL,
-    facet6_score REAL
+    facet6_score REAL,
+    detail TEXT
   );
   PRAGMA foreign_keys = ON;
 `
+
+function tableExists(sqlDb: SqlJsDatabase, table: string): boolean {
+  const res = sqlDb.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name='${table.replace(/'/g, "''")}'`)
+  return res.length > 0 && res[0].values.length > 0
+}
 
 function columnExists(sqlDb: SqlJsDatabase, table: string, column: string): boolean {
   const res = sqlDb.exec(`PRAGMA table_info(${table})`)
@@ -277,14 +284,20 @@ const MIGRATIONS: Array<{ table: string; column: string; ddl: string }> = [
   { table: 'insights', column: 'vault_synced_at', ddl: 'ALTER TABLE insights ADD COLUMN vault_synced_at TEXT' },
   { table: 'imported_files', column: 'content_hash', ddl: 'ALTER TABLE imported_files ADD COLUMN content_hash TEXT' },
   { table: 'profile_facets', column: 'agent_brief', ddl: 'ALTER TABLE profile_facets ADD COLUMN agent_brief TEXT' },
+  { table: 'assessment_attempts', column: 'assessment_type', ddl: "ALTER TABLE assessment_attempts ADD COLUMN assessment_type TEXT DEFAULT 'bigfive'" },
+  { table: 'assessment_results', column: 'detail', ddl: 'ALTER TABLE assessment_results ADD COLUMN detail TEXT' },
 ]
 
-function runMigrations(sqlDb: SqlJsDatabase): void {
+export function runMigrations(sqlDb: SqlJsDatabase): void {
   for (const migration of MIGRATIONS) {
-    if (!columnExists(sqlDb, migration.table, migration.column)) sqlDb.run(migration.ddl)
+    if (tableExists(sqlDb, migration.table) && !columnExists(sqlDb, migration.table, migration.column)) sqlDb.run(migration.ddl)
   }
-  sqlDb.run('CREATE INDEX IF NOT EXISTS idx_imported_files_hash ON imported_files(content_hash)')
-  sqlDb.run('CREATE INDEX IF NOT EXISTS idx_insights_vault_synced ON insights(vault_synced_at)')
+  if (tableExists(sqlDb, 'imported_files')) {
+    sqlDb.run('CREATE INDEX IF NOT EXISTS idx_imported_files_hash ON imported_files(content_hash)')
+  }
+  if (tableExists(sqlDb, 'insights')) {
+    sqlDb.run('CREATE INDEX IF NOT EXISTS idx_insights_vault_synced ON insights(vault_synced_at)')
+  }
 }
 
 // ---- Public API ----

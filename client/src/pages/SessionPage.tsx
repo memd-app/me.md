@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { useToast } from '@/contexts/ToastContext';
@@ -8,6 +8,7 @@ import { formatFullDate, formatDateTime, formatTime } from '@/utils/dateFormat';
 import { getSession, getMultiBucketSuggestions, pauseSession, resumeSession, sendMessage as sendMessageService, retryMessage, saveMultiBucketConnections } from '@/services/sessions';
 import { distillSession, getNoteForSession, regenerateNote, updateNote } from '@/services/notes';
 import { createBookmark, deleteBookmark } from '@/services/bookmarks';
+import { completeValuesAssessment, VALUES_TOPIC_TITLE } from '@/services/values';
 
 interface Message {
   id: string;
@@ -224,6 +225,7 @@ export default function SessionPage() {
   const { user } = useUser();
   const db = useDatabase();
   const { addToast } = useToast();
+  const navigate = useNavigate();
   const [session, setSession] = useState<Session | null>(null);
   const [topic, setTopic] = useState<Topic | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -380,6 +382,12 @@ export default function SessionPage() {
     setError(null);
 
     try {
+      if (topic?.title === VALUES_TOPIC_TITLE) {
+        const valuesResult = await completeValuesAssessment(db, session.id);
+        navigate(`/app/personality/${valuesResult.attemptId}/results`);
+        return;
+      }
+
       const distillData = await distillSession(db, session.id, 'full_analysis');
       if (!distillData) {
         throw new Error('Failed to distill session');

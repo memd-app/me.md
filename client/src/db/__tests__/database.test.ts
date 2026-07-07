@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import initSqlJs, { type Database as SqlJsDatabase } from 'sql.js'
 import { drizzle } from 'drizzle-orm/sql-js'
 import * as schema from '../schema'
-import { CREATE_TABLES_SQL } from '../database'
+import { CREATE_TABLES_SQL, runMigrations } from '../database'
 
 // We test database initialization logic directly using sql.js in Node.js,
 // bypassing the browser-specific IndexedDB and locateFile parts of database.ts.
@@ -49,6 +49,55 @@ describe('database initialization', () => {
     expect(tableNames).toContain('assessment_attempts')
     expect(tableNames).toContain('assessment_answers')
     expect(tableNames).toContain('assessment_results')
+  })
+
+  it('creates assessment discriminator and result detail columns on fresh databases', () => {
+    const attemptsInfo = sqlDb.exec('PRAGMA table_info(assessment_attempts)')[0].values
+    const resultsInfo = sqlDb.exec('PRAGMA table_info(assessment_results)')[0].values
+
+    expect(attemptsInfo.map((row: any[]) => row[1])).toContain('assessment_type')
+    expect(resultsInfo.map((row: any[]) => row[1])).toContain('detail')
+  })
+
+  it('migrates older assessment tables and backfills the default assessment type', async () => {
+    const SQL = await initSqlJs()
+    const oldDb = new SQL.Database()
+    oldDb.run(`
+      CREATE TABLE users (id TEXT PRIMARY KEY);
+      CREATE TABLE assessment_attempts (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        started_at TEXT DEFAULT (datetime('now')),
+        completed_at TEXT,
+        status TEXT DEFAULT 'in_progress'
+      );
+      CREATE TABLE assessment_results (
+        id TEXT PRIMARY KEY,
+        attempt_id TEXT NOT NULL,
+        domain TEXT NOT NULL,
+        domain_score REAL NOT NULL,
+        facet1_score REAL,
+        facet2_score REAL,
+        facet3_score REAL,
+        facet4_score REAL,
+        facet5_score REAL,
+        facet6_score REAL
+      );
+      INSERT INTO assessment_attempts (id, user_id, status)
+      VALUES ('attempt-1', 'local-user', 'completed');
+    `)
+
+    runMigrations(oldDb)
+
+    const attemptsInfo = oldDb.exec('PRAGMA table_info(assessment_attempts)')[0].values
+    const resultsInfo = oldDb.exec('PRAGMA table_info(assessment_results)')[0].values
+    const typeValue = oldDb.exec("SELECT assessment_type FROM assessment_attempts WHERE id = 'attempt-1'")[0].values[0][0]
+
+    expect(attemptsInfo.map((row: any[]) => row[1])).toContain('assessment_type')
+    expect(resultsInfo.map((row: any[]) => row[1])).toContain('detail')
+    expect(typeValue).toBe('bigfive')
+
+    oldDb.close()
   })
 
   it('can insert and read data via raw sql.js', () => {

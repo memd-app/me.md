@@ -37,7 +37,7 @@ export interface InterviewMapAngle {
 }
 
 export interface InterviewMap {
-  type: 'default'
+  type: 'default' | 'values_guided'
   angles: InterviewMapAngle[]
   currentAngleIndex: number
   breadthFirstComplete: boolean
@@ -108,13 +108,24 @@ considerate editor: literate, quiet, precise — warm without gushing, curious w
   parts.push(`\n## Current Questioning Methodology\n${METHODOLOGY_DESCRIPTIONS[methodology]}`)
 
   // Interview map angle guidance
-  if (interviewMap && interviewMap.type === 'default') {
+  if (interviewMap && (interviewMap.type === 'default' || interviewMap.type === 'values_guided')) {
     const angleIndex = userMessageCount % interviewMap.angles.length
     const currentAngle = interviewMap.angles[angleIndex]
     parts.push(`\n## Interview Map - Current Angle: ${currentAngle.label}`)
     parts.push(`You are exploring the "${currentAngle.label}" angle: ${currentAngle.description}.`)
     parts.push(`Focus your questions on: ${currentAngle.questionFocus}.`)
-    parts.push(`The full interview map has 5 angles (Journey, Principles, Frameworks, Examples, Tensions). You are cycling through them breadth-first to ensure comprehensive coverage.`)
+    if (interviewMap.type === 'values_guided') {
+      parts.push(`The full interview map has 5 values angles (Trade-offs, Non-negotiables, Admired behaviour, Despised behaviour, Hard decisions). You are cycling through them breadth-first to gather concrete evidence.`)
+      parts.push(`<values_probe>
+You are drawing out what this person actually values — not what they say they should value.
+Prefer concrete trade-offs over abstractions: ask what they gave up for what, what they refuse to
+do for money or status, whose behaviour they admire or despise and why. When they name a value,
+ask for the last time it cost them something. Stay with specifics; one question at a time; never
+list the Schwartz values or hint at being scored.
+</values_probe>`)
+    } else {
+      parts.push(`The full interview map has 5 angles (Journey, Principles, Frameworks, Examples, Tensions). You are cycling through them breadth-first to ensure comprehensive coverage.`)
+    }
 
     // Every 3rd exchange, note the angle transition
     if (userMessageCount >= 3 && userMessageCount % 3 === 0) {

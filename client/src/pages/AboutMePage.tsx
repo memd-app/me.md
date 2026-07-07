@@ -14,6 +14,8 @@ import {
   type ShowcaseSelection,
 } from '@/services/insightShowcase';
 import { getPersonalityExportData, type PersonalityExportData } from '@/services/profile';
+import { getRiasecExportData } from '@/services/riasec';
+import { getValuesExportData } from '@/services/values';
 import {
   getFacetStaleness,
   getProfileFacets,
@@ -158,7 +160,18 @@ function ShowcaseSection({ showcase }: { showcase: ShowcaseSelection }) {
   );
 }
 
-function BigFiveBand({ personality }: { personality: PersonalityExportData | null }) {
+type RiasecExportData = ReturnType<typeof getRiasecExportData>;
+type ValuesExportData = ReturnType<typeof getValuesExportData>;
+
+function BigFiveBand({
+  personality,
+  riasec,
+  values,
+}: {
+  personality: PersonalityExportData | null;
+  riasec: RiasecExportData | null;
+  values: ValuesExportData | null;
+}) {
   const hasAssessment = personality?.hasAssessment ?? false;
   const domainScores = DOMAIN_ORDER
     .map(domain => personality?.domainScores.find(score => score.domain === domain))
@@ -233,6 +246,36 @@ function BigFiveBand({ personality }: { personality: PersonalityExportData | nul
           </Link>
         </div>
       )}
+
+      {(riasec?.hasRiasec || values?.hasValues) && (
+        <div className="mt-8 space-y-4 border-t border-rule dark:border-dark-border pt-6">
+          {riasec?.hasRiasec && riasec.attemptId && (
+            <Link
+              to={`/app/personality/${riasec.attemptId}/results`}
+              className="block text-sm text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+            >
+              <span className="font-serif italic text-xl text-gray-900 dark:text-white">{riasec.code}</span>
+              {' '}— {riasec.code.split('').map(domain => riasec.scales.find(scale => scale.domain === domain)?.label).filter(Boolean).join(' · ')}
+            </Link>
+          )}
+
+          {values?.hasValues && values.attemptId && (
+            <Link
+              to={`/app/personality/${values.attemptId}/results`}
+              className="block text-sm text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+            >
+              <span className="font-serif italic text-xl text-gray-900 dark:text-white">
+                {values.dominant.map(value => value.label).join(' · ')}
+              </span>
+              {values.least_active.length > 0 && (
+                <span className="text-gray-500 dark:text-gray-500">
+                  {' '}— least active: {values.least_active.map(value => value.label.toLowerCase()).join(', ')}
+                </span>
+              )}
+            </Link>
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -249,6 +292,8 @@ export default function AboutMePage() {
   const [facetStaleness, setFacetStaleness] = useState<FacetStaleness | null>(null);
   const [showcase, setShowcase] = useState<ShowcaseSelection>(EMPTY_SHOWCASE);
   const [personality, setPersonality] = useState<PersonalityExportData | null>(null);
+  const [riasec, setRiasec] = useState<RiasecExportData | null>(null);
+  const [values, setValues] = useState<ValuesExportData | null>(null);
   const [synthesizing, setSynthesizing] = useState(false);
   const isMounted = useRef(true);
 
@@ -264,6 +309,8 @@ export default function AboutMePage() {
       const sourceInsights = getShowcaseSourceInsights(db);
       const nextFacets = getProfileFacets(db);
       const nextPersonality = getPersonalityExportData(db, 'exportable');
+      const nextRiasec = getRiasecExportData(db);
+      const nextValues = getValuesExportData(db);
 
       if (isMounted.current && !signal?.aborted) {
         setVerifiedCount(sourceInsights.length);
@@ -271,6 +318,8 @@ export default function AboutMePage() {
         setFacetStaleness(getFacetStaleness(db));
         setShowcase(selectShowcase(sourceInsights));
         setPersonality(nextPersonality);
+        setRiasec(nextRiasec);
+        setValues(nextValues);
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
@@ -471,7 +520,7 @@ export default function AboutMePage() {
         <EmptyInsightLoop />
       )}
 
-      <BigFiveBand personality={personality} />
+      <BigFiveBand personality={personality} riasec={riasec} values={values} />
 
       <footer className="py-8 text-center">
         <p className="text-xs text-gray-500 dark:text-gray-400">

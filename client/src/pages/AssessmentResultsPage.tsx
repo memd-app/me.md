@@ -1,9 +1,11 @@
 import PageTabs from '@/components/ui/PageTabs';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useUser } from '@/contexts/UserContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
-import { getAttemptResults, generateInsightsForAttempt } from '@/services/assessment';
+import { getAttemptResults, generateInsightsForAttempt, getAttemptMeta } from '@/services/assessment';
+import { getRiasecAttemptResults } from '@/services/riasec';
+import { getValuesAttemptResults, SCHWARTZ_QUADRANTS, type SchwartzValue } from '@/services/values';
 
 // ============================================
 // Types
@@ -66,6 +68,28 @@ interface AssessmentResultsData {
   domainScores: DomainScoreData[];
   results: DomainResult[];
   aiAnalysis?: AIAnalysisData;
+}
+
+interface RiasecResultsData {
+  attemptId: string;
+  assessmentType: 'riasec';
+  status: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  code: string;
+  scales: Array<{ domain: string; label: string; score: number; level: string }>;
+  aiAnalysis?: AIAnalysisData;
+}
+
+interface ValuesResultsData {
+  attemptId: string;
+  assessmentType: 'values';
+  status: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  values: Array<{ key: SchwartzValue; label: string; score: number; rationale: string }>;
+  dominant: SchwartzValue[];
+  least_active: SchwartzValue[];
 }
 
 // ============================================
@@ -443,6 +467,252 @@ function DomainCard({ domainScoreData, domainResult, animationDelay }: DomainCar
   );
 }
 
+function HairlineMeter({ value, max, label }: { value: number; max: number; label: string }) {
+  const pct = Math.max(0, Math.min(100, Math.round((value / max) * 100)));
+  return (
+    <div
+      className="mt-2 h-[2px] bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden"
+      role="progressbar"
+      aria-valuenow={pct}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={label}
+    >
+      <div className="h-full bg-primary-500 dark:bg-primary-400 rounded-full" style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+function CompactAiAnalysis({
+  aiAnalysis,
+  generatingInsights,
+  insightError,
+  onGenerate,
+}: {
+  aiAnalysis?: AIAnalysisData;
+  generatingInsights: boolean;
+  insightError: string | null;
+  onGenerate: () => void;
+}) {
+  return (
+    <section className="mb-8 print:mb-4">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">AI Analysis</h2>
+        {(!aiAnalysis || !aiAnalysis.generated || aiAnalysis.insights.length === 0) && (
+          <button
+            onClick={onGenerate}
+            disabled={generatingInsights}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed print:hidden"
+          >
+            {generatingInsights ? 'Generating…' : 'Generate AI insights'}
+          </button>
+        )}
+      </div>
+
+      {insightError && (
+        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
+          {insightError}
+        </div>
+      )}
+
+      {aiAnalysis && aiAnalysis.generated && aiAnalysis.insights.length > 0 ? (
+        <div className="space-y-3">
+          {aiAnalysis.insights.map((insight, idx) => (
+            <div key={insight.id || idx} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+              <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">{insight.content}</p>
+              <p className="mt-2 text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400">
+                {insight.confidenceScore}% &middot; {insight.verificationStatus === 'unverified' ? 'Awaiting review' : insight.verificationStatus}
+              </p>
+            </div>
+          ))}
+          {(aiAnalysis.agreements.length > 0 || aiAnalysis.contradictions.length > 0) && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {aiAnalysis.agreements.length > 0 && (
+                <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800 p-4">
+                  <h3 className="text-sm font-semibold text-emerald-800 dark:text-emerald-300 mb-2">Agreements with interview insights</h3>
+                  <ul className="space-y-1.5">
+                    {aiAnalysis.agreements.map((agreement, idx) => <li key={idx} className="text-sm text-emerald-700 dark:text-emerald-300/80">{agreement}</li>)}
+                  </ul>
+                </div>
+              )}
+              {aiAnalysis.contradictions.length > 0 && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800 p-4">
+                  <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-2">Potential contradictions</h3>
+                  <ul className="space-y-1.5">
+                    {aiAnalysis.contradictions.map((contradiction, idx) => <li key={idx} className="text-sm text-amber-700 dark:text-amber-300/80">{contradiction}</li>)}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+          {aiAnalysis.insights.some(i => i.verificationStatus === 'unverified') && (
+            <div className="flex justify-center print:hidden">
+              <Link to="/app/review" className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors">
+                Go to Review
+              </Link>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 p-6 text-center">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {generatingInsights ? 'Generating interest insights…' : 'AI interest insights have not been generated yet.'}
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ResultsChrome({ children, onPrint }: { children: ReactNode; onPrint: () => void }) {
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-8 print:py-2 print:px-0">
+      <div className="mb-8 print:mb-4">
+        <div className="flex items-center justify-between mb-4 print:hidden">
+          <Link to="/app/personality" className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+            Back to assessment
+          </Link>
+          <button
+            onClick={onPrint}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            title="Print results"
+          >
+            Print
+          </button>
+        </div>
+        <div className="print:hidden">
+          <PageTabs
+            tabs={[
+              { to: '/app/personality', label: 'Take the assessment', end: true },
+              { to: '/app/personality/history', label: 'History' },
+            ]}
+          />
+        </div>
+      </div>
+      {children}
+      <style>{`
+        @media print {
+          body { background: white !important; }
+          .print\\:hidden { display: none !important; }
+          .print\\:mb-4 { margin-bottom: 1rem !important; }
+          .print\\:py-2 { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+          .print\\:px-0 { padding-left: 0 !important; padding-right: 0 !important; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function RiasecResults({
+  data,
+  onPrint,
+  onGenerateInsights,
+  generatingInsights,
+  insightError,
+}: {
+  data: RiasecResultsData;
+  onPrint: () => void;
+  onGenerateInsights: () => void;
+  generatingInsights: boolean;
+  insightError: string | null;
+}) {
+  const codeScales = data.code.split('').map(domain => data.scales.find(scale => scale.domain === domain)).filter(Boolean);
+  const completedDate = data.completedAt ? new Date(data.completedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Unknown';
+
+  return (
+    <ResultsChrome onPrint={onPrint}>
+      <header className="text-center mb-10">
+        <p className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-3">
+          O*NET Interest Profiler
+        </p>
+        <h1 className="font-serif italic text-5xl text-gray-900 dark:text-white">{data.code}</h1>
+        <p className="mt-3 text-gray-600 dark:text-gray-300">
+          {codeScales.map(scale => scale?.label).join(' · ')}
+        </p>
+        <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">Completed on {completedDate}</p>
+      </header>
+
+      <section className="grid gap-5 sm:grid-cols-2 mb-10">
+        {data.scales.map(scale => (
+          <div key={scale.domain} className="border-b border-gray-200 dark:border-gray-700 pb-5">
+            <div className="flex items-baseline justify-between gap-4">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-600 dark:text-gray-400">{scale.label}</p>
+                <p className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-400 dark:text-gray-600">{scale.level}</p>
+              </div>
+              <p className="font-serif italic text-3xl text-gray-900 dark:text-white">{scale.score}</p>
+            </div>
+            <HairlineMeter value={scale.score} max={50} label={`${scale.label} score`} />
+          </div>
+        ))}
+      </section>
+
+      <CompactAiAnalysis
+        aiAnalysis={data.aiAnalysis}
+        generatingInsights={generatingInsights}
+        insightError={insightError}
+        onGenerate={onGenerateInsights}
+      />
+    </ResultsChrome>
+  );
+}
+
+function ValuesResults({ data, onPrint }: { data: ValuesResultsData; onPrint: () => void }) {
+  const valuesByKey = new Map(data.values.map(value => [value.key, value]));
+  const dominant = data.dominant.map(key => valuesByKey.get(key)).filter(Boolean);
+  const leastActive = data.least_active.map(key => valuesByKey.get(key)).filter(Boolean);
+
+  return (
+    <ResultsChrome onPrint={onPrint}>
+      <header className="text-center mb-10">
+        <p className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-500 dark:text-gray-400 mb-3">
+          Values
+        </p>
+        <h1 className="font-serif italic text-3xl sm:text-4xl leading-tight text-gray-900 dark:text-white">
+          {dominant.map(value => value?.label).join(' · ')}
+        </h1>
+        <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
+          Least active: {leastActive.map(value => value?.label.toLowerCase()).join(', ')}
+        </p>
+      </header>
+
+      <section className="space-y-8">
+        {SCHWARTZ_QUADRANTS.map(quadrant => {
+          const quadrantValues = quadrant.values
+            .map(key => valuesByKey.get(key))
+            .filter((value): value is ValuesResultsData['values'][number] => Boolean(value))
+            .sort((a, b) => b.score - a.score);
+          return (
+            <div key={quadrant.key} className="border-b border-gray-200 dark:border-gray-700 pb-8">
+              <h2 className="text-[11px] uppercase tracking-[0.08em] font-sans font-semibold text-gray-600 dark:text-gray-400 mb-5">
+                {quadrant.title}
+              </h2>
+              <div className="space-y-5">
+                {quadrantValues.map(value => (
+                  <div key={value.key}>
+                    <div className="flex items-baseline justify-between gap-4">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{value.label}</p>
+                      <p className="font-serif italic text-2xl text-gray-900 dark:text-white">{value.score}</p>
+                    </div>
+                    <HairlineMeter value={value.score} max={100} label={`${value.label} score`} />
+                    {value.rationale && (
+                      <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{value.rationale}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </section>
+
+      <p className="mt-6 text-xs text-gray-500 dark:text-gray-400">
+        Hedonism sits on the boundary between openness to change and self-enhancement in Schwartz&apos;s circle; this view groups it under openness to change.
+      </p>
+    </ResultsChrome>
+  );
+}
+
 // ============================================
 // Main Results Page Component
 // ============================================
@@ -455,7 +725,10 @@ export default function AssessmentResultsPage() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [attemptType, setAttemptType] = useState<'bigfive' | 'riasec' | 'values'>('bigfive');
   const [data, setData] = useState<AssessmentResultsData | null>(null);
+  const [riasecData, setRiasecData] = useState<RiasecResultsData | null>(null);
+  const [valuesData, setValuesData] = useState<ValuesResultsData | null>(null);
   const [generatingInsights, setGeneratingInsights] = useState(false);
   const [insightError, setInsightError] = useState<string | null>(null);
 
@@ -469,8 +742,20 @@ export default function AssessmentResultsPage() {
     setError(null);
 
     try {
-      const resultData = getAttemptResults(db, attemptId) as AssessmentResultsData;
-      setData(resultData);
+      const meta = getAttemptMeta(db, attemptId);
+      setAttemptType(meta.assessmentType);
+      setData(null);
+      setRiasecData(null);
+      setValuesData(null);
+
+      if (meta.assessmentType === 'riasec') {
+        setRiasecData(getRiasecAttemptResults(db, attemptId) as RiasecResultsData);
+      } else if (meta.assessmentType === 'values') {
+        setValuesData(getValuesAttemptResults(db, attemptId) as ValuesResultsData);
+      } else {
+        const resultData = getAttemptResults(db, attemptId) as AssessmentResultsData;
+        setData(resultData);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -531,6 +816,22 @@ export default function AssessmentResultsPage() {
   // ============================================
 
   if (error || !data) {
+    if (!error && attemptType === 'riasec' && riasecData) {
+      return (
+        <RiasecResults
+          data={riasecData}
+          onPrint={handlePrint}
+          onGenerateInsights={handleGenerateInsights}
+          generatingInsights={generatingInsights}
+          insightError={insightError}
+        />
+      );
+    }
+
+    if (!error && attemptType === 'values' && valuesData) {
+      return <ValuesResults data={valuesData} onPrint={handlePrint} />;
+    }
+
     return (
       <div className="max-w-lg mx-auto px-4 py-12">
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">

@@ -26,4 +26,9 @@ describe('database schema', () => {
     expect(columns).not.toContain('firebaseUid')
     expect(columns).not.toContain('passwordHash')
   })
+
+  it('assessment tables expose assessment type and result detail columns', () => {
+    expect(Object.keys(schema.assessmentAttempts)).toContain('assessmentType')
+    expect(Object.keys(schema.assessmentResults)).toContain('detail')
+  })
 })

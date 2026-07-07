@@ -70,10 +70,59 @@ const DEFAULT_INTERVIEW_MAP_ANGLES: InterviewMapAngle[] = [
   },
 ]
 
+const VALUES_GUIDED_TOPIC_TITLE = 'Values — guided assessment'
+
+export const VALUES_GUIDED_ANGLES: InterviewMapAngle[] = [
+  {
+    id: 'trade_offs',
+    label: 'Trade-offs',
+    description: 'What gets sacrificed and what gets protected',
+    questionFocus: 'specific moments where you gave up one good thing to protect another',
+    explored: false,
+  },
+  {
+    id: 'non_negotiables',
+    label: 'Non-negotiables',
+    description: 'Lines the person will not cross',
+    questionFocus: "what you refuse to do for money, status, comfort, or approval",
+    explored: false,
+  },
+  {
+    id: 'admired_behaviour',
+    label: 'Admired behaviour',
+    description: 'People and acts the person respects',
+    questionFocus: 'whose behaviour you admire, what they did, and why it mattered to you',
+    explored: false,
+  },
+  {
+    id: 'despised_behaviour',
+    label: 'Despised behaviour',
+    description: 'Conduct the person finds contemptible',
+    questionFocus: 'what behaviour you find contemptible, what line it crosses, and why it stays with you',
+    explored: false,
+  },
+  {
+    id: 'hard_decisions',
+    label: 'Hard decisions',
+    description: 'Real forks and how the person chose',
+    questionFocus: 'a real fork where the choice cost you something and what decided it',
+    explored: false,
+  },
+]
+
 function createDefaultInterviewMap(): InterviewMap {
   return {
     type: 'default',
     angles: DEFAULT_INTERVIEW_MAP_ANGLES.map(a => ({ ...a })),
+    currentAngleIndex: 0,
+    breadthFirstComplete: false,
+  }
+}
+
+export function createValuesInterviewMap(): InterviewMap {
+  return {
+    type: 'values_guided',
+    angles: VALUES_GUIDED_ANGLES.map(a => ({ ...a })),
     currentAngleIndex: 0,
     breadthFirstComplete: false,
   }
@@ -547,6 +596,26 @@ function generateAngleQuestion(
       `What's an **unresolved question** you have about **${keyPhrase}** and **${topicTitle}**? Something that still **keeps you thinking**?`,
       `Where does your thinking about **${keyPhrase}** feel **incomplete or uncertain**? What would you need to **resolve that tension**?`,
     ],
+    trade_offs: [
+      `Think of a concrete trade-off involving **${keyPhrase}**. What did you give up, and what were you protecting?`,
+      `When **${keyPhrase}** has cost you something, what was the cost and why was it worth paying?`,
+    ],
+    non_negotiables: [
+      `What line would you not cross around **${keyPhrase}**, even if crossing it brought money, status, or approval?`,
+      `When have you refused something because it violated a non-negotiable? What exactly made it unacceptable?`,
+    ],
+    admired_behaviour: [
+      `Whose behaviour do you admire around **${keyPhrase}**? What did they do, and why did it matter to you?`,
+      `Tell me about an act you respected immediately. What value did it reveal to you?`,
+    ],
+    despised_behaviour: [
+      `What kind of behaviour around **${keyPhrase}** do you find contemptible? What line does it cross?`,
+      `Think of a moment when someone's conduct stayed with you for the wrong reason. What made it unacceptable?`,
+    ],
+    hard_decisions: [
+      `Tell me about a real fork where **${keyPhrase}** was at stake. How did you choose, and what did it cost?`,
+      `When you had two defensible options, what finally decided the choice?`,
+    ],
   }
 
   const questions = angleQuestions[angle.id] || angleQuestions['journey']
@@ -626,7 +695,7 @@ function generateAIResponse(
   let question: string
   let angleLabel = ''
 
-  if (interviewMap && interviewMap.type === 'default') {
+  if (interviewMap && (interviewMap.type === 'default' || interviewMap.type === 'values_guided')) {
     const currentAngle = getCurrentInterviewAngle(interviewMap, messageCount)
     angleLabel = currentAngle.label
 
@@ -850,7 +919,7 @@ export async function createSession(
     suggestedDurationMinutes: suggestedDuration,
     timeSpentSeconds: 0,
     researchData: sessionContextData ? JSON.stringify(sessionContextData) : null,
-    interviewMap: JSON.stringify(createDefaultInterviewMap()),
+    interviewMap: JSON.stringify(topic.title === VALUES_GUIDED_TOPIC_TITLE ? createValuesInterviewMap() : createDefaultInterviewMap()),
   }).returning().get()
 
   // Update topic status

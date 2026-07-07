@@ -219,6 +219,7 @@ export const importedFiles = sqliteTable('imported_files', {
 export const assessmentAttempts = sqliteTable('assessment_attempts', {
   id: text('id').primaryKey(),
   userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  assessmentType: text('assessment_type').default('bigfive'),
   startedAt: text('started_at').default(sql`(datetime('now'))`),
   completedAt: text('completed_at'),
   status: text('status').default('in_progress'),
@@ -243,4 +244,5 @@ export const assessmentResults = sqliteTable('assessment_results', {
   facet4Score: real('facet4_score'),
   facet5Score: real('facet5_score'),
   facet6Score: real('facet6_score'),
+  detail: text('detail'),
 })

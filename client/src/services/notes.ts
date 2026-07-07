@@ -10,7 +10,7 @@ import {
 import { admitInsights, extractInsights, formatInterviewTranscript, type ExtractionContext } from './insightExtraction'
 import { applyInsightEvidenceAttachments, fetchExistingInsightRefs, logAdmissionDrops } from './admissionPersistence'
 import { enqueueVaultPendingWrites } from './vaultWriteThrough'
-import { getBigFiveSummaryLine } from './profile'
+import { getAssessmentSummary } from './profile'
 type Db = any // Drizzle sql.js instance
 
 // ============================================
@@ -342,7 +342,7 @@ export async function distillSession(
     userName: userProfile?.name || undefined,
     occupation: userProfile?.occupation || undefined,
     existingVerifiedInsights: existingVerified,
-    bigFiveSummary: getBigFiveSummaryLine(db) ?? undefined,
+    assessmentSummary: getAssessmentSummary(db) ?? undefined,
   }
 
   const extractedInsights = await extractInsights(extractionCtx)

@@ -37,8 +37,8 @@ export interface ExtractionContext {
   occupation?: string
   /** Existing verified insights for deduplication */
   existingVerifiedInsights?: Array<{ content: string; confidenceScore: number }>
-  /** Pre-formatted Big Five domain line (from profile.getBigFiveSummaryLine), when an assessment exists */
-  bigFiveSummary?: string
+  /** Pre-formatted assessment profile lines, when assessment results exist */
+  assessmentSummary?: string
 }
 
 export interface ExtractedInsight {
@@ -299,24 +299,24 @@ export function selectKnownProfileInsights(
   return scored.slice(0, cap).map(s => s.v)
 }
 
-/** Builds the "known profile" block: capped verified list + one Big Five line.
+/** Builds the "known profile" block: capped verified list + assessment summary lines.
  *  Returns '' when there is nothing known (fail-open — behaves like today's empty dedup). */
 export function buildKnownProfileSection(args: {
   verified?: Array<{ content: string; confidenceScore: number }>
   topicTitle?: string
-  bigFiveSummary?: string
+  assessmentSummary?: string
 }): string {
   const list = args.verified && args.verified.length > 0
     ? selectKnownProfileInsights(args.verified, args.topicTitle)
     : []
-  if (list.length === 0 && !args.bigFiveSummary) return ''
+  if (list.length === 0 && !args.assessmentSummary) return ''
 
   const lines: string[] = ['\n## Known Profile (what is already verified about this person)']
   if (list.length > 0) {
     lines.push('Verified insights — do NOT duplicate; use them to judge alignment:')
     lines.push(...list.map(i => `- "${i.content}" (confidence: ${i.confidenceScore})`))
   }
-  if (args.bigFiveSummary) lines.push(`Big Five: ${args.bigFiveSummary}`)
+  if (args.assessmentSummary) lines.push(args.assessmentSummary)
   lines.push('')
   return lines.join('\n')
 }
@@ -445,7 +445,7 @@ function buildUserPrompt(ctx: ExtractionContext, contentChunk: string): string {
   const knownProfileSection = buildKnownProfileSection({
     verified: ctx.existingVerifiedInsights,
     topicTitle: ctx.topicTitle,
-    bigFiveSummary: ctx.bigFiveSummary,
+    assessmentSummary: ctx.assessmentSummary,
   })
 
   const topicContext = ctx.topicTitle

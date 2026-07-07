@@ -3,7 +3,7 @@ import type { SQLJsDatabase } from 'drizzle-orm/sql-js'
 import type * as schema from '@/db/schema'
 import { profileFacets } from '@/db/schema'
 import { callAnthropic, isApiKeyConfigured } from './anthropic'
-import { getBigFiveSummaryLine, getVerifiedExportableInsights } from './profile'
+import { getAssessmentSummary, getVerifiedExportableInsights } from './profile'
 import { extractJson } from './textCleaning'
 
 type Db = SQLJsDatabase<typeof schema>
@@ -76,7 +76,7 @@ const SYSTEM_PROMPT = [
 function buildUserPrompt(
   insightsForPrompt: ReturnType<typeof getVerifiedExportableInsights>,
   totalInsightCount: number,
-  bigFiveSummary: string | null,
+  assessmentSummary: string | null,
 ): string {
   const topicGroups = new Map<string, typeof insightsForPrompt>()
 
@@ -90,8 +90,8 @@ function buildUserPrompt(
   const lines: string[] = []
   lines.push('# Source context')
   lines.push('')
-  if (bigFiveSummary) {
-    lines.push(`Big Five: ${bigFiveSummary}`)
+  if (assessmentSummary) {
+    lines.push(assessmentSummary)
     lines.push('')
   }
   lines.push(`${totalInsightCount} verified exportable insight${totalInsightCount === 1 ? '' : 's'} supplied; ${insightsForPrompt.length} included below.`)
@@ -239,9 +239,9 @@ export async function synthesizeFacets(db: Db): Promise<FacetRecord[]> {
   }
 
   const insightsForPrompt = verifiedInsights.slice(0, MAX_SYNTHESIS_INSIGHTS)
-  const bigFiveSummary = getBigFiveSummaryLine(db)
+  const assessmentSummary = getAssessmentSummary(db)
   const responseText = await callAnthropic({
-    messages: [{ role: 'user', content: buildUserPrompt(insightsForPrompt, verifiedInsights.length, bigFiveSummary) }],
+    messages: [{ role: 'user', content: buildUserPrompt(insightsForPrompt, verifiedInsights.length, assessmentSummary) }],
     system: SYSTEM_PROMPT,
     maxTokens: 16384,
   })

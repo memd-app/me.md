@@ -16,7 +16,7 @@ import {
   selfReferenceGate,
 } from './insightExtraction'
 import { rejectInsight } from './insights'
-import { getBigFiveSummaryLine } from './profile'
+import { getAssessmentSummary } from './profile'
 import { extractJson } from './textCleaning'
 import { enqueueVaultWrite } from './vaultWriteThrough'
 
@@ -301,7 +301,7 @@ export async function reevaluatePendingInsights(
       .map((r: { content: string; confidenceScore: number | null }) => ({ content: r.content, confidenceScore: r.confidenceScore ?? 50 }))
     knownProfile = buildKnownProfileSection({
       verified,
-      bigFiveSummary: getBigFiveSummaryLine(db) ?? undefined,
+      assessmentSummary: getAssessmentSummary(db) ?? undefined,
     })
   }
 
