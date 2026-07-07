@@ -1,48 +1,57 @@
 # me.md
 
-AI-guided personal knowledge system. Build a verified knowledge graph of yourself through interview-style sessions with Claude. All data stays local in your browser.
+An open-source experiment in verified personal context for AI. The interviewer draws your story out one conversation at a time; you verify every extracted insight before it becomes part of your profile; the result is portable context any AI tool can use. Everything runs in your browser — there are no servers and no accounts.
 
-## Quick Start
+## How it works
+
+1. **Interview** — pick a topic (career turning points, core values, how you decide) and talk. The interviewer follows threads, asks one question at a time, and adapts to what you say.
+2. **Review** — the insights it extracts land in a queue. You verify, edit, or reject each one. Nothing enters your profile without your sign-off.
+3. **Use** — your verified knowledge becomes a living profile: chat with it, export it, or sync it into your Obsidian vault.
+
+## Features
+
+### Talking
+- **Interviews** — AI-guided sessions with a conversational host: thread-following questions, natural quick replies, voice input, pause and resume. Sessions distill into structured notes.
+- **Converse** — freeform chat grounded in your verified knowledge, in two modes: *Assistant* (an assistant that knows you and cites which insights inform its answers) and *Me* (the model speaks as you, first person, strictly within what you've verified).
+
+### Knowing
+- **Review queue** — verify, edit, or reject extracted insights with keyboard-first triage. Confidence scores and source references on every card.
+- **About me** — a two-register portrait synthesized from your verified insights: an analytical essay for you, an agent brief you can hand to any AI.
+- **Personality** — three validated assessments: Big Five (IPIP-NEO), RIASEC interests (O*NET Interest Profiler), and a guided Schwartz values interview.
+- **Notes & bookmarks** — distilled session notes and the transcript moments you starred, in one place.
+- **Search** — across topics, insights, transcripts, and notes.
+
+### Keeping
+- **Vault** — your profile as Markdown or JSON, and an Obsidian export with graph links between notes. With a local vault connected, changes write through as you verify — updates in place; never deletes your files.
+- **Import** — seed your knowledge base from files, pasted text, URLs, or a ChatGPT memory export.
+- **MCP server** — serve your verified knowledge to Claude Desktop or Cursor (setup below).
+- **Backups** — full database export and restore from Settings.
+
+## Quick start
 
 ```bash
-git clone <repo> && cd me.md
+git clone https://github.com/memd-app/me.md && cd me.md
 cd client && npm install
 npm run dev
 ```
 
-Then open [http://localhost:5173](http://localhost:5173) and enter your Anthropic API key in Settings.
+Open [http://localhost:5173](http://localhost:5173) and add your Anthropic API key in Settings. The key stays in your browser's localStorage and is sent only to Anthropic's API, directly from your browser. Without a key, interviews fall back to template questions — you can try the flow before committing.
 
-## Features
+## Data safety
 
-- **Topics & interviews** — organize knowledge by life areas and explore them through guided conversations
-- **AI-powered sessions** — Claude conducts interviews, asks follow-ups, and synthesizes what it learns
-- **Insight extraction & verification** — AI-generated facts are surfaced for you to confirm, edit, or reject
-- **Knowledge graph visualization** — interactive D3.js graph of your verified facts and their connections
-- **Big Five personality assessment** — AI-driven personality profiling based on your interviews
-- **Session notes with 4 formats** — structured summaries in multiple styles for every session
-- **AI sandbox comparison** — test prompts with and without your knowledge graph as context
-- **Full-text search** — search across all your facts, sessions, and notes
-- **Data import** — bring in content from files, URLs, and ChatGPT exports
-- **Database export/import** — full backup and restore of your entire knowledge base
+All data lives in your browser's IndexedDB. There is no sync, no telemetry, and no network traffic with your data except the Anthropic API calls you make with your own key. Fonts are self-hosted; the app makes no third-party requests.
 
-## Data Safety
+Two boundaries to know:
 
-All data lives in your browser's IndexedDB. You can export backups from the Settings page at any time.
+- **Clearing browser data deletes your knowledge base.** Export backups from Settings regularly, or keep an Obsidian vault connected.
+- **Storage and exports are unencrypted.** Backups contain your personal knowledge in plain form — store and share them accordingly.
 
-**Warning:** Clearing your browser data will permanently delete your knowledge base. Export regularly.
+## MCP server
 
-Data is stored and exported **unencrypted** — backups contain your personal knowledge base in
-plain form, so store and share them carefully. The app makes no network requests with your data
-except calls to Anthropic's API with your own key (the UI also loads the Inter font from Google
-Fonts; self-host it if you want a fully offline posture).
+Serve your verified knowledge to Claude Desktop or Cursor. Only insights you've verified and marked exportable are visible.
 
-## MCP Server
-
-Use your knowledge graph as context in Claude Desktop or Cursor:
-
-1. Export your database from Settings
-2. Save it as `~/.memd/memd.db`
-3. Add to your Claude Desktop or Cursor config:
+1. Export your database from Settings and save it as `~/.memd/memd.db`
+2. Add to your Claude Desktop or Cursor config:
 
 ```json
 {
@@ -55,15 +64,9 @@ Use your knowledge graph as context in Claude Desktop or Cursor:
 }
 ```
 
-## Tech Stack
+## Tech
 
-- React 18 + TypeScript
-- Vite 5
-- Tailwind CSS
-- sql.js (SQLite compiled to WASM, runs in browser)
-- Drizzle ORM
-- D3.js
-- Claude API (called directly from the browser with your own key)
+React 18 + TypeScript, Vite, Tailwind CSS, sql.js (SQLite in WASM) persisted to IndexedDB, Drizzle ORM, and the Claude API called directly from the browser with your own key. File System Access API for the Obsidian write-through.
 
 ## License
 
