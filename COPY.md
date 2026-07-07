@@ -54,8 +54,10 @@ Corollary: **adjectives don't do the work; nouns and verbs do.** "Smart Search" 
 | Personality surface | **Personality** (nav) · **the Big Five assessment** (the artifact) | "Take the assessment"; "retake the assessment" | "test" ("Take the Big Five Test", "About This Test", "Resume Test") |
 | Big Five duration | **120 questions · about 15 minutes** | Prose: "about 15 minutes"; meta lines: "~15 minutes" | "~10 minutes", any second number |
 | Import surface | **Import** | Nav, page title, onboarding step label | Title "Import Context"; kicker "Context" on the Import page |
+| Interviews list surface (nav + page) | **Interviews** | Nav "Interviews"; TopicsPage title "Interviews"; the page that lists your topics | "Topics" as the nav label or page title (the common noun "topic" stays valid app-wide) |
 | API key | **Anthropic API key** | Settings, Converse guard, all key prompts | "Claude API key" (Claude is the model; the key is Anthropic's) |
 | The export artifact | **your me.md file** / **your profile** | "a portable me.md file" | "your data export package" etc. |
+| Export/sync surface (nav + page) | **Vault** | Nav "Vault"; ExportPage title "Vault"; "the vault" for the connected Obsidian folder | "Export & Sync" as the nav label |
 | Interview surface | **interview sessions** / **a session** | "Finish a session", "during interview sessions" | "chats", "convos" |
 
 ## 6. Banned phrases

@@ -436,11 +436,11 @@ export default function TopicsPage() {
   return (
     <div className="max-w-6xl mx-auto">
       <PageHeader
-        title="Topics"
+        title="Interviews"
         subtitle={
           <>
-            The areas of your life the interviewer explores
-            {!isLoading && topics.length > 0 && ` — ${topics.length} total`}
+            Guided interview sessions, organized by topic
+            {!isLoading && topics.length > 0 && ` — ${topics.length} ${topics.length === 1 ? 'topic' : 'topics'}`}
           </>
         }
         actions={

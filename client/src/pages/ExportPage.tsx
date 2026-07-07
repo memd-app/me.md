@@ -409,8 +409,8 @@ export default function ExportPage() {
   return (
     <div className="max-w-4xl mx-auto">
       <PageHeader
-        kicker="Export"
-        title="Export"
+        kicker="Export & sync"
+        title="Vault"
         subtitle="Your verified profile as Markdown or JSON — and Obsidian, if you keep a vault."
       />
 

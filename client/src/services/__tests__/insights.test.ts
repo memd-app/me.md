@@ -3,7 +3,7 @@ import initSqlJs from 'sql.js'
 import { drizzle } from 'drizzle-orm/sql-js'
 import * as schema from '@/db/schema'
 import { CREATE_TABLES_SQL } from '@/db/database'
-import { getGraphStats, getPendingInsights } from '../insights'
+import { getGraphStats, getPendingInsights, getPendingInsightsCount } from '../insights'
 
 vi.mock('@/db/persistence', () => ({
   scheduleSave: vi.fn(),
@@ -61,6 +61,54 @@ describe('getPendingInsights', () => {
     insertPending('low', 40, '2026-07-05T11:00:00.000Z')
 
     expect(getPendingInsights(db).insights.map((insight: { id: string }) => insight.id)).toEqual(['newer', 'older', 'low'])
+  })
+})
+
+describe('getPendingInsightsCount', () => {
+  let db: ReturnType<typeof drizzle<typeof schema>>
+
+  beforeAll(async () => {
+    const SQL = await initSqlJs()
+    const sqlDb = new SQL.Database()
+    sqlDb.run('PRAGMA foreign_keys = ON;')
+    sqlDb.run(CREATE_TABLES_SQL)
+    db = drizzle(sqlDb, { schema })
+  })
+
+  beforeEach(() => {
+    db.run('DELETE FROM insights')
+    db.run('DELETE FROM users')
+    db.run("INSERT OR IGNORE INTO users (id, name) VALUES ('local-user', 'Test User')")
+  })
+
+  function insertInsight(id: string, status: string): void {
+    db.run(`
+      INSERT INTO insights (
+        id,
+        user_id,
+        content,
+        verification_status
+      )
+      VALUES (
+        '${id}',
+        'local-user',
+        'Insight ${id}',
+        '${status}'
+      )
+    `)
+  }
+
+  it('counts only insights awaiting review', () => {
+    insertInsight('unverified', 'unverified')
+    insertInsight('recheck', 're_verification_pending')
+    insertInsight('verified', 'verified')
+    insertInsight('rejected', 'rejected')
+
+    expect(getPendingInsightsCount(db)).toBe(2)
+  })
+
+  it('returns 0 when no insights are awaiting review', () => {
+    expect(getPendingInsightsCount(db)).toBe(0)
   })
 })
 

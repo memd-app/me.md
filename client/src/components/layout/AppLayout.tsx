@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 
@@ -7,6 +7,7 @@ const COLLAPSE_KEY = 'memd_sidebar_collapsed';
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === '1');
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const toggleCollapsed = useCallback(() => {
     setCollapsed(prev => {
@@ -28,6 +29,20 @@ export default function AppLayout() {
     return () => window.removeEventListener('keydown', handler);
   }, [toggleCollapsed]);
 
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k' && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        setCollapsed(false);
+        setSidebarOpen(true);
+        localStorage.setItem(COLLAPSE_KEY, '0');
+        requestAnimationFrame(() => searchInputRef.current?.focus());
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   return (
     <div className="flex h-screen bg-paper dark:bg-dark-bg">
       {/* Skip to main content link - first focusable element for keyboard users */}
@@ -44,6 +59,7 @@ export default function AppLayout() {
         onClose={() => setSidebarOpen(false)}
         collapsed={collapsed}
         onToggleCollapse={toggleCollapsed}
+        searchInputRef={searchInputRef}
       />
 
       {/* Floating reopen control when the sidebar is collapsed (desktop) */}

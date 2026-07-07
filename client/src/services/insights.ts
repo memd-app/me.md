@@ -1,4 +1,4 @@
-import { eq, and, desc, or } from 'drizzle-orm'
+import { eq, and, desc, or, count } from 'drizzle-orm'
 import { scheduleSave } from '@/db/persistence'
 import { LOCAL_USER_ID } from '@/contexts/UserContext'
 import { insights, topics, verificationHistory, conceptNodes, conceptEdges } from '@/db/schema'
@@ -90,6 +90,21 @@ export function getInsightStats(db: Db) {
   const rejected = allInsights.filter((i: any) => i.verificationStatus === 'rejected').length
 
   return { pending, verified, rejected, total: allInsights.length }
+}
+
+/** Cheap count of insights awaiting review (unverified or re_verification_pending). */
+export function getPendingInsightsCount(db: Db): number {
+  const rows = db.select({ value: count() }).from(insights)
+    .where(and(
+      eq(insights.userId, LOCAL_USER_ID),
+      or(
+        eq(insights.verificationStatus, 'unverified'),
+        eq(insights.verificationStatus, 're_verification_pending'),
+      ),
+    ))
+    .all()
+
+  return rows[0]?.value ?? 0
 }
 
 export function getGraphStats(db: Db): {
