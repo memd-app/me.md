@@ -107,8 +107,30 @@ function buildUserPrompt(
   return lines.join('\n')
 }
 
+// A completion cut off mid-facet leaves unparseable JSON. Salvage every facet
+// object that closed cleanly rather than discarding the whole response.
+function repairTruncatedFacets(raw: string): { facets?: unknown } | null {
+  const start = raw.indexOf('{')
+  if (start === -1) return null
+  const slice = raw.slice(start)
+  const objects: unknown[] = []
+  const re = /\{[^{}]*"key"\s*:\s*"[^"]+"[\s\S]*?"body"\s*:\s*"(?:[^"\\]|\\.)*"\s*\}/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(slice)) !== null) {
+    try {
+      objects.push(JSON.parse(m[0]))
+    } catch {
+      // skip fragments that still fail to parse
+    }
+  }
+  return objects.length > 0 ? { facets: objects } : null
+}
+
 export function parseFacetsResponse(raw: string): Array<{ key: string; title: string; body: string }> {
-  const parsed = extractJson<{ facets?: unknown }>(raw)
+  let parsed = extractJson<{ facets?: unknown }>(raw)
+  if (!parsed || typeof parsed !== 'object' || !Array.isArray((parsed as { facets?: unknown }).facets)) {
+    parsed = repairTruncatedFacets(raw)
+  }
   const seen = new Set<string>()
   const facets: Array<{ key: string; title: string; body: string }> = []
 
@@ -201,7 +223,7 @@ export async function synthesizeFacets(db: Db): Promise<FacetRecord[]> {
   const responseText = await callAnthropic({
     messages: [{ role: 'user', content: buildUserPrompt(insightsForPrompt, verifiedInsights.length, bigFiveSummary) }],
     system: SYSTEM_PROMPT,
-    maxTokens: 4096,
+    maxTokens: 12288,
   })
   const parsedFacets = parseFacetsResponse(responseText)
   const generatedAt = new Date().toISOString()
