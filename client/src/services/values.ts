@@ -6,6 +6,7 @@ import {
   assessmentResults,
   messages,
   notes,
+  sessions,
   topics,
 } from '@/db/schema'
 import { scheduleSave } from '@/db/persistence'
@@ -274,8 +275,9 @@ function deriveLeastActive(values: Array<{ key: SchwartzValue; score: number }>)
 }
 
 export async function completeValuesAssessment(db: Db, sessionId: string): Promise<ValuesMapping & { attemptId: string }> {
-  const completedSession = completeSession(db, sessionId)
-  const topic = db.select().from(topics).where(eq(topics.id, completedSession.topicId)).get()
+  const sessionRow = db.select().from(sessions).where(eq(sessions.id, sessionId)).get()
+  if (!sessionRow) throw new Error('Session not found')
+  const topic = db.select().from(topics).where(eq(topics.id, sessionRow.topicId)).get()
   if (!topic) throw new Error('Values topic not found')
 
   const sessionMessages = db.select()
@@ -287,6 +289,10 @@ export async function completeValuesAssessment(db: Db, sessionId: string): Promi
   const assistantMsgs = sessionMessages.filter(message => message.role === 'assistant')
   const transcript = formatInterviewTranscript(userMsgs, assistantMsgs)
   const mapping = await mapValuesTranscript(transcript)
+
+  // Mapping succeeded — only now retire the session, so a mapping failure
+  // leaves it active and re-finishable.
+  completeSession(db, sessionId)
 
   const attemptId = crypto.randomUUID()
   const completedAt = new Date().toISOString()
@@ -314,6 +320,7 @@ export async function completeValuesAssessment(db: Db, sessionId: string): Promi
     }).run()
   }
 
+  try {
   const existing = fetchExistingInsightRefs(db)
   const existingVerified = existing
     .filter(ref => ref.verificationStatus === 'verified')
@@ -352,6 +359,10 @@ export async function completeValuesAssessment(db: Db, sessionId: string): Promi
     extraAnalysis: formatValuesAnalysis(mapping),
     contentJson: JSON.stringify(mapping),
   })
+  } catch (error) {
+    // Results are already stored; insight extraction is best-effort.
+    console.warn('[me.md:values] insight extraction after mapping failed:', error)
+  }
 
   scheduleSave()
   return { attemptId, ...mapping }

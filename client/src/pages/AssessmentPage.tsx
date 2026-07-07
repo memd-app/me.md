@@ -470,7 +470,7 @@ export default function AssessmentPage() {
               <div>
                 <h3 className="font-medium text-amber-800 dark:text-amber-200">You have an unfinished assessment</h3>
                 <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                  {inProgressAttempt.answeredQuestions} of 120 questions answered
+                  {inProgressAttempt.answeredQuestions} questions answered
                   {inProgressAttempt.startedAt && (
                     <> &middot; Started {new Date(inProgressAttempt.startedAt).toLocaleDateString()}</>
                   )}
